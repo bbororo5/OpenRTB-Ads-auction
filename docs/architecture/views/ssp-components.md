@@ -1,8 +1,8 @@
 # SSP 애플리케이션 컴포넌트
 
-상태: 경계 검토 완료·기술 미정
+상태: C3 책임·협력·인터페이스 경계 확정 · 구현 기술 미정
 
-범위는 [SSP 컨테이너](ssp-containers.md)의 `SSP 애플리케이션` 하나다. 화살표는 처리 순서가 아니라 출발 요소가 도착 요소를 사용하는 의존 관계다. 호출의 반환값은 역방향 화살표로 반복하지 않는다.
+범위는 [SSP 컨테이너](ssp-containers.md)의 `SSP 애플리케이션` 하나다. 이 문서의 8개 컴포넌트는 배포 단위나 Java 패키지 수가 아니라, 각자 바꿀 수 있는 규칙과 데이터 책임을 나타낸다.
 
 ## C4 Level 3
 
@@ -20,46 +20,41 @@ flowchart LR
         direction TB
         subgraph APP["SSP 애플리케이션 [Container: Java 21]"]
             direction TB
-            API["경매·렌더링 API<br/>HTTP 계약 검증과 요청 전달"]
+            API["경매·렌더링 API<br/>HTTP 계약 검증·응답"]
+            DEDUPE["경매 중복 방지<br/>최초 실행·결과 재사용"]
+            COORDINATOR["경매 조정<br/>기한·병렬 호출·통지 조정"]
+            BIDDER["DSP 입찰 실행<br/>DSP별 OpenRTB 통신"]
+            WINNER["낙찰 결정<br/>입찰 검증·1가격 규칙"]
+            PROOF["렌더링 증표<br/>발급·검증·기한"]
+            CLAIM["렌더링 청구<br/>청구·전달 작업 원자 생성"]
+            DELIVERY["DSP 통지 전달<br/>nurl·lurl·burl 전달·재시도"]
 
-            IDEMP["경매 중복 방지<br/>요청 키·지문과 최초 결과 재사용"]
-            AUCTION["경매 실행<br/>전체 기한과 DSP 병렬 호출 조정"]
-            BILLING["렌더링 확인·청구 처리<br/>유효 렌더링의 청구 근거 생성"]
-
-            ENGINE["낙찰 결정<br/>입찰 검증과 1가격 낙찰 결정"]
-            PROOF["렌더링 증표 발급·검증<br/>상태 없는 증표의 무결성·기한 검증"]
-
-            BID["DSP 입찰 요청<br/>DSP별 OpenRTB 통신과 자원 격리"]
-            NOTICE["DSP 경매·과금 통지<br/>경매 통지와 내구 과금 통지 전달"]
-            REPOSITORY["청구·통지 기록 저장<br/>청구 생명주기 사건의 멱등 추가·재생"]
-
-            API -->|"중복 판정"| IDEMP
-            IDEMP -->|"최초 경매만 실행"| AUCTION
-            API -->|"렌더링 판정"| BILLING
-            AUCTION -->|"낙찰 결정"| ENGINE
-            AUCTION -->|"증표 발급"| PROOF
-            AUCTION -->|"DSP별 입찰 호출"| BID
-            AUCTION -->|"nurl·lurl 전달 요청"| NOTICE
-            BILLING -->|"증표 검증"| PROOF
-            BILLING -->|"청구 근거 추가"| REPOSITORY
-            NOTICE -->|"미전달 burl 조회·전달 결과 추가"| REPOSITORY
+            API -->|"경매 요청"| DEDUPE
+            DEDUPE -->|"최초 경매"| COORDINATOR
+            COORDINATOR -->|"입찰 요청"| BIDDER
+            COORDINATOR -->|"유효 입찰"| WINNER
+            COORDINATOR -->|"낙찰 사실"| PROOF
+            COORDINATOR -->|"nurl·lurl"| DELIVERY
+            API -->|"렌더링 완료"| CLAIM
+            CLAIM -->|"증표 검증"| PROOF
         end
 
-        STORE[("리전별 SSP 청구 기록 DB<br/>[Container: PostgreSQL]<br/>리전별 독립 저장")]
-        REPOSITORY -->|"사건 추가·재생"| STORE
+        STORE[("리전별 SSP 청구 기록 DB<br/>[Container: PostgreSQL]")]
+        CLAIM -->|"청구·전달 작업 원자 기록"| STORE
+        DELIVERY -->|"작업 임대·결과 기록"| STORE
     end
 
     DSPS["DSP 회사들<br/>프로젝트 DSP · 외부 DSP<br/>[Software Systems]"]
 
-    SUPPLIER -->|"경매 요청 / 결과·증표 수신"| API
-    CLIENT -->|"렌더링 성공·증표"| API
-    BID -->|"입찰 요청·응답"| DSPS
-    NOTICE -->|"nurl·lurl·burl"| DSPS
+    SUPPLIER -->|"경매 요청 / 응답"| API
+    CLIENT -->|"렌더링 완료·증표"| API
+    BIDDER -->|"입찰 요청·응답"| DSPS
+    DELIVERY -->|"nurl·lurl·burl"| DSPS
 
     classDef component fill:#2563eb,color:#fff,stroke:#1d4ed8,stroke-width:1.5px;
     classDef external fill:#fff,color:#172033,stroke:#94a3b8,stroke-width:1.5px;
     classDef store fill:#d1fae5,color:#064e3b,stroke:#10b981,stroke-width:1.5px;
-    class API,IDEMP,AUCTION,BILLING,ENGINE,PROOF,BID,NOTICE,REPOSITORY component;
+    class API,DEDUPE,COORDINATOR,BIDDER,WINNER,PROOF,CLAIM,DELIVERY component;
     class SUPPLIER,CLIENT,DSPS external;
     class STORE store;
     style SUPPLY fill:#f1f5f9,stroke:#94a3b8,stroke-width:1.5px
@@ -67,62 +62,62 @@ flowchart LR
     style APP fill:#ffffff,stroke:#3b82f6,stroke-width:1.5px,stroke-dasharray:6 4
 ```
 
-## 관계 검증
+화살표는 의존 관계다. 경매가 실제로 진행되는 순서는 별도 구현·시험 흐름에서 검증하며, 이 그림은 그 순서를 강제하지 않는다.
 
-| 출발 | 도착 | 의존 이유 |
-|---|---|---|
-| 공급자 시스템 | 경매·렌더링 API | 경매를 요청하고 응답으로 낙찰 결과와 증표를 받는다. |
-| 공급자 시스템 | 광고 표시 클라이언트 | 광고 응답과 렌더링 증표를 전달한다. |
-| 광고 표시 클라이언트 | 경매·렌더링 API | 렌더링 성공과 증표를 통지한다. |
-| 경매·렌더링 API | 경매 중복 방지 | 검증한 공급자 요청의 중복 판정을 위임한다. |
-| 경매·렌더링 API | 렌더링 확인·청구 처리 | 렌더링 판정을 위임한다. |
-| 경매 중복 방지 | 경매 실행 | 요청 키를 최초 선점한 호출만 경매 실행을 요청한다. |
-| 경매 실행 | 낙찰 결정 | 기한 안에 종결된 입찰의 낙찰 결정을 요청한다. |
-| 경매 실행 | 렌더링 증표 발급·검증 | 낙찰 결과의 증표 발급을 요청한다. |
-| 경매 실행 | DSP 입찰 요청 | 여러 DSP에 대한 개별 호출을 병렬로 시작한다. |
-| 경매 실행 | DSP 경매·과금 통지 | 낙찰·패찰 통지를 요청한다. |
-| 렌더링 확인·청구 처리 | 렌더링 증표 발급·검증 | 돌아온 증표의 무결성과 기한 검증을 요청한다. |
-| 렌더링 확인·청구 처리 | 청구·통지 기록 저장 | 성공 응답 전에 청구 근거를 내구 기록한다. |
-| DSP 입찰 요청 | DSP 회사들 | DSP 하나에 OpenRTB 입찰 요청을 보내고 응답을 받는다. |
-| DSP 경매·과금 통지 | 청구·통지 기록 저장 | 미전달 과금 통지를 읽고 전달 결과를 기록한다. |
-| DSP 경매·과금 통지 | DSP 회사들 | `nurl`·`lurl`·`burl`을 전달한다. |
-| 청구·통지 기록 저장 | 리전별 SSP 청구 기록 DB | 청구 생명주기 사건을 멱등 추가하고 복구 시 재생한다. |
+## 책임과 협력
 
-`BillingClaimRecorded`와 `burl` 전달 대기 작업은 하나의 저장 트랜잭션으로 추가한다. 렌더링 확인·청구 처리는 통지 컴포넌트를 직접 호출하지 않으며, 두 기록이 함께 커밋된 뒤에만 클라이언트에 성공을 응답한다. DSP 경매·과금 통지는 저장된 미전달 작업을 읽어 작업자 장애 뒤에도 전달을 재개한다.
-
-## 컴포넌트 경계 검증
-
-| 컴포넌트 | 숨기는 결정·소유 규칙 | 결론 | 재검토 조건 |
+| 컴포넌트 | 소유 책임 | 협력 메시지 | 소유하지 않는 것 |
 |---|---|---|---|
-| 경매·렌더링 API | HTTP 경로·표현·기술 검증과 내부 요청 변환 | 하나로 유지 | 측정된 경합 때문에 진입 실행 자원을 독립시킬 때 |
-| 경매 중복 방지 | 공급자 요청 키·서버 지문, 로컬 단일 실행과 최초 응답 재사용 | 독립 유지 | 외부 상태를 쓰거나 중복 허용 정책으로 바꿀 때 |
-| 경매 실행 | 절대 기한, DSP 호출 병렬 조정과 실패 종결 | 낙찰 결정과 분리 | 단순 전달만 남거나 별도 실행 경계가 필요할 때 |
-| 낙찰 결정 | 슬롯별 입찰 유효성, 1가격과 결정적 동점 규칙 | 순수 정책으로 분리 | 규칙이 사라져 단순 비교 함수만 남을 때 |
-| 렌더링 증표 발급·검증 | 버전형 이진 형식, AEAD 봉인, 로컬 키 묶음과 기한 | 독립 유지 | 증표 대신 서버 경매 상태 저장을 선택할 때 |
-| 렌더링 확인·청구 처리 | 유효 렌더링만 청구 근거로 만드는 전이와 저장 선행 규칙 | 하나로 유지 | 렌더링 분석이 청구와 독립된 제품 책임이 될 때 |
-| DSP 입찰 요청 | OpenRTB 변환, DSP별 연결·기한·동시성·취소 | 모든 DSP의 공통 컴포넌트 | DSP별 프로토콜·변환·배포 주기가 달라질 때 |
-| DSP 경매·과금 통지 | 등록 URL 제한, OpenRTB 통지 호출과 전달 결과 분류 | 하나로 유지하되 경매·과금 자원 분리 | 과금 전달의 복구 구조가 별도 배포를 요구할 때 |
-| 청구·통지 기록 저장 | PostgreSQL 스키마, 고유 제약, 청구·과금 통지 사건 추가와 재생 | 하나로 유지 | 사건별 보존·일관성·저장 기술이 달라질 때 |
+| 경매·렌더링 API | HTTP 표현 검증, 지역 렌더링 URL로의 응답 | `AuctionRequest`, `RenderCompleted` | 경매·청구 규칙 |
+| 경매 중복 방지 | 요청 키·지문, 최초 실행과 5초 결과 재사용 | `StartAuction` 또는 `ReuseAuctionResult` | DSP 호출·낙찰 규칙 |
+| 경매 조정 | 50ms 절대 기한, 슬롯별 병렬 흐름, `nurl`·`lurl` 발행 | `RequestBids`, `SelectWinner`, `IssueRenderProof`, `AuctionNotice` | DSP별 통신 세부·가격 규칙 |
+| DSP 입찰 실행 | DSP별 요청 변환·기한·연결 격리 | `BidRequestBatch` → `BidResponses` | 낙찰과 예산 판단 |
+| 낙찰 결정 | 입찰 유효성, 1가격, 결정적 동점 처리 | `EligibleBids` → `AuctionWinners` | 네트워크·시계·저장소 |
+| 렌더링 증표 | AEAD 증표 발급·검증, 2초 렌더링 기한 | `IssueRenderProof`, `VerifyRenderProof` | 청구 기록·`burl` 전달 |
+| 렌더링 청구 | 유효 증표의 청구 판정, 청구와 전달 작업의 원자 생성 | `RenderCompleted` → `BillingClaimRecorded` + `BillingDeliveryPending` | `burl` HTTP 호출·재시도 |
+| DSP 통지 전달 | `nurl`·`lurl` 단발 통지, `burl` 작업 임대·전달·종결 | `AuctionNotice`, `BillingDeliveryTask` | DSP 내부 금액 판정 |
 
-## 경계 계약
+`BillingClaimRecorded`와 `BillingDeliveryPending`은 같은 DB 트랜잭션에서 생성한다. 이 커밋이 성공한 뒤에만 API가 렌더링 성공을 응답한다. 따라서 성공 응답은 “청구와 `burl` 전달 책임이 내구화됐다”는 뜻이다.
 
-- 경매·렌더링 API는 업무 규칙을 소유하지 않는다. 경매 요청과 렌더링 통지는 우선 같은 진입 실행 자원을 사용하고 경로별 지연·동시 처리·거절을 따로 관측한다. 측정된 경합이 경매 목표를 침범할 때만 자원을 격리한다.
-- 경매 중복 방지는 인증된 공급자 식별자와 `providerRequestId`를 128비트 요청 키로 축약하고, 정규화한 요청의 128비트 지문으로 같은 ID의 내용 변경을 거부한다.
-- 최초 호출만 DSP 경매를 실행한다. 처리 중 중복은 같은 실행에 합류하고 완료 중복은 최초 응답과 렌더링 증표를 재사용한다. 요청 키·지문·최초 결과는 5초간 제한된 로컬 메모리에 둔다.
-- 확장 후에도 같은 요청 키는 한 SSP 소유자만 실행해야 한다. 소유권을 잃어 기존 로컬 상태를 확인할 수 없으면 같은 요청을 새로 실행하지 않는다. 구체적인 키 라우팅 방식은 배포 설계에서 정한다.
-- 경매 실행은 전체 흐름을 조정하고, 낙찰 결정은 외부 I/O와 시계에 의존하지 않는 순수 경매 규칙을 소유한다.
-- 경매 실행이 여러 DSP 호출을 병렬 조정한다. DSP 입찰 요청은 DSP 하나에 대한 통신과 회사별 격리 자원을 소유한다.
-- 렌더링 증표는 `version`, `keyId`, `nonce`를 평문 헤더로 두고, `slotAuctionKey`, 발급 시각, 낙찰 DSP·입찰·가격, 매크로를 치환한 `billingUrl`, SSP가 정한 2초 렌더링 기한을 최소 이진 페이로드로 직렬화한다. 데이터 압축은 사용하지 않는다. 발급 시각은 SSP가 5초 `burl` 수락 상한을 계산하는 근거이며, DSP의 `Bid.exp`와 `burl` 수락 상한은 증표 필드가 아니라 입찰 응답·통합 계약에서 해석한다.
-- 증표 컴포넌트는 평문 헤더와 용도 식별자를 부가 인증 데이터로 묶어 AEAD로 페이로드를 봉인한다. 별도 HMAC을 덧붙이지 않으며 인증 태그 검증 전에는 복호화한 값을 업무 데이터로 사용하지 않는다.
-- 두 리전은 같은 로컬 키 묶음을 가진다. 새 키를 모든 인스턴스에 검증용으로 먼저 배포하고 발급 키를 전환한 뒤, 2초의 최대 증표 수명과 배포 여유가 지나면 이전 키를 제거한다. 증표 검증은 외부 키 조회를 하지 않는다.
-- `slotAuctionKey`가 청구 고유 키다. 같은 증표 지문의 발급 리전 내 중복 청구는 저장소 고유 제약이 막고 같은 성공을 다시 응답한다. 같은 키에 다른 증표가 오면 청구하지 않고 거부한다. 다른 SSP 리전은 그 청구를 대신 처리하지 않는다. DSP의 불투명 `burl` 처리는 같은 URL의 금액 효과를 한 번으로 수렴시킨다.
-- 렌더링 확인·청구 처리는 `BillingClaimRecorded`의 내구 기록 성공까지만 소유한다. `burl` 전달과 재개는 DSP 경매·과금 통지가 소유한다.
-- DSP 경매·과금 통지는 `nurl`·`lurl`을 단발 최선 노력으로 전달하고, `burl`만 내구 전달 작업을 원본으로 비동기 전달·재시도한다. 여러 SSP 인스턴스의 내부 실행기가 DB에서 작업을 짧게 임대해 호출하고, 작업 세대번호가 일치할 때만 결과를 기록해 늦은 이전 작업자가 결과를 덮어쓰지 못하게 한다. 호출 뒤 장애·응답 유실로 중복 `burl`은 가능하므로, 금액 멱등성은 DSP의 불투명 URL이 보장한다. 프로젝트 DSP에는 `Imp.exp=2`, `Bid.exp=2`와 발급 시각부터 5초인 `burl` 수락 상한을 통합 계약으로 적용하며, 재시도는 그 상한을 넘지 않는다.
-- `burl` HTTP 성공은 SSP가 통지를 전달했다는 뜻일 뿐 DSP의 내부 금액 판정을 뜻하지 않는다. 네트워크 오류·타임아웃·서버 오류는 기한 안에서 재시도하고, 계약 오류는 미전달로 끝낸다. 기한이 끝난 작업도 미전달로 종결한다.
-- DSP 경매·과금 통지는 DSP가 사전에 등록한 HTTPS 대상만 호출한다. 응답 URL이 임의 호스트나 내부 주소로 통신 경계를 넓히지 못하게 한다.
-- 청구·통지 기록 저장은 `BillingClaimRecorded`, 전달 대기·임대 상태, `BillingNoticeDelivered`, `BillingNoticeUndelivered`만 금액 관련 원본으로 다룬다. `nurl`·`lurl` 운영 로그는 이 장부에 섞지 않는다.
-- SSP 저장소는 SSP가 소유하지만 애플리케이션과 별도 컨테이너다. 각 리전은 자신의 사건을 독립적으로 기록한다.
+## 인터페이스
 
-## 구현 전 확정할 값
+### 외부 HTTP 인터페이스
 
-`burl` 재시도 간격·동시 실행 수·과부하 제한과 PostgreSQL의 구체 스키마·연결 풀은 구현 기준선 측정으로 정한다. 이는 위 책임 경계를 바꾸지 않는 운영 수치다.
+| 상대 | 요청 | 성공 응답 | 실패·중복 규칙 |
+|---|---|---|---|
+| 공급자 시스템 | OpenRTB `BidRequest` | `BidResponse` 또는 no-bid | 인증·표현 오류만 즉시 거부한다. 같은 요청은 중복 방지가 최초 결과를 재사용한다. |
+| 광고 표시 클라이언트 | 발급 리전 URL의 `RenderCompleted(renderProof)` | `204 No Content` | `204`는 청구·전달 작업 커밋 뒤에만 반환한다. 같은 증표는 다시 `204`, 다른 증표로 같은 키를 주장하면 거부한다. 저장 실패는 `5xx`로 재시도를 유도한다. |
+| DSP 회사 | OpenRTB 입찰 요청 | DSP별 입찰 응답 | DSP 응답은 절대 기한 뒤 무시한다. |
+| DSP 회사 | `nurl`·`lurl`·`burl` HTTP 호출 | 일반 HTTP 성공 | `nurl`·`lurl`은 단발 최선 노력이다. `burl`은 5초 상한 안에서만 재시도하며 HTTP 성공은 전달 성공일 뿐 과금 확정의 증거가 아니다. |
+
+### 내부 협력 인터페이스
+
+내부 메시지는 같은 프로세스 안의 명령·값 객체다. 별도 메시지 브로커나 원격 RPC 계약을 뜻하지 않는다.
+
+| 제공 컴포넌트 | 인터페이스 | 입력 → 출력 | 규칙 |
+|---|---|---|---|
+| 경매 중복 방지 | `deduplicate` | `AuctionRequest` → `StartAuction` / `ReuseAuctionResult` / `RejectChangedRequest` | `providerId + providerRequestId`와 요청 지문을 함께 판정한다. |
+| 경매 조정 | `runAuction` | `StartAuction` → `AuctionResult` | 절대 마감 시각을 하위 호출에 전달하며 마감 뒤 결과를 만들지 않는다. |
+| DSP 입찰 실행 | `requestBids` | `BidRequestBatch` → `BidResponses` | DSP별 실패는 해당 DSP만 탈락시킨다. |
+| 낙찰 결정 | `selectWinners` | `EligibleBids` → `AuctionWinners` | 외부 I/O 없이 같은 입력에 같은 결과를 낸다. |
+| 렌더링 증표 | `issue` / `verify` | `AuctionWinner` → `RenderProof`, `RenderProof` → `VerifiedRender` / `InvalidRender` | 발급 시각과 2초 기한을 검증한다. 발급 리전은 전용 렌더링 URL이 정한다. |
+| 렌더링 청구 | `acceptRender` | `VerifiedRender` → `ClaimAccepted` / `ClaimRejected` | 청구와 `burl` 전달 작업을 함께 저장한 뒤에만 수락한다. |
+| DSP 통지 전달 | `sendAuctionNotice` / `deliverBilling` | `AuctionNotice` / `BillingDeliveryTask` → 전달 결과 | `burl`은 중복될 수 있음을 전제로 하며 5초 마감 뒤 미전달로 종결한다. |
+
+### 저장소 포트
+
+PostgreSQL 접근은 C3 컴포넌트가 아니라 구현 내부의 저장소 포트로 감춘다. 다음 세 연산이 SSP의 내구성 계약이다.
+
+| 포트 | 호출자 | 보장 |
+|---|---|---|
+| `recordClaimAndScheduleDelivery` | 렌더링 청구 | `slotAuctionKey` 고유 제약 아래 청구 사건과 전달 대기 작업을 하나의 트랜잭션으로 저장한다. |
+| `leaseDueDelivery` | DSP 통지 전달 | 만료되지 않은 대기 작업 하나에 짧은 임대와 새 작업 세대번호를 원자 부여한다. |
+| `completeOrReleaseDelivery` | DSP 통지 전달 | 같은 작업 세대번호를 가진 실행기만 성공·재시도·미전달 결과를 기록한다. |
+
+작업 세대번호는 금액·인증 토큰이 아니다. 임대가 끝난 뒤 늦게 실행된 이전 작업자가 새 작업자의 결과를 덮어쓰지 못하게 하는 DB 조건값이다.
+
+## 구현 경계
+
+- 8개 컴포넌트는 우선 하나의 SSP 프로세스에 둔다. `burl` 전달 실행기는 각 인스턴스 내부의 백그라운드 실행기이며 별도 배포 서비스가 아니다.
+- 경매 API와 렌더링 API도 우선 같은 진입 자원을 쓴다. 실제 경합이 경매 p99 50ms를 침범할 때만 실행 자원을 분리한다.
+- PostgreSQL 스키마, 연결 풀, `burl` 재시도 간격·동시 실행 수는 기준선 측정으로 정한다. 이는 위 책임·인터페이스 경계를 바꾸지 않는 운영 수치다.
