@@ -1,11 +1,2 @@
-plugins {
-    id 'application'
-}
-
-dependencies {
-    implementation project(':shared')
-}
-
-application {
-    mainClass = 'com.bbororo.rtb.dsp.DspApplication'
-}
+// Java plugin and toolchain are inherited from the root build.
+// DSP implementation starts after the SSP implementation is complete.

@@ -1,0 +1,150 @@
+package com.bbororo.rtb.ssp.contract;
+
+import java.net.URI;
+import java.time.Instant;
+import java.util.List;
+
+/**
+ * SSP C3 컴포넌트가 주고받는 내부 메시지다.
+ *
+ * <p>이 타입은 같은 프로세스의 값 객체이며, 메시지 브로커나 원격 RPC 계약이 아니다.</p>
+ */
+public final class SspMessages {
+
+    private SspMessages() {
+    }
+
+    public record AuctionRequest(
+            String providerId,
+            String providerRequestId,
+            String requestFingerprint,
+            Instant deadline,
+            List<AuctionSlot> slots
+    ) {
+        public AuctionRequest {
+            slots = List.copyOf(slots);
+        }
+    }
+
+    public record AuctionSlot(String impId) {
+    }
+
+    public record AuctionResult(String auctionId, List<WinningBid> winners, String encodedRenderProof) {
+        public AuctionResult {
+            winners = List.copyOf(winners);
+        }
+    }
+
+    public record WinningBid(
+            String slotAuctionKey,
+            String dspId,
+            String bidId,
+            long cpmKrw,
+            URI nurl,
+            URI lurl,
+            URI burl
+    ) {
+    }
+
+    public record BidRequestBatch(String auctionId, AuctionRequest auction, List<String> dspIds, Instant deadline) {
+        public BidRequestBatch {
+            dspIds = List.copyOf(dspIds);
+        }
+    }
+
+    public record DspBid(
+            String dspId,
+            String impId,
+            String bidId,
+            long cpmKrw,
+            URI nurl,
+            URI lurl,
+            URI burl
+    ) {
+    }
+
+    public record BidResponses(List<DspBid> bids) {
+        public BidResponses {
+            bids = List.copyOf(bids);
+        }
+    }
+
+    public record EligibleBids(List<DspBid> bids) {
+        public EligibleBids {
+            bids = List.copyOf(bids);
+        }
+    }
+
+    public record AuctionWinners(List<WinningBid> winners) {
+        public AuctionWinners {
+            winners = List.copyOf(winners);
+        }
+    }
+
+    public record RenderProof(String encodedValue) {
+    }
+
+    public record RenderCompleted(RenderProof renderProof, Instant receivedAt) {
+    }
+
+    public record VerifiedRender(
+            String slotAuctionKey,
+            String proofDigest,
+            String dspId,
+            URI billingUrl,
+            Instant auctionIssuedAt,
+            Instant renderExpiresAt
+    ) {
+    }
+
+    public record BillingClaim(
+            String slotAuctionKey,
+            String proofDigest,
+            String dspId,
+            URI billingUrl,
+            Instant billingDeadline
+    ) {
+    }
+
+    public record BillingDeliveryTask(String deliveryId, BillingClaim claim) {
+    }
+
+    public record DeliveryLease(String deliveryId, long generation, Instant leaseUntil) {
+    }
+
+    public record LeasedBillingDelivery(BillingDeliveryTask task, DeliveryLease lease) {
+    }
+
+    public record AuctionNotice(NoticeKind kind, URI url) {
+    }
+
+    public enum NoticeKind {
+        WIN,
+        LOSS
+    }
+
+    public enum RenderAcceptance {
+        ACCEPTED,
+        DUPLICATE,
+        REJECTED,
+        RETRY_LATER
+    }
+
+    public enum DeliveryOutcome {
+        DELIVERED,
+        RETRY,
+        UNDELIVERED
+    }
+
+    public sealed interface Deduplication permits StartAuction, ReuseAuctionResult, RejectChangedRequest {
+    }
+
+    public record StartAuction(AuctionRequest request) implements Deduplication {
+    }
+
+    public record ReuseAuctionResult(AuctionResult result) implements Deduplication {
+    }
+
+    public record RejectChangedRequest(String providerId, String providerRequestId) implements Deduplication {
+    }
+}

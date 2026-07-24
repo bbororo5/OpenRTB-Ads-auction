@@ -1,11 +1,2 @@
-plugins {
-    id 'application'
-}
-
-dependencies {
-    implementation project(':shared')
-}
-
-application {
-    mainClass = 'com.bbororo.rtb.ssp.SspApplication'
-}
+// Java plugin and toolchain are inherited from the root build.
+// This module currently exposes SSP component contracts only.
