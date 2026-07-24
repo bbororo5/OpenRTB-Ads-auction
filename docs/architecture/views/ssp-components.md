@@ -68,13 +68,13 @@ flowchart LR
 
 | 컴포넌트 | 소유 책임 | 협력 메시지 | 소유하지 않는 것 |
 |---|---|---|---|
-| 경매·렌더링 API | HTTP 표현 검증, 지역 렌더링 URL로의 응답 | `AuctionRequest`, `RenderCompleted` | 경매·청구 규칙 |
+| 경매·렌더링 API | 프로젝트 공급자 HTTP 표현 검증, 지역 렌더링 URL로의 응답 | `AuctionRequest`, `RenderCompleted` | 경매·청구 규칙 |
 | 경매 중복 방지 | 요청 키·지문, 최초 실행과 5초 결과 재사용 | `StartAuction` 또는 `ReuseAuctionResult` | DSP 호출·낙찰 규칙 |
 | 경매 조정 | 50ms 절대 기한, 슬롯별 병렬 흐름, `nurl`·`lurl` 발행 | `RequestBids`, `SelectWinner`, `IssueRenderProof`, `AuctionNotice` | DSP별 통신 세부·가격 규칙 |
 | DSP 입찰 실행 | DSP별 요청 변환·기한·연결 격리 | `BidRequestBatch` → `BidResponses` | 낙찰과 예산 판단 |
 | 낙찰 결정 | 입찰 유효성, 1가격, 결정적 동점 처리 | `EligibleBids` → `AuctionWinners` | 네트워크·시계·저장소 |
-| 렌더링 증표 | AEAD 증표 발급·검증, 2초 렌더링 기한 | `IssueRenderProof`, `VerifyRenderProof` | 청구 기록·`burl` 전달 |
-| 렌더링 청구 | 유효 증표의 청구 판정, 청구와 전달 작업의 원자 생성 | `RenderCompleted` → `BillingClaimRecorded` + `BillingDeliveryPending` | `burl` HTTP 호출·재시도 |
+| 렌더링 증표 | 공급자·요청·슬롯 귀속을 가진 AEAD 증표 발급·검증, 2초 기한 | `IssueRenderProof`, `VerifyRenderProof` | 청구 기록·`burl` 전달 |
+| 렌더링 청구 | 유효 증표와 현재 공급자 활성 상태의 청구 판정, 청구와 전달 작업의 원자 생성 | `RenderCompleted` → `BillingClaimRecorded` + `BillingDeliveryPending` | `burl` HTTP 호출·재시도 |
 | DSP 통지 전달 | `nurl`·`lurl` 단발 통지, `burl` 작업 임대·전달·종결 | `AuctionNotice`, `BillingDeliveryTask` | DSP 내부 금액 판정 |
 
 `BillingClaimRecorded`와 `BillingDeliveryPending`은 같은 DB 트랜잭션에서 생성한다. 이 커밋이 성공한 뒤에만 API가 렌더링 성공을 응답한다. 따라서 성공 응답은 “청구와 `burl` 전달 책임이 내구화됐다”는 뜻이다.
@@ -85,8 +85,8 @@ flowchart LR
 
 | 상대 | 요청 | 성공 응답 | 실패·중복 규칙 |
 |---|---|---|---|
-| 공급자 시스템 | OpenRTB `BidRequest` | `BidResponse` 또는 no-bid | 인증·표현 오류만 즉시 거부한다. 같은 요청은 중복 방지가 최초 결과를 재사용한다. |
-| 광고 표시 클라이언트 | 발급 리전 URL의 `RenderCompleted(renderProof)` | `204 No Content` | `204`는 청구·전달 작업 커밋 뒤에만 반환한다. 같은 증표는 다시 `204`, 다른 증표로 같은 키를 주장하면 거부한다. 저장 실패는 `5xx`로 재시도를 유도한다. |
+| 공급자 시스템 | 프로젝트 공급자 경매 요청 | 낙찰 결과·렌더링 증표 또는 no-bid | 지역 설정 스냅숏의 공급자 ID·키 ID·활성 상태를 검증한다. 같은 요청은 중복 방지가 최초 결과를 재사용한다. |
+| 광고 표시 클라이언트 | 발급 리전 URL의 `RenderCompleted(renderProof)` | `204 No Content` | `204`는 청구·전달 작업 커밋 뒤에만 반환한다. 증표의 공급자 귀속과 현재 활성 상태를 함께 확인한다. 같은 증표는 다시 `204`, 다른 증표로 같은 키를 주장하면 거부한다. 저장 실패는 `5xx`로 재시도를 유도한다. |
 | DSP 회사 | OpenRTB 입찰 요청 | DSP별 입찰 응답 | DSP 응답은 절대 기한 뒤 무시한다. |
 | DSP 회사 | `nurl`·`lurl`·`burl` HTTP 호출 | 일반 HTTP 성공 | `nurl`·`lurl`은 단발 최선 노력이다. `burl`은 5초 상한 안에서만 재시도하며 HTTP 성공은 전달 성공일 뿐 과금 확정의 증거가 아니다. |
 
@@ -100,8 +100,8 @@ flowchart LR
 | 경매 조정 | `runAuction` | `StartAuction` → `AuctionResult` | 절대 마감 시각을 하위 호출에 전달하며 마감 뒤 결과를 만들지 않는다. |
 | DSP 입찰 실행 | `requestBids` | `BidRequestBatch` → `BidResponses` | DSP별 실패는 해당 DSP만 탈락시킨다. |
 | 낙찰 결정 | `selectWinners` | `EligibleBids` → `AuctionWinners` | 외부 I/O 없이 같은 입력에 같은 결과를 낸다. |
-| 렌더링 증표 | `issue` / `verify` | `AuctionWinner` → `RenderProof`, `RenderProof` → `VerifiedRender` / `InvalidRender` | 발급 시각과 2초 기한을 검증한다. 발급 리전은 전용 렌더링 URL이 정한다. |
-| 렌더링 청구 | `acceptRender` | `VerifiedRender` → `ClaimAccepted` / `ClaimRejected` | 청구와 `burl` 전달 작업을 함께 저장한 뒤에만 수락한다. |
+| 렌더링 증표 | `issue` / `verify` | `ProofIssuance` → `RenderProof`, `RenderProof` → `VerifiedRender` / `InvalidRender` | 증표에는 공급자 ID·요청 ID·슬롯·발급 시각·낙찰 사실·`burl`·2초 기한을 봉인한다. 발급 리전은 전용 URL이 정한다. |
+| 렌더링 청구 | `acceptRender` | `VerifiedRender` → `ClaimAccepted` / `ClaimRejected` | 현재 지역 공급자 스냅숏에서 활성 상태를 확인하고, 청구와 `burl` 전달 작업을 함께 저장한 뒤에만 수락한다. |
 | DSP 통지 전달 | `sendAuctionNotice` / `deliverBilling` | `AuctionNotice` / `BillingDeliveryTask` → 전달 결과 | `burl`은 중복될 수 있음을 전제로 하며 5초 마감 뒤 미전달로 종결한다. |
 
 ### 저장소 포트
@@ -121,4 +121,5 @@ PostgreSQL 접근은 C3 컴포넌트가 아니라 구현 내부의 저장소 포
 - 8개 컴포넌트는 우선 하나의 SSP 프로세스에 둔다. `burl` 전달 실행기는 각 인스턴스 내부의 백그라운드 실행기이며 별도 배포 서비스가 아니다.
 - 경매 API와 렌더링 API도 우선 같은 진입 자원을 쓴다. 실제 경합이 경매 p99 50ms를 침범할 때만 실행 자원을 분리한다.
 - 공급자 설정의 복제·메모리 스냅숏 교체는 경매 C3의 아홉 번째 업무 컴포넌트가 아닌 제어 경로 어댑터다. API는 그 스냅숏만 읽으며 서울의 설정 원본이나 도쿄 복제본을 요청마다 조회하지 않는다.
+- 렌더링 증표는 공급자–SSP 프로젝트 전용 봉투이며 OpenRTB 객체에 넣지 않는다. SSP–DSP 경계만 OpenRTB 2.6의 `BidRequest`, `BidResponse`, `nurl`, `lurl`, `burl`, `Imp.exp`, `Bid.exp`를 사용한다.
 - PostgreSQL 스키마, 연결 풀, `burl` 재시도 간격·동시 실행 수는 기준선 측정으로 정한다. 이는 위 책임·인터페이스 경계를 바꾸지 않는 운영 수치다.

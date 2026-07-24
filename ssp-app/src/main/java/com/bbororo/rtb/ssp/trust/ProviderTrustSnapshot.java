@@ -10,4 +10,6 @@ public interface ProviderTrustSnapshot {
     long version();
 
     boolean permits(String providerId, String keyId);
+
+    boolean isActive(String providerId);
 }

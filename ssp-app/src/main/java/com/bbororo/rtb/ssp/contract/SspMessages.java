@@ -16,6 +16,7 @@ public final class SspMessages {
 
     public record AuctionRequest(
             String providerId,
+            String providerKeyId,
             String providerRequestId,
             String requestFingerprint,
             Instant deadline,
@@ -29,7 +30,7 @@ public final class SspMessages {
     public record AuctionSlot(String impId) {
     }
 
-    public record AuctionResult(String auctionId, List<WinningBid> winners, String encodedRenderProof) {
+    public record AuctionResult(String auctionId, List<WinningBid> winners, RenderProof renderProof) {
         public AuctionResult {
             winners = List.copyOf(winners);
         }
@@ -84,10 +85,21 @@ public final class SspMessages {
     public record RenderProof(String encodedValue) {
     }
 
+    public record ProofIssuance(
+            AuctionRequest auction,
+            AuctionWinners winners,
+            Instant issuedAt,
+            Instant expiresAt
+    ) {
+    }
+
     public record RenderCompleted(RenderProof renderProof, Instant receivedAt) {
     }
 
     public record VerifiedRender(
+            String providerId,
+            String providerRequestId,
+            String impId,
             String slotAuctionKey,
             String proofDigest,
             String dspId,
@@ -98,6 +110,9 @@ public final class SspMessages {
     }
 
     public record BillingClaim(
+            String providerId,
+            String providerRequestId,
+            String impId,
             String slotAuctionKey,
             String proofDigest,
             String dspId,
