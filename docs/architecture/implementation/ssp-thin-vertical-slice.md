@@ -1,6 +1,6 @@
 # SSP 얇은 수직 흐름 구현 계획
 
-상태: 구현 순서 확정 · 0단계 데이터 모델 확정
+상태: 구현 순서 확정 · 0단계 설정 복제 개발 환경 구현
 
 목표는 [첫 E2E 인수 시나리오](../../../ssp-app/src/test/java/com/bbororo/rtb/ssp/e2e/SspAuctionBillingE2eTest.java)를 녹색으로 만드는 것이다. 먼저 공급자 설정 제어 경로를 준비하고, 컴포넌트를 각각 완성하지 않고 아래 네 개의 관찰 가능한 결과를 순서대로 만든다.
 
@@ -42,9 +42,11 @@
 | 관계 보장 | 원본과 도쿄 복제본 모두 외래 키로 설정 버전·공급자·키의 참조 무결성을 강제한다 |
 | 발행 규칙 | 새 버전·정책·키 전체와 활성 버전 포인터 갱신을 하나의 트랜잭션으로 커밋한다 |
 | 애플리케이션 포트 | `ProviderTrustSnapshot.version`, `permits`, `isActive` |
-| 완료 조건 | 지역 SSP가 head가 가리키는 완결 버전 하나만 메모리 스냅숏으로 읽고, 공급자·키 상태를 조회할 수 있다 |
+| 개발 환경 | Docker Compose의 서울 publisher와 도쿄 subscriber를 PostgreSQL 논리 복제로 연결한다. 공통 DDL, publication·subscription 초기화, 서울 발행→도쿄 수신 검증까지 포함한다. |
+| 남은 완료 조건 | 지역 SSP가 head가 가리키는 완결 버전 하나만 메모리 스냅숏으로 읽고, 공급자·키 상태를 조회할 수 있다 |
 
 정확한 칼럼·기본 키·외래 키는 [데이터 접근·보존 기준](../views/data.md#6-공급자-설정-제어-모델)에 둔다.
+로컬 구동과 복제 검증 방법은 [공급자 설정 논리 복제 개발 환경](../../../infrastructure/postgres/provider-config/README.md)에 둔다.
 
 ## 1. 입장 — 신뢰된 요청만 경매에 넣기
 

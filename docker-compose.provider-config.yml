@@ -1,0 +1,90 @@
+services:
+  postgres-seoul:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_DB: rtb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-postgres-password}
+      CONFIG_REPLICATOR_PASSWORD: ${CONFIG_REPLICATOR_PASSWORD:-local-dev-replication-password}
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_seoul_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/provider-config/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rtb"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  postgres-tokyo:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_DB: rtb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-postgres-password}
+    ports:
+      - "25432:5432"
+    volumes:
+      - postgres_tokyo_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/provider-config/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rtb"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  provider-config-replication-bootstrap:
+    image: postgres:17.5-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-local-dev-postgres-password}
+      CONFIG_REPLICATOR_PASSWORD: ${CONFIG_REPLICATOR_PASSWORD:-local-dev-replication-password}
+    depends_on:
+      provider-config-publisher-bootstrap:
+        condition: service_completed_successfully
+      postgres-seoul:
+        condition: service_healthy
+      postgres-tokyo:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/postgres/provider-config/bootstrap-subscription.sh:/bootstrap-subscription.sh:ro
+    entrypoint: ["/bin/sh", "/bootstrap-subscription.sh"]
+    restart: "no"
+
+  provider-config-publisher-bootstrap:
+    image: postgres:17.5-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-local-dev-postgres-password}
+      CONFIG_REPLICATOR_PASSWORD: ${CONFIG_REPLICATOR_PASSWORD:-local-dev-replication-password}
+    depends_on:
+      postgres-seoul:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/postgres/provider-config/init-publisher.sh:/init-publisher.sh:ro
+    entrypoint: ["/bin/sh", "/init-publisher.sh"]
+    restart: "no"
+
+  provider-config-replication-verifier:
+    image: postgres:17.5-alpine
+    profiles: ["verify"]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-local-dev-postgres-password}
+    depends_on:
+      provider-config-replication-bootstrap:
+        condition: service_completed_successfully
+    volumes:
+      - ./infrastructure/postgres/provider-config/verify-replication.sh:/verify-replication.sh:ro
+    entrypoint: ["/bin/sh", "/verify-replication.sh"]
+    restart: "no"
+
+volumes:
+  postgres_seoul_data:
+  postgres_tokyo_data:
