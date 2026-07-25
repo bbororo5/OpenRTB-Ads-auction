@@ -75,3 +75,23 @@ SSP 청구 근거와 DSP 접수 근거는 독립 원본이며 외부 계약으�
 - 리스 크기와 유효 기간은 페이싱 편차와 리전 원장 통신량 사이의 조정값이며 시험으로 정한다.
 
 리전별 누적값은 검증 지표로 수집할 수 있지만 런타임 페이싱 제어에는 전역 합산 결과를 사용하지 않는다.
+
+## 6. 공급자 설정 제어 모델
+
+공급자 설정은 서울 PostgreSQL의 단일 쓰기 원본에서 버전별 완결 스냅숏으로 발행하고, 도쿄 PostgreSQL로 비동기 논리 복제한다. 두 저장소 모두 같은 외래 키 제약을 적용한다. 이 데이터는 저빈도이고 하나의 쓰기 권위 안에 있으므로 애플리케이션 검증만으로 관계를 관리하지 않는다.
+
+```text
+provider_config_head.active_version
+  → provider_config_version.version
+      → provider_policy.version
+          → provider_key.(version, provider_id)
+```
+
+| 테이블 | 기본 키 | 관계·핵심 칼럼 | 역할 |
+|---|---|---|---|
+| `provider_config_head` | `scope` | `active_version` → 설정 버전 | `scope = global` 행 하나로 현재 효력 버전을 가리킨다. |
+| `provider_config_version` | `version` | `checksum`, `published_at` | 변경하지 않는 완결 설정 스냅숏의 식별자다. |
+| `provider_policy` | `(version, provider_id)` | `version` → 설정 버전, `active` | 특정 버전에서 공급자 요청을 허용할지 정한다. |
+| `provider_key` | `(version, provider_id, key_id)` | `(version, provider_id)` → 공급자 정책, `active` | 특정 공급자가 해당 버전에서 쓸 수 있는 키 ID다. |
+
+새 설정은 버전 행, 공급자 정책 전체, 키 전체를 추가하고 마지막에 `provider_config_head.active_version`을 바꾸는 하나의 트랜잭션으로 발행한다. SSP는 읽기 트랜잭션 하나에서 head와 그 버전의 행들을 읽어 불변 메모리 스냅숏으로 교체한다. 이전 버전은 삭제하지 않고 보존하며, 보존 정책은 운영 단계에서 정한다.

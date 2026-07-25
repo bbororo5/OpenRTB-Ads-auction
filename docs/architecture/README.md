@@ -18,6 +18,7 @@
 | C4 Deployment | [SSP 다중 리전 배포](views/ssp-deployment.md) | SSP 컨테이너 인스턴스와 장애 영역 |
 | C4 Deployment | [프로젝트 DSP 다중 리전 배포](views/dsp-deployment.md) | DSP 컨테이너 인스턴스·원장과 장애 영역 |
 | Technology | [SSP 기술 기준선](technology/ssp.md) | SSP의 확정 기술과 컴포넌트 뒤에 정할 기술 |
+| Implementation | [SSP 얇은 수직 흐름 구현 계획](implementation/ssp-thin-vertical-slice.md) | E2E를 녹색으로 만드는 컴포넌트·인터페이스 순서 |
 
 C4 Level 3은 내부 책임을 설명할 가치가 있는 실행 컨테이너에만 작성한다. 현재는 SSP 애플리케이션 경계를 검토했으며 DSP는 별도로 다룬다. Level 4는 구현 구조가 생긴 뒤 필요할 때 코드에서 생성한다.
 
