@@ -1,2 +1,30 @@
-// Java plugin and toolchain are inherited from the root build.
-// This module currently exposes SSP component contracts only.
+dependencies {
+    implementation 'org.postgresql:postgresql:42.7.12'
+    implementation 'com.zaxxer:HikariCP:7.1.0'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'provider-config-replication'
+    }
+}
+
+tasks.register('providerConfigReplicationIntegrationTest', Test) {
+    description = 'Runs the PostgreSQL provider configuration reader against the local publisher and subscriber databases.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'provider-config-replication'
+    }
+
+    systemProperty 'provider.config.publisher.jdbc-url',
+            providers.gradleProperty('providerConfigPublisherJdbcUrl').getOrElse('jdbc:postgresql://localhost:15432/rtb')
+    systemProperty 'provider.config.subscriber.jdbc-url',
+            providers.gradleProperty('providerConfigSubscriberJdbcUrl').getOrElse('jdbc:postgresql://localhost:25432/rtb')
+    systemProperty 'provider.config.username',
+            providers.gradleProperty('providerConfigUsername').getOrElse('postgres')
+    systemProperty 'provider.config.password',
+            providers.gradleProperty('providerConfigPassword').getOrElse('local-dev-postgres-password')
+}

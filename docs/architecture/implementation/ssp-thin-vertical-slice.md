@@ -43,7 +43,8 @@
 | 발행 규칙 | 새 버전·정책·키 전체와 활성 버전 포인터 갱신을 하나의 트랜잭션으로 커밋한다 |
 | 애플리케이션 포트 | `ProviderTrustSnapshot.version`, `permits`, `isActive` |
 | 개발 환경 | Docker Compose의 서울 publisher와 도쿄 subscriber를 PostgreSQL 논리 복제로 연결한다. 공통 DDL, publication·subscription 초기화, 서울 발행→도쿄 수신 검증까지 포함한다. |
-| 남은 완료 조건 | 지역 SSP가 head가 가리키는 완결 버전 하나만 메모리 스냅숏으로 읽고, 공급자·키 상태를 조회할 수 있다 |
+| 현재 구현 | 주입받은 지역 `DataSource`만 쓰는 PostgreSQL 설정 읽기와 불변 `ProviderTrustSnapshot` 조립을 구현한다. 코드에 특정 리전 이름·원격 DB 선택 규칙은 없다. |
+| 남은 완료 조건 | 새 스냅숏을 원자 교체하고, 경매 API가 그 스냅숏만 조회하도록 연결한다. |
 
 정확한 칼럼·기본 키·외래 키는 [데이터 접근·보존 기준](../views/data.md#6-공급자-설정-제어-모델)에 둔다.
 로컬 구동과 복제 검증 방법은 [공급자 설정 논리 복제 개발 환경](../../../infrastructure/postgres/provider-config/README.md)에 둔다.

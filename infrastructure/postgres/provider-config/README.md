@@ -24,6 +24,14 @@ docker compose -f docker-compose.provider-config.yml --profile verify \
 
 검증기는 서울에서 버전 1을 발행한 뒤 도쿄 수신을 확인하고, 버전 2에서 공급자를 비활성화한 뒤 도쿄가 새 head와 정책을 받았는지 확인한다.
 
+SSP의 실제 JDBC 설정 리더까지 함께 검증하려면 DB를 올린 상태에서 다음을 실행한다.
+
+```bash
+gradle :ssp-app:providerConfigReplicationIntegrationTest
+```
+
+이 시험은 publisher 연결로 새 설정 버전을 발행하고, subscriber 연결로 구성한 `PostgreSqlProviderConfigReader`가 복제된 활성 버전과 공급자·키 상태를 읽는지 확인한다. 연결 주소는 Gradle 속성으로 바꿀 수 있으며, 애플리케이션 코드에는 지역 이름이나 DB 선택 분기가 없다.
+
 초기화부터 다시 하려면 볼륨도 제거한다.
 
 ```bash
