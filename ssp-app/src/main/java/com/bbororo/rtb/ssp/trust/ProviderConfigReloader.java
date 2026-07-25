@@ -15,6 +15,9 @@ public final class ProviderConfigReloader {
 
     /** 읽기·조립이 성공했을 때만 더 새 버전을 공개한다. */
     public boolean refresh() {
+        if (reader.loadActiveVersion() <= snapshots.version()) {
+            return false;
+        }
         return snapshots.replaceIfNewer(reader.loadActiveSnapshot());
     }
 }

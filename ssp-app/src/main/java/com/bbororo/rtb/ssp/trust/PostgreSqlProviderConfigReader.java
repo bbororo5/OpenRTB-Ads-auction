@@ -18,6 +18,12 @@ import javax.sql.DataSource;
  */
 public final class PostgreSqlProviderConfigReader implements ProviderConfigReader {
 
+    private static final String LOAD_ACTIVE_VERSION = """
+            SELECT active_version
+            FROM provider_config_head
+            WHERE scope = 'global'
+            """;
+
     private static final String LOAD_ACTIVE_SNAPSHOT = """
             SELECT
                 head.active_version,
@@ -41,6 +47,21 @@ public final class PostgreSqlProviderConfigReader implements ProviderConfigReade
 
     public PostgreSqlProviderConfigReader(DataSource dataSource) {
         this.dataSource = dataSource;
+    }
+
+    @Override
+    public long loadActiveVersion() {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(LOAD_ACTIVE_VERSION);
+             ResultSet result = statement.executeQuery()) {
+
+            if (!result.next()) {
+                throw new IllegalStateException("활성 공급자 설정 버전이 없습니다.");
+            }
+            return result.getLong("active_version");
+        } catch (SQLException exception) {
+            throw new IllegalStateException("지역 공급자 설정 버전을 읽지 못했습니다.", exception);
+        }
     }
 
     @Override
