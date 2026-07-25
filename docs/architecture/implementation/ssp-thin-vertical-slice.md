@@ -1,6 +1,6 @@
 # SSP 얇은 수직 흐름 구현 계획
 
-상태: 구현 순서 확정 · 0단계 설정 복제 개발 환경 구현
+상태: 0단계 설정 제어 완료 · 1단계 입장 구현 대기
 
 목표는 [첫 E2E 인수 시나리오](../../../ssp-app/src/test/java/com/bbororo/rtb/ssp/e2e/SspAuctionBillingE2eTest.java)를 녹색으로 만드는 것이다. 먼저 공급자 설정 제어 경로를 준비하고, 컴포넌트를 각각 완성하지 않고 아래 네 개의 관찰 가능한 결과를 순서대로 만든다.
 
@@ -45,7 +45,8 @@
 | 개발 환경 | Docker Compose의 서울 publisher와 도쿄 subscriber를 PostgreSQL 논리 복제로 연결한다. 공통 DDL, publication·subscription 초기화, 서울 발행→도쿄 수신 검증까지 포함한다. |
 | 현재 구현 | 주입받은 지역 `DataSource`만 쓰는 PostgreSQL 설정 읽기, 불변 `ProviderTrustSnapshot` 조립, 더 새 완결 버전만 공개하는 원자 교체를 구현한다. 코드에 특정 리전 이름·원격 DB 선택 규칙은 없다. |
 | 갱신 규칙 | 시작 뒤 0~10초 무작위 지연을 둔 뒤, 작업 완료 후 10초를 기다리는 fixed-delay 방식으로 지역 DB의 `active_version`만 확인한다. 더 새 버전일 때만 전체 스냅숏을 읽고 원자 교체하며, 실패하면 기존 스냅숏을 유지한다. |
-| 남은 완료 조건 | 시작 시 초기 스냅숏을 만들고, 경매 API가 그 스냅숏만 조회하도록 연결한다. |
+| 시작 규칙 | `ProviderTrustControlPlane.startFromEnvironment()`은 HTTP 포트를 열기 전에 활성 스냅숏을 읽는다. 실패하면 DB 자원을 닫고 예외를 전파하므로 SSP는 시작하지 못한다. |
+| 완료 조건 | 완료. 1단계에서 `SspApplication`이 이 제어 경로를 먼저 시작하고, 경매 API에는 `trustSnapshot()`만 전달한다. |
 
 정확한 칼럼·기본 키·외래 키는 [데이터 접근·보존 기준](../views/data.md#6-공급자-설정-제어-모델)에 둔다.
 로컬 구동과 복제 검증 방법은 [공급자 설정 논리 복제 개발 환경](../../../infrastructure/postgres/provider-config/README.md)에 둔다.

@@ -25,13 +25,17 @@ public final class ProviderConfigRefreshScheduler implements AutoCloseable {
     public ProviderConfigRefreshScheduler(ProviderConfigReloader reloader) {
         this(
                 reloader,
-                Executors.newSingleThreadScheduledExecutor(runnable -> {
-                    Thread thread = new Thread(runnable, "provider-config-refresh");
-                    thread.setDaemon(true);
-                    return thread;
-                }),
+                newExecutor(),
                 DEFAULT_REFRESH_INTERVAL
         );
+    }
+
+    static ScheduledExecutorService newExecutor() {
+        return Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "provider-config-refresh");
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 
     ProviderConfigRefreshScheduler(
