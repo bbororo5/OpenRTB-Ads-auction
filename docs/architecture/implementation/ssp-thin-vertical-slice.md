@@ -2,7 +2,7 @@
 
 상태: 0단계 설정 제어 완료 · 1단계 입장 구현 대기
 
-목표는 [첫 E2E 인수 시나리오](../../../ssp-app/src/test/java/com/bbororo/rtb/ssp/e2e/SspAuctionBillingE2eTest.java)를 녹색으로 만드는 것이다. 먼저 공급자 설정 제어 경로를 준비하고, 컴포넌트를 각각 완성하지 않고 아래 네 개의 관찰 가능한 결과를 순서대로 만든다.
+목표는 [SSP E2E 인수 시나리오](../../../ssp-app/src/test/java/com/bbororo/rtb/ssp/e2e/SspAuctionBillingE2eTest.java)를 녹색으로 만드는 것이다. 단계 1~4에서는 각 컴포넌트와 경계의 단위·통합 시험으로 규칙을 검증하고, 네 결과가 모두 연결된 뒤에만 SSP 전체 E2E를 실행한다.
 
 ```text
 ① 신뢰된 요청 입장
@@ -18,7 +18,7 @@
 
 ## 전체 지도
 
-| 단계 | E2E에서 새로 참이 되는 사실 | 참여 컴포넌트 | 아직 의도적으로 하지 않는 것 |
+| 단계 | 단계 완료 시 보장하는 사실 | 참여 컴포넌트 | 아직 의도적으로 하지 않는 것 |
 |---|---|---|---|
 | 0. 설정 제어 | 지역 SSP가 완결된 공급자 설정 버전을 읽을 수 있다 | 공급자 신뢰 스냅숏 제어 경로 | 계약 관리 UI·실제 비밀키 발급 |
 | 1. 입장 | 신뢰된 공급자 요청만 경매에 들어간다 | 경매·렌더링 API, 경매 중복 방지 | 실제 HTTP·PostgreSQL |
@@ -54,8 +54,7 @@
 ## 1. 입장 — 신뢰된 요청만 경매에 넣기
 
 ```text
-지역 L7 진입 계층
-  → Rendezvous Hash(AuctionRequestKey)
+지역 L7 진입 계층이 ADR-009에 따라 요청 소유 SSP로 전달
   → AuctionRenderApi.auction(AuctionRequest)
   → ProviderTrustSnapshot.permits(providerId, keyId)
   → AuctionDeduplicator.deduplicate(AuctionRequest)
@@ -64,12 +63,13 @@
 
 | 항목 | 내용 |
 |---|---|
-| 참여 컴포넌트 | 지역 L7 진입 계층, 경매·렌더링 API, 경매 중복 방지 |
+| 참여 컴포넌트 | 경매·렌더링 API, 경매 중복 방지 |
 | 제어 경로 포트 | `ProviderTrustSnapshot.permits`, `ProviderTrustSnapshot.isActive` |
-| 입력 메시지 | `AuctionRequestKey(providerId, providerRequestId)`, 서버가 계산한 요청 지문, `AuctionRequest` |
+| 라우팅 전제 | 지역 L7 진입 계층이 `AuctionRequestKey(providerId, providerRequestId)`로 Rendezvous Hash를 적용해 요청 소유 SSP에 전달한다. 이 단계는 그 결정을 다시 하지 않는다. |
+| 입력 메시지 | `AuctionRequest`, 서버가 계산한 요청 지문 |
 | 출력 메시지 | `StartAuction`, `JoinInFlightAuction`, `ReuseAuctionResult`, `RejectChangedRequest` |
-| 시험용 구현 | 불변 공급자 스냅숏, Rendezvous Hash 소유자 선택, 5초 인메모리 single-flight |
-| 완료 조건 | 신뢰되지 않은 공급자는 경매 조정에 도달하지 못한다. 같은 키는 같은 소유자로 라우팅되고, 5초 안에는 두 번째 경매를 만들지 않는다. |
+| 시험용 구현 | 불변 공급자 스냅숏, 5초 인메모리 single-flight |
+| 완료 조건 | 신뢰되지 않은 공급자는 경매 조정에 도달하지 못한다. 소유 SSP에 도착한 같은 키는 5초 안에 두 번째 경매를 만들지 않는다. |
 
 ## 2. 경매 — DSP 응답에서 낙찰 만들기
 
@@ -128,7 +128,7 @@ DspNotificationDelivery.deliverDueBilling(now)
 | 시험용 구현 | 동기 호출되는 시험용 DSP 통지 수신기와 인메모리 작업 임대 |
 | 완료 조건 | 대기 작업 하나가 프로젝트 DSP의 `burl` 주소로 한 번 전달되고, 대기 수가 0이 된다 |
 
-이 시점에 첫 E2E 전체가 녹색이 된다. 시험용 어댑터는 업무 규칙을 흉내 내지 않고, 이후 실제 어댑터로 교체할 수 있는 각 포트만 구현한다.
+이 시점에 네 결과가 연결되므로 SSP 전체 E2E를 처음 실행한다. 시험용 어댑터는 업무 규칙을 흉내 내지 않고, 이후 실제 어댑터로 교체할 수 있는 각 포트만 구현한다.
 
 ## 5. 강화 — 시험용 어댑터를 실제 기술로 교체하기
 
