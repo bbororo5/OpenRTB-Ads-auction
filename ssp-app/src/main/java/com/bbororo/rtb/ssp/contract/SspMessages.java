@@ -18,12 +18,16 @@ public final class SspMessages {
             String providerId,
             String providerKeyId,
             String providerRequestId,
-            String requestFingerprint,
             Instant deadline,
             List<AuctionSlot> slots
     ) {
         public AuctionRequest {
             slots = List.copyOf(slots);
+        }
+
+        /** 이 요청이 기존 경매와 같은지를 판단하는 SSP 내부 지문이다. */
+        public AuctionRequestFingerprint fingerprint() {
+            return AuctionRequestFingerprintCalculator.calculate(this);
         }
     }
 
