@@ -1,10 +1,10 @@
-package com.bbororo.rtb.ssp.api;
+package com.bbororo.rtb.ssp.admission;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import com.bbororo.rtb.ssp.api.AuctionAdmission.AcceptedAdmission;
-import com.bbororo.rtb.ssp.api.AuctionAdmission.RejectedAdmission;
+import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.AuthorizedRequest;
+import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.RejectedAuthorization;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.trust.ImmutableProviderTrustSnapshot;
 import java.time.Instant;
@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-class AuctionAdmissionTest {
+class ProviderRequestAuthorizerTest {
 
     private static final AuctionRequest REQUEST = new AuctionRequest(
             "provider-active",
@@ -24,33 +24,33 @@ class AuctionAdmissionTest {
     );
 
     @Test
-    void admitsOnlyAProviderWithAnActiveKeyInTheRegionalSnapshot() {
-        AuctionAdmission admission = new AuctionAdmission(snapshot());
+    void authorizesOnlyAnActiveProviderWithAnActiveKeyInTheRegionalSnapshot() {
+        ProviderRequestAuthorizer authorizer = new ProviderRequestAuthorizer(snapshot());
 
-        AcceptedAdmission result = assertInstanceOf(AcceptedAdmission.class, admission.admit(REQUEST));
+        AuthorizedRequest result = assertInstanceOf(AuthorizedRequest.class, authorizer.authorize(REQUEST));
 
         assertEquals(REQUEST, result.request());
     }
 
     @Test
-    void rejectsAnInactiveKeyBeforeDeduplication() {
-        AuctionAdmission admission = new AuctionAdmission(snapshot());
+    void rejectsAnInactiveKey() {
+        ProviderRequestAuthorizer authorizer = new ProviderRequestAuthorizer(snapshot());
         AuctionRequest inactiveKey = new AuctionRequest(
                 "provider-active", "key-inactive", "request-1", REQUEST.deadline(), List.of());
 
-        assertEquals(RejectedAdmission.UNTRUSTED_PROVIDER, admission.admit(inactiveKey));
+        assertEquals(RejectedAuthorization.UNTRUSTED_PROVIDER, authorizer.authorize(inactiveKey));
     }
 
     @Test
     void rejectsAnInactiveProviderEvenWhenItsKeyIsKnown() {
-        AuctionAdmission admission = new AuctionAdmission(new ImmutableProviderTrustSnapshot(
+        ProviderRequestAuthorizer authorizer = new ProviderRequestAuthorizer(new ImmutableProviderTrustSnapshot(
                 1,
                 Map.of("provider-inactive", new ImmutableProviderTrustSnapshot.ProviderPolicy(false, Set.of("key-active")))
         ));
         AuctionRequest inactiveProvider = new AuctionRequest(
                 "provider-inactive", "key-active", "request-1", REQUEST.deadline(), List.of());
 
-        assertEquals(RejectedAdmission.UNTRUSTED_PROVIDER, admission.admit(inactiveProvider));
+        assertEquals(RejectedAuthorization.UNTRUSTED_PROVIDER, authorizer.authorize(inactiveProvider));
     }
 
     private static ImmutableProviderTrustSnapshot snapshot() {
