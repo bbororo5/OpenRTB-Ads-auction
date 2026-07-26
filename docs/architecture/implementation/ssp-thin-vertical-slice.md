@@ -1,6 +1,6 @@
 # SSP 얇은 수직 흐름 구현 계획
 
-상태: 0단계 설정 제어 완료 · 1단계 입장 구현 대기
+상태: 0단계 설정 제어 완료 · 1단계 입장 완료
 
 목표는 [SSP E2E 인수 시나리오](../../../ssp-app/src/test/java/com/bbororo/rtb/ssp/e2e/SspAuctionBillingE2eTest.java)를 녹색으로 만드는 것이다. 단계 1~4에서는 각 컴포넌트와 경계의 단위·통합 시험으로 규칙을 검증하고, 네 결과가 모두 연결된 뒤에만 SSP 전체 E2E를 실행한다.
 
@@ -57,8 +57,9 @@
 지역 L7 진입 계층이 ADR-009에 따라 요청 소유 SSP로 전달
   → AuctionRenderApi.auction(AuctionRequest)
   → ProviderTrustSnapshot.permits(providerId, keyId)
-  → AuctionDeduplicator.deduplicate(AuctionRequest)
-  → StartAuction | JoinInFlightAuction | ReuseAuctionResult | RejectChangedRequest
+  → AuctionDeduplicator.execute(AuctionRequest, AuctionStarter)
+  → 최초 요청만 StartAuction
+  → 중복 요청은 같은 CompletionStage 결과를 공유
 ```
 
 | 항목 | 내용 |
@@ -67,9 +68,9 @@
 | 제어 경로 포트 | `ProviderTrustSnapshot.permits`, `ProviderTrustSnapshot.isActive` |
 | 라우팅 전제 | 지역 L7 진입 계층이 `AuctionRequestKey(providerId, providerRequestId)`로 Rendezvous Hash를 적용해 요청 소유 SSP에 전달한다. 이 단계는 그 결정을 다시 하지 않는다. |
 | 입력 메시지 | `AuctionRequest`, 서버가 계산한 요청 지문 |
-| 출력 메시지 | `StartAuction`, `JoinInFlightAuction`, `ReuseAuctionResult`, `RejectChangedRequest` |
+| 출력 메시지 | 최초 요청의 `StartAuction`, 또는 기존 경매의 동일 완료 결과 |
 | 시험용 구현 | 불변 공급자 스냅숏, 5초 인메모리 single-flight |
-| 완료 조건 | 신뢰되지 않은 공급자는 경매 조정에 도달하지 못한다. 소유 SSP에 도착한 같은 키는 5초 안에 두 번째 경매를 만들지 않는다. |
+| 완료 조건 | 완료. 신뢰되지 않은 공급자는 경매 조정에 도달하지 못하며, 소유 SSP에 도착한 같은 키는 5초 안에 두 번째 경매를 만들지 않는다. |
 
 ## 2. 경매 — DSP 응답에서 낙찰 만들기
 
