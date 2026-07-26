@@ -155,15 +155,7 @@ public final class SspMessages {
         UNDELIVERED
     }
 
-    public sealed interface Deduplication permits StartAuction, ReuseAuctionResult, RejectChangedRequest {
-    }
-
-    public record StartAuction(AuctionRequest request) implements Deduplication {
-    }
-
-    public record ReuseAuctionResult(AuctionResult result) implements Deduplication {
-    }
-
-    public record RejectChangedRequest(String providerId, String providerRequestId) implements Deduplication {
+    /** 중복 방어를 통과한 최초 요청을 경매 조정자에게 넘기는 메시지다. */
+    public record StartAuction(AuctionRequest request) {
     }
 }

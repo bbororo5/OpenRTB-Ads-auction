@@ -1,10 +1,11 @@
 package com.bbororo.rtb.ssp.deduplication;
 
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
-import com.bbororo.rtb.ssp.contract.SspMessages.Deduplication;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
+import java.util.concurrent.CompletionStage;
 
-/** 같은 공급자 요청의 최초 실행 또는 결과 재사용을 판정한다. */
+/** 같은 공급자 요청의 경매를 한 번만 시작하고, 중복 요청은 그 결과를 공유한다. */
 public interface AuctionDeduplicator {
 
-    Deduplication deduplicate(AuctionRequest request);
+    CompletionStage<AuctionResult> execute(AuctionRequest request, AuctionStarter starter);
 }
