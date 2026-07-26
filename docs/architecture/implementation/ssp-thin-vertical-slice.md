@@ -54,20 +54,22 @@
 ## 1. 입장 — 신뢰된 요청만 경매에 넣기
 
 ```text
-AuctionRenderApi.auction(AuctionRequest)
+지역 L7 진입 계층
+  → Rendezvous Hash(AuctionRequestKey)
+  → AuctionRenderApi.auction(AuctionRequest)
   → ProviderTrustSnapshot.permits(providerId, keyId)
   → AuctionDeduplicator.deduplicate(AuctionRequest)
-  → StartAuction | ReuseAuctionResult | RejectChangedRequest
+  → StartAuction | JoinInFlightAuction | ReuseAuctionResult | RejectChangedRequest
 ```
 
 | 항목 | 내용 |
 |---|---|
-| 참여 컴포넌트 | 경매·렌더링 API, 경매 중복 방지 |
+| 참여 컴포넌트 | 지역 L7 진입 계층, 경매·렌더링 API, 경매 중복 방지 |
 | 제어 경로 포트 | `ProviderTrustSnapshot.permits`, `ProviderTrustSnapshot.isActive` |
-| 입력 메시지 | `AuctionRequest(providerId, providerKeyId, providerRequestId, requestFingerprint, ...)` |
-| 출력 메시지 | `StartAuction`, `ReuseAuctionResult`, `RejectChangedRequest` |
-| 시험용 구현 | 불변 메모리 공급자 스냅숏, 5초 인메모리 중복 방지 |
-| 완료 조건 | 신뢰되지 않은 공급자는 경매 조정에 도달하지 못하고, 같은 요청은 새 경매를 만들지 않는다 |
+| 입력 메시지 | `AuctionRequestKey(providerId, providerRequestId)`, 서버가 계산한 요청 지문, `AuctionRequest` |
+| 출력 메시지 | `StartAuction`, `JoinInFlightAuction`, `ReuseAuctionResult`, `RejectChangedRequest` |
+| 시험용 구현 | 불변 공급자 스냅숏, Rendezvous Hash 소유자 선택, 5초 인메모리 single-flight |
+| 완료 조건 | 신뢰되지 않은 공급자는 경매 조정에 도달하지 못한다. 같은 키는 같은 소유자로 라우팅되고, 5초 안에는 두 번째 경매를 만들지 않는다. |
 
 ## 2. 경매 — DSP 응답에서 낙찰 만들기
 
