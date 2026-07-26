@@ -18,10 +18,13 @@ public final class SspMessages {
             String providerId,
             String providerKeyId,
             String providerRequestId,
-            Instant deadline,
+            int tmaxMillis,
             List<AuctionSlot> slots
     ) {
         public AuctionRequest {
+            if (tmaxMillis <= 0 || tmaxMillis > 180) {
+                throw new IllegalArgumentException("tmaxMillis must be between 1 and 180");
+            }
             slots = List.copyOf(slots);
         }
 
@@ -31,7 +34,13 @@ public final class SspMessages {
         }
     }
 
-    public record AuctionSlot(String impId) {
+    public record AuctionSlot(String impId, long floorCpmKrw) {
+
+        public AuctionSlot {
+            if (floorCpmKrw < 0) {
+                throw new IllegalArgumentException("floorCpmKrw must not be negative");
+            }
+        }
     }
 
     public record AuctionResult(String auctionId, List<WinningBid> winners, RenderProof renderProof) {
@@ -51,7 +60,7 @@ public final class SspMessages {
     ) {
     }
 
-    public record BidRequestBatch(String auctionId, AuctionRequest auction, List<String> dspIds, Instant deadline) {
+    public record BidRequestBatch(String auctionId, AuctionRequest auction, List<String> dspIds, AuctionDeadline deadline) {
         public BidRequestBatch {
             dspIds = List.copyOf(dspIds);
         }
@@ -68,10 +77,31 @@ public final class SspMessages {
     ) {
     }
 
-    public record BidResponses(List<DspBid> bids) {
+    public record BidResponses(List<DspCallOutcome> outcomes) {
         public BidResponses {
-            bids = List.copyOf(bids);
+            outcomes = List.copyOf(outcomes);
         }
+    }
+
+    public record DspCallOutcome(String dspId, DspCallOutcomeKind kind, List<DspBid> bids) {
+
+        public DspCallOutcome {
+            bids = List.copyOf(bids);
+            if (kind == DspCallOutcomeKind.VALID_BID && bids.isEmpty()) {
+                throw new IllegalArgumentException("VALID_BID must include at least one bid");
+            }
+            if (kind != DspCallOutcomeKind.VALID_BID && !bids.isEmpty()) {
+                throw new IllegalArgumentException(kind + " must not include bids");
+            }
+        }
+    }
+
+    public enum DspCallOutcomeKind {
+        VALID_BID,
+        NO_BID,
+        TIMEOUT,
+        INVALID_BID,
+        ERROR
     }
 
     public record EligibleBids(List<DspBid> bids) {
@@ -156,6 +186,6 @@ public final class SspMessages {
     }
 
     /** 중복 방어를 통과한 최초 요청을 경매 조정자에게 넘기는 메시지다. */
-    public record StartAuction(AuctionRequest request) {
+    public record StartAuction(AuctionRequest request, AuctionDeadline deadline) {
     }
 }

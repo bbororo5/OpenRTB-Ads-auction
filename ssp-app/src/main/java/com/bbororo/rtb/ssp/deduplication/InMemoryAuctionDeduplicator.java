@@ -2,6 +2,7 @@ package com.bbororo.rtb.ssp.deduplication;
 
 import com.bbororo.rtb.ssp.contract.AuctionRequestFingerprint;
 import com.bbororo.rtb.ssp.contract.AuctionRequestKey;
+import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
 import com.bbororo.rtb.ssp.contract.SspMessages.StartAuction;
@@ -38,8 +39,9 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
     }
 
     @Override
-    public CompletionStage<AuctionResult> execute(AuctionRequest request, AuctionStarter starter) {
+    public CompletionStage<AuctionResult> execute(AuctionRequest request, AuctionDeadline deadline, AuctionStarter starter) {
         Objects.requireNonNull(request);
+        Objects.requireNonNull(deadline);
         Objects.requireNonNull(starter);
 
         Instant now = clock.instant();
@@ -68,7 +70,7 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
 
         return switch (resolution.get()) {
             case StartFlight start -> {
-                start(start.flight(), request, starter);
+                start(start.flight(), request, deadline, starter);
                 yield start.flight().result();
             }
             case ReuseFlight reuse -> reuse.flight().result();
@@ -77,10 +79,10 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
         };
     }
 
-    private void start(Flight flight, AuctionRequest request, AuctionStarter starter) {
+    private void start(Flight flight, AuctionRequest request, AuctionDeadline deadline, AuctionStarter starter) {
         try {
             CompletionStage<AuctionResult> started = Objects.requireNonNull(
-                    starter.start(new StartAuction(request)),
+                    starter.start(new StartAuction(request, deadline)),
                     "AuctionStarter must return a completion stage"
             );
             started.whenComplete(flight::complete);

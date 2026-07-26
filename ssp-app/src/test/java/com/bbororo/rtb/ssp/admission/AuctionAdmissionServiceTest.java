@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import com.bbororo.rtb.ssp.admission.AuctionAdmissionService.AcceptedAuction;
 import com.bbororo.rtb.ssp.admission.AuctionAdmissionService.RejectedAuction;
 import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.RejectedAuthorization;
+import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
@@ -32,6 +33,7 @@ class AuctionAdmissionServiceTest {
 
         RejectedAuction rejected = assertInstanceOf(RejectedAuction.class, service.admit(
                 request("key-inactive", "request-1"),
+                deadline(),
                 auction -> {
                     starts.incrementAndGet();
                     return CompletableFuture.completedFuture(RESULT);
@@ -50,6 +52,7 @@ class AuctionAdmissionServiceTest {
 
         AcceptedAuction first = assertInstanceOf(AcceptedAuction.class, service.admit(
                 request("key-active", "request-1"),
+                deadline(),
                 auction -> {
                     starts.incrementAndGet();
                     return firstAuction;
@@ -57,6 +60,7 @@ class AuctionAdmissionServiceTest {
         ));
         AcceptedAuction duplicate = assertInstanceOf(AcceptedAuction.class, service.admit(
                 request("key-active", "request-1"),
+                deadline(),
                 auction -> {
                     throw new AssertionError("duplicate must not start another auction");
                 }
@@ -82,8 +86,12 @@ class AuctionAdmissionServiceTest {
                 "provider-active",
                 keyId,
                 requestId,
-                Instant.parse("2026-07-26T00:00:01Z"),
-                List.of(new AuctionSlot("imp-1"))
+                180,
+                List.of(new AuctionSlot("imp-1", 0))
         );
+    }
+
+    private static AuctionDeadline deadline() {
+        return AuctionDeadline.start(180, System::nanoTime);
     }
 }

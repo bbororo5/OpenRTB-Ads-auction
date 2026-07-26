@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
@@ -30,11 +31,11 @@ class InMemoryAuctionDeduplicatorTest {
         CompletableFuture<AuctionResult> firstAuction = new CompletableFuture<>();
         AtomicInteger starts = new AtomicInteger();
 
-        CompletionStage<AuctionResult> first = deduplicator.execute(request("request-1", "imp-1"), auction -> {
+        CompletionStage<AuctionResult> first = execute(deduplicator, request("request-1", "imp-1"), auction -> {
             starts.incrementAndGet();
             return firstAuction;
         });
-        CompletionStage<AuctionResult> duplicate = deduplicator.execute(request("request-1", "imp-1"), auction -> {
+        CompletionStage<AuctionResult> duplicate = execute(deduplicator, request("request-1", "imp-1"), auction -> {
             throw new AssertionError("duplicate must not start another auction");
         });
 
@@ -50,11 +51,11 @@ class InMemoryAuctionDeduplicatorTest {
         InMemoryAuctionDeduplicator deduplicator = new InMemoryAuctionDeduplicator();
         AtomicInteger starts = new AtomicInteger();
 
-        deduplicator.execute(request("request-1", "imp-1"), auction -> {
+        execute(deduplicator, request("request-1", "imp-1"), auction -> {
             starts.incrementAndGet();
             return CompletableFuture.completedFuture(RESULT);
         }).toCompletableFuture().join();
-        AuctionResult retry = deduplicator.execute(request("request-1", "imp-1"), auction -> {
+        AuctionResult retry = execute(deduplicator, request("request-1", "imp-1"), auction -> {
             throw new AssertionError("completed result must be reused");
         }).toCompletableFuture().join();
 
@@ -66,11 +67,11 @@ class InMemoryAuctionDeduplicatorTest {
     void rejectsChangedContentForTheSameAuctionRequestKey() {
         InMemoryAuctionDeduplicator deduplicator = new InMemoryAuctionDeduplicator();
         CompletableFuture<AuctionResult> firstAuction = new CompletableFuture<>();
-        deduplicator.execute(request("request-1", "imp-1"), ignored -> firstAuction);
+        execute(deduplicator, request("request-1", "imp-1"), ignored -> firstAuction);
 
         CompletionException exception = assertThrows(
                 CompletionException.class,
-                () -> deduplicator.execute(request("request-1", "imp-2"), ignored -> firstAuction)
+                () -> execute(deduplicator, request("request-1", "imp-2"), ignored -> firstAuction)
                         .toCompletableFuture()
                         .join()
         );
@@ -85,13 +86,13 @@ class InMemoryAuctionDeduplicatorTest {
                 clock, Duration.ofSeconds(5), Duration.ofSeconds(1));
         AtomicInteger starts = new AtomicInteger();
 
-        deduplicator.execute(request("request-1", "imp-1"), auction -> {
+        execute(deduplicator, request("request-1", "imp-1"), auction -> {
             starts.incrementAndGet();
             return CompletableFuture.completedFuture(RESULT);
         }).toCompletableFuture().join();
         clock.advance(Duration.ofSeconds(5));
 
-        deduplicator.execute(request("request-1", "imp-1"), auction -> {
+        execute(deduplicator, request("request-1", "imp-1"), auction -> {
             starts.incrementAndGet();
             return CompletableFuture.completedFuture(RESULT);
         }).toCompletableFuture().join();
@@ -104,9 +105,17 @@ class InMemoryAuctionDeduplicatorTest {
                 "provider-1",
                 "key-1",
                 providerRequestId,
-                Instant.parse("2026-07-26T00:00:01Z"),
-                List.of(new AuctionSlot(impId))
+                180,
+                List.of(new AuctionSlot(impId, 0))
         );
+    }
+
+    private static CompletionStage<AuctionResult> execute(
+            InMemoryAuctionDeduplicator deduplicator,
+            AuctionRequest request,
+            AuctionStarter starter
+    ) {
+        return deduplicator.execute(request, AuctionDeadline.start(request.tmaxMillis(), System::nanoTime), starter);
     }
 
     private static final class MutableClock extends Clock {

@@ -2,6 +2,7 @@ package com.bbororo.rtb.ssp.admission;
 
 import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.AuthorizedRequest;
 import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.RejectedAuthorization;
+import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
 import com.bbororo.rtb.ssp.deduplication.AuctionDeduplicator;
@@ -20,13 +21,14 @@ public final class AuctionAdmissionService {
         this.deduplicator = Objects.requireNonNull(deduplicator);
     }
 
-    public Admission admit(AuctionRequest request, AuctionStarter starter) {
+    public Admission admit(AuctionRequest request, AuctionDeadline deadline, AuctionStarter starter) {
         Objects.requireNonNull(request);
+        Objects.requireNonNull(deadline);
         Objects.requireNonNull(starter);
 
         return switch (authorizer.authorize(request)) {
             case AuthorizedRequest authorized -> new AcceptedAuction(
-                    deduplicator.execute(authorized.request(), starter)
+                    deduplicator.execute(authorized.request(), deadline, starter)
             );
             case RejectedAuthorization rejected -> new RejectedAuction(rejected);
         };

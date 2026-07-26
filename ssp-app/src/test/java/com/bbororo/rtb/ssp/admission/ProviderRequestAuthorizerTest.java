@@ -7,7 +7,6 @@ import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.AuthorizedRequest
 import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.RejectedAuthorization;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.trust.ImmutableProviderTrustSnapshot;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -19,7 +18,7 @@ class ProviderRequestAuthorizerTest {
             "provider-active",
             "key-active",
             "request-1",
-            Instant.parse("2026-07-26T00:00:01Z"),
+            180,
             List.of()
     );
 
@@ -36,7 +35,7 @@ class ProviderRequestAuthorizerTest {
     void rejectsAnInactiveKey() {
         ProviderRequestAuthorizer authorizer = new ProviderRequestAuthorizer(snapshot());
         AuctionRequest inactiveKey = new AuctionRequest(
-                "provider-active", "key-inactive", "request-1", REQUEST.deadline(), List.of());
+                "provider-active", "key-inactive", "request-1", REQUEST.tmaxMillis(), List.of());
 
         assertEquals(RejectedAuthorization.UNTRUSTED_PROVIDER, authorizer.authorize(inactiveKey));
     }
@@ -48,7 +47,7 @@ class ProviderRequestAuthorizerTest {
                 Map.of("provider-inactive", new ImmutableProviderTrustSnapshot.ProviderPolicy(false, Set.of("key-active")))
         ));
         AuctionRequest inactiveProvider = new AuctionRequest(
-                "provider-inactive", "key-active", "request-1", REQUEST.deadline(), List.of());
+                "provider-inactive", "key-active", "request-1", REQUEST.tmaxMillis(), List.of());
 
         assertEquals(RejectedAuthorization.UNTRUSTED_PROVIDER, authorizer.authorize(inactiveProvider));
     }

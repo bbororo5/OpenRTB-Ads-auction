@@ -32,8 +32,8 @@ class SspAuctionBillingE2eTest {
                 "provider-a",
                 "key-2026-01",
                 "request-1",
-                Instant.parse("2026-07-24T00:00:00Z").plusMillis(50),
-                List.of(new AuctionSlot("imp-1"))
+                50,
+                List.of(new AuctionSlot("imp-1", 0))
         ));
 
         assertEquals(1, result.winners().size());
