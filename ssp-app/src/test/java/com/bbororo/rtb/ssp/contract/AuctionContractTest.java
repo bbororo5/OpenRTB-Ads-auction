@@ -18,6 +18,17 @@ class AuctionContractTest {
     }
 
     @Test
+    void rejectsDuplicateSlotIdentifiers() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest(
+                        "provider-1", "key-1", "request-1", 180,
+                        List.of(new AuctionSlot("imp-1", 0), new AuctionSlot("imp-1", 0))
+                )
+        );
+    }
+
+    @Test
     void requiresBidsOnlyForAValidBidOutcome() {
         assertThrows(
                 IllegalArgumentException.class,

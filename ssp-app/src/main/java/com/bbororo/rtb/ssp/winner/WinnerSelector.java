@@ -1,10 +1,11 @@
 package com.bbororo.rtb.ssp.winner;
 
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
-import com.bbororo.rtb.ssp.contract.SspMessages.EligibleBids;
+import com.bbororo.rtb.ssp.contract.SspMessages.BidResponses;
 
 /** 외부 I/O 없이 유효 입찰로부터 1가격 낙찰자를 결정한다. */
 public interface WinnerSelector {
 
-    AuctionWinners selectWinners(EligibleBids bids);
+    AuctionWinners selectWinners(String auctionId, AuctionRequest auction, BidResponses responses);
 }

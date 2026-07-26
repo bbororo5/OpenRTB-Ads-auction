@@ -2,7 +2,9 @@ package com.bbororo.rtb.ssp.contract;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * SSP C3 컴포넌트가 주고받는 내부 메시지다.
@@ -26,6 +28,12 @@ public final class SspMessages {
                 throw new IllegalArgumentException("tmaxMillis must be between 1 and 180");
             }
             slots = List.copyOf(slots);
+            Set<String> impIds = new HashSet<>();
+            for (AuctionSlot slot : slots) {
+                if (!impIds.add(slot.impId())) {
+                    throw new IllegalArgumentException("Auction slots must not repeat an impId");
+                }
+            }
         }
 
         /** 이 요청이 기존 경매와 같은지를 판단하는 SSP 내부 지문이다. */
@@ -37,6 +45,9 @@ public final class SspMessages {
     public record AuctionSlot(String impId, long floorCpmKrw) {
 
         public AuctionSlot {
+            if (impId == null || impId.isBlank()) {
+                throw new IllegalArgumentException("impId must not be blank");
+            }
             if (floorCpmKrw < 0) {
                 throw new IllegalArgumentException("floorCpmKrw must not be negative");
             }
