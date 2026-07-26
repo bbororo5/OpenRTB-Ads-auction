@@ -1,6 +1,6 @@
 # SSP 얇은 수직 흐름 구현 계획
 
-상태: 0단계 설정 제어 완료 · 1단계 입장 완료
+상태: 0단계 설정 제어 완료 · 1단계 입장 완료 · 2단계 경매 완료
 
 목표는 [SSP E2E 인수 시나리오](../../../ssp-app/src/test/java/com/bbororo/rtb/ssp/e2e/SspAuctionBillingE2eTest.java)를 녹색으로 만드는 것이다. 단계 1~4에서는 각 컴포넌트와 경계의 단위·통합 시험으로 규칙을 검증하고, 네 결과가 모두 연결된 뒤에만 SSP 전체 E2E를 실행한다.
 
@@ -88,7 +88,7 @@ AuctionCoordinator.runAuction(StartAuction)
 | 입력 메시지 | `StartAuction`, `BidRequestBatch`, `BidResponses`, `EligibleBids` |
 | 출력 메시지 | `AuctionWinners` |
 | 시험용 구현 | 세 DSP의 고정 입찰 응답. 프로젝트 DSP가 CPM 2,000으로 이기는 시나리오 |
-| 완료 조건 | 절대 마감 안의 유효 입찰만 비교하고, 1가격·결정적 동점 규칙으로 슬롯별 낙찰자가 나온다 |
+| 완료 조건 | 완료. 절대 마감 안의 유효 입찰만 비교하고, 1가격·결정적 동점 규칙으로 슬롯별 낙찰자가 나온다 |
 
 ## 3. 청구 — 증표를 내구 작업으로 바꾸기
 
