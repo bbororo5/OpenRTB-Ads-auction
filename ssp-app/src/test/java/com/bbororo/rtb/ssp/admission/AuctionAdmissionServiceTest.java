@@ -9,9 +9,9 @@ import com.bbororo.rtb.ssp.admission.AuctionAdmissionService.RejectedAuction;
 import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.RejectedAuthorization;
 import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
-import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
-import com.bbororo.rtb.ssp.contract.SspMessages.RenderProof;
+import com.bbororo.rtb.ssp.deduplication.AuctionStarter;
 import com.bbororo.rtb.ssp.deduplication.InMemoryAuctionDeduplicator;
 import com.bbororo.rtb.ssp.trust.ImmutableProviderTrustSnapshot;
 import java.time.Instant;
@@ -24,20 +24,19 @@ import org.junit.jupiter.api.Test;
 
 class AuctionAdmissionServiceTest {
 
-    private static final AuctionResult RESULT = new AuctionResult("auction-1", List.of(), new RenderProof("proof"));
+    private static final AuctionWinners RESULT = new AuctionWinners(List.of());
 
     @Test
     void rejectsAnUntrustedRequestBeforeItCanStartAnAuction() {
-        AuctionAdmissionService service = serviceFor("key-active");
         AtomicInteger starts = new AtomicInteger();
+        AuctionAdmissionService service = serviceFor("key-active", auction -> {
+            starts.incrementAndGet();
+            return CompletableFuture.completedFuture(RESULT);
+        });
 
         RejectedAuction rejected = assertInstanceOf(RejectedAuction.class, service.admit(
                 request("key-inactive", "request-1"),
-                deadline(),
-                auction -> {
-                    starts.incrementAndGet();
-                    return CompletableFuture.completedFuture(RESULT);
-                }
+                deadline()
         ));
 
         assertEquals(RejectedAuthorization.UNTRUSTED_PROVIDER, rejected.reason());
@@ -46,24 +45,20 @@ class AuctionAdmissionServiceTest {
 
     @Test
     void sendsTrustedDuplicatesToTheSameSingleFlightAuction() {
-        AuctionAdmissionService service = serviceFor("key-active");
-        CompletableFuture<AuctionResult> firstAuction = new CompletableFuture<>();
+        CompletableFuture<AuctionWinners> firstAuction = new CompletableFuture<>();
         AtomicInteger starts = new AtomicInteger();
+        AuctionAdmissionService service = serviceFor("key-active", auction -> {
+            starts.incrementAndGet();
+            return firstAuction;
+        });
 
         AcceptedAuction first = assertInstanceOf(AcceptedAuction.class, service.admit(
                 request("key-active", "request-1"),
-                deadline(),
-                auction -> {
-                    starts.incrementAndGet();
-                    return firstAuction;
-                }
+                deadline()
         ));
         AcceptedAuction duplicate = assertInstanceOf(AcceptedAuction.class, service.admit(
                 request("key-active", "request-1"),
-                deadline(),
-                auction -> {
-                    throw new AssertionError("duplicate must not start another auction");
-                }
+                deadline()
         ));
 
         assertEquals(1, starts.get());
@@ -73,12 +68,12 @@ class AuctionAdmissionServiceTest {
         assertEquals(RESULT, duplicate.result().toCompletableFuture().join());
     }
 
-    private static AuctionAdmissionService serviceFor(String activeKey) {
+    private static AuctionAdmissionService serviceFor(String activeKey, AuctionStarter starter) {
         ProviderRequestAuthorizer authorizer = new ProviderRequestAuthorizer(new ImmutableProviderTrustSnapshot(
                 1,
                 Map.of("provider-active", new ImmutableProviderTrustSnapshot.ProviderPolicy(true, Set.of(activeKey)))
         ));
-        return new AuctionAdmissionService(authorizer, new InMemoryAuctionDeduplicator());
+        return new AuctionAdmissionService(authorizer, new InMemoryAuctionDeduplicator(), starter);
     }
 
     private static AuctionRequest request(String keyId, String requestId) {
