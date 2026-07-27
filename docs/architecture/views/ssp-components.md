@@ -69,7 +69,7 @@ flowchart LR
 | 컴포넌트 | 소유 책임 | 협력 메시지 | 소유하지 않는 것 |
 |---|---|---|---|
 | 경매·렌더링 API | 프로젝트 공급자 HTTP 표현 검증, 지역 렌더링 URL로의 응답 | `AuctionRequest`, `RenderCompleted` | 경매·청구 규칙 |
-| 경매 중복 방지 | 요청 키·지문, 최초 실행과 5초 결과 재사용 | `StartAuction` 또는 `ReuseAuctionResult` | DSP 호출·낙찰 규칙 |
+| 경매 중복 방지 | 요청 키·지문, 최초 실행과 5초 결과 재사용 | 최초 `StartAuction` 또는 동일 완료 결과 | DSP 호출·낙찰 규칙 |
 | 경매 조정 | 50ms 절대 기한, 슬롯별 병렬 흐름, `nurl`·`lurl` 발행 | `RequestBids`, `SelectWinner`, `IssueRenderProof`, `AuctionNotice` | DSP별 통신 세부·가격 규칙 |
 | DSP 입찰 실행 | DSP별 요청 변환·기한·연결 격리 | `BidRequestBatch` → `BidResponses` | 낙찰과 예산 판단 |
 | 낙찰 결정 | 입찰 유효성, 1가격, 결정적 동점 처리 | `EligibleBids` → `AuctionWinners` | 네트워크·시계·저장소 |
@@ -96,8 +96,8 @@ flowchart LR
 
 | 제공 컴포넌트 | 인터페이스 | 입력 → 출력 | 규칙 |
 |---|---|---|---|
-| 경매 중복 방지 | `deduplicate` | `AuctionRequest` → `StartAuction` / `ReuseAuctionResult` / `RejectChangedRequest` | `providerId + providerRequestId`와 요청 지문을 함께 판정한다. |
-| 경매 조정 | `runAuction` | `StartAuction` → `AuctionResult` | 절대 마감 시각을 하위 호출에 전달하며 마감 뒤 결과를 만들지 않는다. |
+| 경매 중복 방지 | `execute` | `AuctionRequest` → 최초 `StartAuction` 또는 동일 완료 결과 | `providerId + providerRequestId`와 요청 지문을 함께 판정한다. |
+| 경매 조정 | `runAuction` | `StartAuction` → `AuctionWinners` | 절대 마감 시각을 하위 호출에 전달하며 마감 뒤 결과를 만들지 않는다. |
 | DSP 입찰 실행 | `requestBids` | `BidRequestBatch` → `BidResponses` | DSP별 실패는 해당 DSP만 탈락시킨다. |
 | 낙찰 결정 | `selectWinners` | `EligibleBids` → `AuctionWinners` | 외부 I/O 없이 같은 입력에 같은 결과를 낸다. |
 | 렌더링 증표 | `issue` / `verify` | `ProofIssuance` → `RenderProof`, `RenderProof` → `VerifiedRender` / `InvalidRender` | 증표에는 공급자 ID·요청 ID·슬롯·발급 시각·낙찰 사실·`burl`·2초 기한을 봉인한다. 발급 리전은 전용 URL이 정한다. |

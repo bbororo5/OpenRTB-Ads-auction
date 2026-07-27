@@ -85,7 +85,7 @@ AuctionCoordinator.runAuction(StartAuction)
 |---|---|
 | 참여 컴포넌트 | 경매 조정, DSP 입찰 실행, 낙찰 결정 |
 | 호출 인터페이스 | `runAuction`, `requestBids`, `selectWinners` |
-| 입력 메시지 | `StartAuction`, `BidRequestBatch`, `BidResponses`, `EligibleBids` |
+| 입력 메시지 | `StartAuction`, `BidRequestBatch`, `BidResponses` |
 | 출력 메시지 | `AuctionWinners` |
 | 시험용 구현 | 세 DSP의 고정 입찰 응답. 프로젝트 DSP가 CPM 2,000으로 이기는 시나리오 |
 | 완료 조건 | 완료. 절대 마감 안의 유효 입찰만 비교하고, 1가격·결정적 동점 규칙으로 슬롯별 낙찰자가 나온다 |
