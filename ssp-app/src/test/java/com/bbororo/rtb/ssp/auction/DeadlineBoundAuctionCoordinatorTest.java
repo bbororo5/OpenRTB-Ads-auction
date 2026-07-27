@@ -51,7 +51,7 @@ class DeadlineBoundAuctionCoordinatorTest {
         var winners = coordinator.runAuction(start(deadline));
 
         assertEquals(0, calls.get());
-        assertEquals(List.of(), winners.winners());
+        assertEquals(List.of(), winners.winners().winners());
     }
 
     @Test
@@ -66,7 +66,7 @@ class DeadlineBoundAuctionCoordinatorTest {
 
         var winners = coordinator.runAuction(start(deadline));
 
-        assertEquals(List.of(), winners.winners());
+        assertEquals(List.of(), winners.winners().winners());
     }
 
     private static AuctionCoordinator coordinator(DspBidExecutor executor) {
