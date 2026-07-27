@@ -67,6 +67,7 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
         }
         return new WinningBid(
                 auctionId + "/" + bid.impId(),
+                bid.impId(),
                 bid.dspId(),
                 bid.bidId(),
                 bid.cpmKrw(),

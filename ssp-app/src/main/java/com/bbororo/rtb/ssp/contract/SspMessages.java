@@ -75,6 +75,7 @@ public final class SspMessages {
 
     public record WinningBid(
             String slotAuctionKey,
+            String impId,
             String dspId,
             String bidId,
             long cpmKrw,
