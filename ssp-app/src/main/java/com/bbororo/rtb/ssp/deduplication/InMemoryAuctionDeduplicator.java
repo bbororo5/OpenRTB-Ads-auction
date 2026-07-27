@@ -4,7 +4,7 @@ import com.bbororo.rtb.ssp.contract.AuctionRequestFingerprint;
 import com.bbororo.rtb.ssp.contract.AuctionRequestKey;
 import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
-import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.StartAuction;
 import java.time.Clock;
 import java.time.Duration;
@@ -39,7 +39,7 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
     }
 
     @Override
-    public CompletionStage<AuctionWinners> execute(AuctionRequest request, AuctionDeadline deadline, AuctionStarter starter) {
+    public CompletionStage<AuctionOutcome> execute(AuctionRequest request, AuctionDeadline deadline, AuctionStarter starter) {
         Objects.requireNonNull(request);
         Objects.requireNonNull(deadline);
         Objects.requireNonNull(starter);
@@ -81,7 +81,7 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
 
     private void start(Flight flight, AuctionRequest request, AuctionDeadline deadline, AuctionStarter starter) {
         try {
-            CompletionStage<AuctionWinners> started = Objects.requireNonNull(
+            CompletionStage<AuctionOutcome> started = Objects.requireNonNull(
                     starter.start(new StartAuction(request, deadline)),
                     "AuctionStarter must return a completion stage"
             );
@@ -112,14 +112,14 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
     private final class Flight {
 
         private final AuctionRequestFingerprint fingerprint;
-        private final CompletableFuture<AuctionWinners> result = new CompletableFuture<>();
+        private final CompletableFuture<AuctionOutcome> result = new CompletableFuture<>();
         private final AtomicReference<Instant> retainUntil = new AtomicReference<>();
 
         private Flight(AuctionRequestFingerprint fingerprint) {
             this.fingerprint = fingerprint;
         }
 
-        private CompletionStage<AuctionWinners> result() {
+        private CompletionStage<AuctionOutcome> result() {
             return result;
         }
 
@@ -133,12 +133,12 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
             return ChangedFlight.INSTANCE;
         }
 
-        private void complete(AuctionWinners auctionWinners, Throwable failure) {
+        private void complete(AuctionOutcome auctionOutcome, Throwable failure) {
             if (failure == null) {
-                if (auctionWinners == null) {
-                    result.completeExceptionally(new NullPointerException("Auction winners must not be null"));
+                if (auctionOutcome == null) {
+                    result.completeExceptionally(new NullPointerException("Auction outcome must not be null"));
                 } else {
-                    result.complete(auctionWinners);
+                    result.complete(auctionOutcome);
                 }
             } else {
                 result.completeExceptionally(failure);

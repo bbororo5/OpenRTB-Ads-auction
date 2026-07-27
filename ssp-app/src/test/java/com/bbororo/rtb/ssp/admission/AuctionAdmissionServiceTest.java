@@ -9,6 +9,7 @@ import com.bbororo.rtb.ssp.admission.AuctionAdmissionService.RejectedAuction;
 import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.RejectedAuthorization;
 import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
 import com.bbororo.rtb.ssp.deduplication.AuctionStarter;
@@ -24,7 +25,7 @@ import org.junit.jupiter.api.Test;
 
 class AuctionAdmissionServiceTest {
 
-    private static final AuctionWinners RESULT = new AuctionWinners(List.of());
+    private static final AuctionOutcome RESULT = new AuctionOutcome("auction-1", new AuctionWinners(List.of()));
 
     @Test
     void rejectsAnUntrustedRequestBeforeItCanStartAnAuction() {
@@ -45,7 +46,7 @@ class AuctionAdmissionServiceTest {
 
     @Test
     void sendsTrustedDuplicatesToTheSameSingleFlightAuction() {
-        CompletableFuture<AuctionWinners> firstAuction = new CompletableFuture<>();
+        CompletableFuture<AuctionOutcome> firstAuction = new CompletableFuture<>();
         AtomicInteger starts = new AtomicInteger();
         AuctionAdmissionService service = serviceFor("key-active", auction -> {
             starts.incrementAndGet();

@@ -36,13 +36,13 @@ class SspAuctionBillingE2eTest {
                 List.of(new AuctionSlot("imp-1", 0))
         ));
 
-        assertEquals(1, result.winners().size());
-        assertEquals("project-dsp", result.winners().getFirst().dspId());
-        assertEquals(2_000L, result.winners().getFirst().cpmKrw());
-        assertFalse(result.renderProof().encodedValue().isBlank());
+        assertEquals(1, result.slots().size());
+        assertEquals("project-dsp", result.slots().getFirst().winningBid().dspId());
+        assertEquals(2_000L, result.slots().getFirst().winningBid().cpmKrw());
+        assertFalse(result.slots().getFirst().renderProof().encodedValue().isBlank());
 
         RenderAcceptance acceptance = ssp.completeRender(new RenderCompleted(
-                new RenderProof(result.renderProof().encodedValue()),
+                new RenderProof(result.slots().getFirst().renderProof().encodedValue()),
                 Instant.parse("2026-07-24T00:00:00Z").plusMillis(200)
         ));
 

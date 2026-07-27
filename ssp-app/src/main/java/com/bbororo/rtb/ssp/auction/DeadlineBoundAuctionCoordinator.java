@@ -1,5 +1,6 @@
 package com.bbororo.rtb.ssp.auction;
 
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
 import com.bbororo.rtb.ssp.contract.SspMessages.BidRequestBatch;
 import com.bbororo.rtb.ssp.contract.SspMessages.BidResponses;
@@ -28,13 +29,13 @@ public final class DeadlineBoundAuctionCoordinator implements AuctionCoordinator
     }
 
     @Override
-    public AuctionWinners runAuction(StartAuction command) {
+    public AuctionOutcome runAuction(StartAuction command) {
         Objects.requireNonNull(command);
+        String auctionId = UUID.randomUUID().toString();
         if (command.deadline().isExpired()) {
-            return new AuctionWinners(List.of());
+            return new AuctionOutcome(auctionId, new AuctionWinners(List.of()));
         }
 
-        String auctionId = UUID.randomUUID().toString();
         BidResponses responses = bidExecutor.requestBids(new BidRequestBatch(
                 auctionId,
                 command.request(),
@@ -42,8 +43,8 @@ public final class DeadlineBoundAuctionCoordinator implements AuctionCoordinator
                 command.deadline()
         ));
         if (command.deadline().isExpired()) {
-            return new AuctionWinners(List.of());
+            return new AuctionOutcome(auctionId, new AuctionWinners(List.of()));
         }
-        return winnerSelector.selectWinners(auctionId, command.request(), responses);
+        return new AuctionOutcome(auctionId, winnerSelector.selectWinners(auctionId, command.request(), responses));
     }
 }

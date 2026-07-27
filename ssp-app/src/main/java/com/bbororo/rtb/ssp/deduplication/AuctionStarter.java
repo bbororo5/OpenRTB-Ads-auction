@@ -1,6 +1,6 @@
 package com.bbororo.rtb.ssp.deduplication;
 
-import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.StartAuction;
 import java.util.concurrent.CompletionStage;
 
@@ -8,5 +8,5 @@ import java.util.concurrent.CompletionStage;
 @FunctionalInterface
 public interface AuctionStarter {
 
-    CompletionStage<AuctionWinners> start(StartAuction auction);
+    CompletionStage<AuctionOutcome> start(StartAuction auction);
 }

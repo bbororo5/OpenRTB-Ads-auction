@@ -33,8 +33,8 @@ class DeadlineBoundAuctionCoordinatorTest {
         var winners = coordinator.runAuction(start(AuctionDeadline.start(180, System::nanoTime)));
 
         assertEquals(1, calls.get());
-        assertEquals(1, winners.winners().size());
-        assertEquals("external-dsp", winners.winners().getFirst().dspId());
+        assertEquals(1, winners.winners().winners().size());
+        assertEquals("external-dsp", winners.winners().winners().getFirst().dspId());
     }
 
     @Test

@@ -4,7 +4,7 @@ import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.AuthorizedRequest
 import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.RejectedAuthorization;
 import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
-import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionOutcome;
 import com.bbororo.rtb.ssp.deduplication.AuctionDeduplicator;
 import com.bbororo.rtb.ssp.deduplication.AuctionStarter;
 import java.util.Objects;
@@ -43,7 +43,7 @@ public final class AuctionAdmissionService {
     public sealed interface Admission permits AcceptedAuction, RejectedAuction {
     }
 
-    public record AcceptedAuction(CompletionStage<AuctionWinners> result) implements Admission {
+    public record AcceptedAuction(CompletionStage<AuctionOutcome> result) implements Admission {
 
         public AcceptedAuction {
             Objects.requireNonNull(result);

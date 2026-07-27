@@ -52,7 +52,7 @@ class AuctionAdmissionToCoordinatorTest {
                 admission.admit(request, AuctionDeadline.start(request.tmaxMillis(), System::nanoTime))
         );
 
-        assertEquals("project-dsp", accepted.result().toCompletableFuture().join().winners().getFirst().dspId());
+        assertEquals("project-dsp", accepted.result().toCompletableFuture().join().winners().winners().getFirst().dspId());
     }
 
     private static DspBid bid() {

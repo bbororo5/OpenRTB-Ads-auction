@@ -54,8 +54,21 @@ public final class SspMessages {
         }
     }
 
-    public record AuctionResult(String auctionId, List<WinningBid> winners, RenderProof renderProof) {
+    public record AuctionResult(String auctionId, List<SlotAuctionResult> slots) {
         public AuctionResult {
+            slots = List.copyOf(slots);
+        }
+    }
+
+    public record SlotAuctionResult(WinningBid winningBid, RenderProof renderProof) {
+    }
+
+    /** 마감 안에 끝난 SSP 경매의 식별자와 슬롯별 낙찰 결과다. */
+    public record AuctionOutcome(String auctionId, AuctionWinners winners) {
+    }
+
+    public record AuctionWinners(List<WinningBid> winners) {
+        public AuctionWinners {
             winners = List.copyOf(winners);
         }
     }
@@ -121,18 +134,13 @@ public final class SspMessages {
         }
     }
 
-    public record AuctionWinners(List<WinningBid> winners) {
-        public AuctionWinners {
-            winners = List.copyOf(winners);
-        }
-    }
-
     public record RenderProof(String encodedValue) {
     }
 
     public record ProofIssuance(
             AuctionRequest auction,
-            AuctionWinners winners,
+            String auctionId,
+            WinningBid winner,
             Instant issuedAt,
             Instant expiresAt
     ) {

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderProof;
@@ -23,19 +24,19 @@ import org.junit.jupiter.api.Test;
 
 class InMemoryAuctionDeduplicatorTest {
 
-    private static final AuctionWinners RESULT = new AuctionWinners(List.of());
+    private static final AuctionOutcome RESULT = new AuctionOutcome("auction-1", new AuctionWinners(List.of()));
 
     @Test
     void startsOneAuctionAndLetsConcurrentDuplicatesShareItsCompletion() {
         InMemoryAuctionDeduplicator deduplicator = new InMemoryAuctionDeduplicator();
-        CompletableFuture<AuctionWinners> firstAuction = new CompletableFuture<>();
+        CompletableFuture<AuctionOutcome> firstAuction = new CompletableFuture<>();
         AtomicInteger starts = new AtomicInteger();
 
-        CompletionStage<AuctionWinners> first = execute(deduplicator, request("request-1", "imp-1"), auction -> {
+        CompletionStage<AuctionOutcome> first = execute(deduplicator, request("request-1", "imp-1"), auction -> {
             starts.incrementAndGet();
             return firstAuction;
         });
-        CompletionStage<AuctionWinners> duplicate = execute(deduplicator, request("request-1", "imp-1"), auction -> {
+        CompletionStage<AuctionOutcome> duplicate = execute(deduplicator, request("request-1", "imp-1"), auction -> {
             throw new AssertionError("duplicate must not start another auction");
         });
 
@@ -55,7 +56,7 @@ class InMemoryAuctionDeduplicatorTest {
             starts.incrementAndGet();
             return CompletableFuture.completedFuture(RESULT);
         }).toCompletableFuture().join();
-        AuctionWinners retry = execute(deduplicator, request("request-1", "imp-1"), auction -> {
+        AuctionOutcome retry = execute(deduplicator, request("request-1", "imp-1"), auction -> {
             throw new AssertionError("completed result must be reused");
         }).toCompletableFuture().join();
 
@@ -66,7 +67,7 @@ class InMemoryAuctionDeduplicatorTest {
     @Test
     void rejectsChangedContentForTheSameAuctionRequestKey() {
         InMemoryAuctionDeduplicator deduplicator = new InMemoryAuctionDeduplicator();
-        CompletableFuture<AuctionWinners> firstAuction = new CompletableFuture<>();
+        CompletableFuture<AuctionOutcome> firstAuction = new CompletableFuture<>();
         execute(deduplicator, request("request-1", "imp-1"), ignored -> firstAuction);
 
         CompletionException exception = assertThrows(
@@ -110,7 +111,7 @@ class InMemoryAuctionDeduplicatorTest {
         );
     }
 
-    private static CompletionStage<AuctionWinners> execute(
+    private static CompletionStage<AuctionOutcome> execute(
             InMemoryAuctionDeduplicator deduplicator,
             AuctionRequest request,
             AuctionStarter starter
