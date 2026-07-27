@@ -1,6 +1,6 @@
 # SSP 얇은 수직 흐름 구현 계획
 
-상태: 0단계 설정 제어 완료 · 1단계 입장 완료 · 2단계 경매 완료
+상태: 0단계 설정 제어 완료 · 1단계 입장 완료 · 2단계 경매 완료 · 3단계 청구 완료
 
 목표는 [SSP E2E 인수 시나리오](../../../ssp-app/src/test/java/com/bbororo/rtb/ssp/e2e/SspAuctionBillingE2eTest.java)를 녹색으로 만드는 것이다. 단계 1~4에서는 각 컴포넌트와 경계의 단위·통합 시험으로 규칙을 검증하고, 네 결과가 모두 연결된 뒤에만 SSP 전체 E2E를 실행한다.
 
@@ -109,7 +109,8 @@ ProofIssuance
 | 입력 메시지 | `ProofIssuance`, `RenderCompleted`, `VerifiedRender` |
 | 출력 메시지 | `RenderProof`, `RenderAcceptance`, `BillingClaim`, `BillingDeliveryTask` |
 | 시험용 구현 | 공급자·요청·슬롯 귀속과 2초 기한을 검증하는 시험 증표, 인메모리 원자 저장소 |
-| 완료 조건 | 유효하고 활성 공급자에 귀속된 증표만 `ACCEPTED`가 되며, 청구와 전달 작업 수가 함께 1개 증가한다 |
+| 현재 구현 | HMAC 서명 시험 증표가 공급자·요청·슬롯·DSP `burl`·2초 기한을 봉인한다. 인메모리 저장소는 같은 증표의 청구 근거와 전달 작업을 하나의 임계 구역에서 함께 만든다. |
+| 완료 조건 | 완료. 유효하고 현재 활성인 공급자에 귀속된 증표만 `ACCEPTED`가 되며, 같은 증표의 재전송은 `DUPLICATE`가 되고 청구와 전달 작업은 함께 정확히 1개만 증가한다. |
 
 ## 4. 전달 — 대기 작업을 `burl`로 종결하기
 
@@ -137,7 +138,7 @@ DspNotificationDelivery.deliverDueBilling(now)
 |---|---|---|---|
 | 메모리 공급자 스냅숏 | PostgreSQL 논리 복제 설정 사본을 읽어 원자 교체하는 스냅숏 | `ProviderTrustSnapshot` | 지역별 최신 설정 범위 안에서만 요청을 허용 |
 | 고정 DSP 응답 | HTTP/JSON OpenRTB 2.6 DSP 클라이언트 | `DspBidExecutor`, `DspNotificationDelivery` | 기한 안의 유효 입찰·표준 `nurl/lurl/burl` 의미 |
-| 시험 증표 | 이진 직렬화·AEAD·Base64URL 증표 | `RenderProofService` | 공급자 귀속·기한·낙찰 사실의 변조 불가 검증 |
+| HMAC 시험 증표 | 이진 직렬화·AEAD·Base64URL 증표 | `RenderProofService` | 공급자 귀속·기한·낙찰 사실의 변조 불가 검증 |
 | 인메모리 청구 저장소 | PostgreSQL 청구·전달 작업 트랜잭션과 작업 임대 | `ClaimDeliveryStore` | 청구와 작업의 원자 생성, 이전 작업자의 결과 덮어쓰기 방지 |
 | 동기 `burl` 호출 | 인스턴스 내부 백그라운드 실행기와 제한 재시도 | `DspNotificationDelivery` | 5초 안의 내구 재시도와 중복 호출 허용 |
 
