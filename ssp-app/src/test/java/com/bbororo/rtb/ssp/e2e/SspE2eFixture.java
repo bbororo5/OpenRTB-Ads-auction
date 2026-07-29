@@ -1,43 +1,129 @@
 package com.bbororo.rtb.ssp.e2e;
 
+import com.bbororo.rtb.ssp.admission.AuctionAdmissionService;
+import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer;
 import com.bbororo.rtb.ssp.api.AuctionRenderApi;
+import com.bbororo.rtb.ssp.api.DefaultAuctionRenderApi;
+import com.bbororo.rtb.ssp.auction.CoordinatingAuctionStarter;
+import com.bbororo.rtb.ssp.auction.DeadlineBoundAuctionCoordinator;
+import com.bbororo.rtb.ssp.claim.InMemoryClaimDeliveryStore;
+import com.bbororo.rtb.ssp.claim.StoreBackedRenderClaimService;
+import com.bbororo.rtb.ssp.contract.SspMessages.BidResponses;
+import com.bbororo.rtb.ssp.contract.SspMessages.DspBid;
+import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcome;
+import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcomeKind;
+import com.bbororo.rtb.ssp.deduplication.InMemoryAuctionDeduplicator;
+import com.bbororo.rtb.ssp.notification.DspNotificationDelivery;
+import com.bbororo.rtb.ssp.notification.StoreBackedDspNotificationDelivery;
+import com.bbororo.rtb.ssp.renderproof.AuctionResultAssembler;
+import com.bbororo.rtb.ssp.renderproof.HmacRenderProofService;
+import com.bbororo.rtb.ssp.trust.ImmutableProviderTrustSnapshot;
+import com.bbororo.rtb.ssp.winner.FirstPriceWinnerSelector;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * E2E가 관찰하는 외부 DSP와 저장소의 시험 경계다.
- *
- * <p>실제 SSP 조립체가 아직 없으므로 이 팩처리는 의도적으로 실패한다.</p>
  */
 final class SspE2eFixture {
 
-    private SspE2eFixture() {
+    private static final Instant STARTED_AT = Instant.parse("2026-07-24T00:00:00Z");
+
+    private final AuctionRenderApi api;
+    private final InMemoryClaimDeliveryStore store;
+    private final DspNotificationDelivery notificationDelivery;
+    private final List<URI> deliveredBillingUrls;
+
+    private SspE2eFixture(
+            AuctionRenderApi api,
+            InMemoryClaimDeliveryStore store,
+            DspNotificationDelivery notificationDelivery,
+            List<URI> deliveredBillingUrls
+    ) {
+        this.api = api;
+        this.store = store;
+        this.notificationDelivery = notificationDelivery;
+        this.deliveredBillingUrls = deliveredBillingUrls;
     }
 
     static SspE2eFixture start() {
-        throw new UnsupportedOperationException(
-                "SSP 조립체가 아직 없다: 신뢰 스냅숏, DSP 입찰, 낙찰, 증표, 청구·전달을 연결해야 한다."
+        var trust = new ImmutableProviderTrustSnapshot(
+                1,
+                Map.of("provider-a", new ImmutableProviderTrustSnapshot.ProviderPolicy(
+                        true, Set.of("key-2026-01")
+                ))
         );
+        var store = new InMemoryClaimDeliveryStore();
+        var proofService = new HmacRenderProofService("ssp-e2e-test-key".getBytes(StandardCharsets.UTF_8));
+        var coordinator = new DeadlineBoundAuctionCoordinator(
+                ignored -> new BidResponses(List.of(new DspCallOutcome(
+                        "project-dsp",
+                        DspCallOutcomeKind.VALID_BID,
+                        List.of(projectDspBid())
+                ))),
+                new FirstPriceWinnerSelector(),
+                List.of("project-dsp", "external-dsp-1", "external-dsp-2")
+        );
+        var admission = new AuctionAdmissionService(
+                new ProviderRequestAuthorizer(trust),
+                new InMemoryAuctionDeduplicator(),
+                new CoordinatingAuctionStarter(coordinator, Runnable::run)
+        );
+        Clock clock = Clock.fixed(STARTED_AT, ZoneOffset.UTC);
+        AuctionRenderApi api = new DefaultAuctionRenderApi(
+                admission,
+                new AuctionResultAssembler(proofService, clock),
+                proofService,
+                new StoreBackedRenderClaimService(store, trust),
+                System::nanoTime
+        );
+        List<URI> delivered = new ArrayList<>();
+        DspNotificationDelivery notificationDelivery = new StoreBackedDspNotificationDelivery(
+                store,
+                url -> {
+                    delivered.add(url);
+                    return com.bbororo.rtb.ssp.contract.SspMessages.DeliveryOutcome.DELIVERED;
+                }
+        );
+        return new SspE2eFixture(api, store, notificationDelivery, delivered);
     }
 
     AuctionRenderApi api() {
-        throw new UnsupportedOperationException("not implemented");
+        return api;
     }
 
     int persistedClaimCount() {
-        throw new UnsupportedOperationException("not implemented");
+        return store.recordedClaimCount();
     }
 
     int pendingBillingDeliveryCount() {
-        throw new UnsupportedOperationException("not implemented");
+        return store.pendingDeliveryCount();
     }
 
     void deliverDueBilling(Instant now) {
-        throw new UnsupportedOperationException("not implemented");
+        notificationDelivery.deliverDueBilling(now);
     }
 
     List<URI> deliveredBillingUrls() {
-        throw new UnsupportedOperationException("not implemented");
+        return List.copyOf(deliveredBillingUrls);
+    }
+
+    private static DspBid projectDspBid() {
+        return new DspBid(
+                "project-dsp",
+                "imp-1",
+                "bid-1",
+                2_000,
+                URI.create("https://project-dsp.test/nurl/reservation-1"),
+                URI.create("https://project-dsp.test/lurl/reservation-1"),
+                URI.create("https://project-dsp.test/burl/reservation-1")
+        );
     }
 }

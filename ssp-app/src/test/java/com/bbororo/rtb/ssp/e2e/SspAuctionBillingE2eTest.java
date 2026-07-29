@@ -17,9 +17,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * SSP의 첫 수직 인수 시나리오다.
- *
- * <p>현재는 구현체가 없으므로 의도적으로 실패한다. 이후 실제 SSP 조립체가
- * {@link SspE2eFixture#start()}를 제공하면 이 시나리오를 그대로 통과시킨다.</p>
  */
 class SspAuctionBillingE2eTest {
 
