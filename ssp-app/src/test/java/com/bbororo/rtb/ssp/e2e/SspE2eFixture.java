@@ -15,12 +15,11 @@ import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcomeKind;
 import com.bbororo.rtb.ssp.deduplication.InMemoryAuctionDeduplicator;
 import com.bbororo.rtb.ssp.notification.DspNotificationDelivery;
 import com.bbororo.rtb.ssp.notification.StoreBackedDspNotificationDelivery;
+import com.bbororo.rtb.ssp.renderproof.AeadRenderProofService;
 import com.bbororo.rtb.ssp.renderproof.AuctionResultAssembler;
-import com.bbororo.rtb.ssp.renderproof.HmacRenderProofService;
 import com.bbororo.rtb.ssp.trust.ImmutableProviderTrustSnapshot;
 import com.bbororo.rtb.ssp.winner.FirstPriceWinnerSelector;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -28,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * E2E가 관찰하는 외부 DSP와 저장소의 시험 경계다.
@@ -61,7 +61,11 @@ final class SspE2eFixture {
                 ))
         );
         var store = new InMemoryClaimDeliveryStore();
-        var proofService = new HmacRenderProofService("ssp-e2e-test-key".getBytes(StandardCharsets.UTF_8));
+        var proofService = new AeadRenderProofService(
+                "region-a",
+                (byte) 1,
+                Map.of((byte) 1, new SecretKeySpec(new byte[32], "AES"))
+        );
         var coordinator = new DeadlineBoundAuctionCoordinator(
                 ignored -> new BidResponses(List.of(new DspCallOutcome(
                         "project-dsp",

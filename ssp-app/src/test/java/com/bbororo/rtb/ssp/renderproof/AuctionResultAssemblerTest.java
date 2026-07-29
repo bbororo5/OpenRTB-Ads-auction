@@ -8,11 +8,12 @@ import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
 import com.bbororo.rtb.ssp.contract.SspMessages.WinningBid;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 
 class AuctionResultAssemblerTest {
@@ -21,7 +22,11 @@ class AuctionResultAssemblerTest {
     void issuesOneProofForEachWinningSlot() {
         Instant now = Instant.parse("2026-07-27T00:00:00Z");
         AuctionResultAssembler assembler = new AuctionResultAssembler(
-                new HmacRenderProofService("test-key".getBytes(StandardCharsets.UTF_8)),
+                new AeadRenderProofService(
+                        "region-a",
+                        (byte) 1,
+                        Map.of((byte) 1, new SecretKeySpec(new byte[32], "AES"))
+                ),
                 Clock.fixed(now, ZoneOffset.UTC),
                 URI.create("https://region-a.ssp.test/publisher/render")
         );
