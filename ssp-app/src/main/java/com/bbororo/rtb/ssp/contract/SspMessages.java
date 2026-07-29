@@ -157,6 +157,7 @@ public final class SspMessages {
             String slotAuctionKey,
             String proofDigest,
             String dspId,
+            long cpmKrw,
             URI billingUrl,
             Instant auctionIssuedAt,
             Instant renderExpiresAt
@@ -170,6 +171,7 @@ public final class SspMessages {
             String slotAuctionKey,
             String proofDigest,
             String dspId,
+            long cpmKrw,
             URI billingUrl,
             Instant billingDeadline
     ) {

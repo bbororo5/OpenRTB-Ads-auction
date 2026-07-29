@@ -64,7 +64,8 @@ class InMemoryClaimDeliveryStoreTest {
     private static BillingClaim claim(String proofDigest, Instant deadline) {
         return new BillingClaim(
                 "provider-1", "request-1", "imp-1", "auction-1/imp-1", proofDigest,
-                "project-dsp", URI.create("https://project-dsp.test/burl/reservation-1"), deadline
+                "project-dsp", 2_000,
+                URI.create("https://project-dsp.test/burl/reservation-1"), deadline
         );
     }
 }

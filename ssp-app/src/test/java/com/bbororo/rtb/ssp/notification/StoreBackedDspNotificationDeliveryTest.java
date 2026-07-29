@@ -64,7 +64,7 @@ class StoreBackedDspNotificationDeliveryTest {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
         store.recordClaimAndScheduleDelivery(new BillingClaim(
                 "provider-1", "request-1", "imp-1", "auction-1/imp-1", "proof-1",
-                "project-dsp", BURL, NOW.plusSeconds(5)
+                "project-dsp", 2_000, BURL, NOW.plusSeconds(5)
         ));
         return store;
     }
