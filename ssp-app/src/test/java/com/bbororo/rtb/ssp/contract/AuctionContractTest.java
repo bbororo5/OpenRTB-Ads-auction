@@ -107,6 +107,18 @@ class AuctionContractTest {
         );
     }
 
+    @Test
+    void rejectsRepeatedBidIdentifiersWithinOneDspOutcome() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DspCallOutcome(
+                        "dsp-1",
+                        DspCallOutcomeKind.VALID_BID,
+                        List.of(bid(), bid())
+                )
+        );
+    }
+
     private static DspBid bid() {
         return bid("dsp-1");
     }

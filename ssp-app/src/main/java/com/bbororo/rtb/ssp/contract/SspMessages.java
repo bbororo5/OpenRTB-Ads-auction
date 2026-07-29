@@ -168,6 +168,7 @@ public final class SspMessages {
             if (kind != DspCallOutcomeKind.VALID_BID && !bids.isEmpty()) {
                 throw new IllegalArgumentException(kind + " must not include bids");
             }
+            requireUnique(bids, DspBid::bidId, "bids must not repeat a bidId");
             for (DspBid bid : bids) {
                 if (!dspId.equals(bid.dspId())) {
                     throw new IllegalArgumentException("Every bid must belong to the outcome DSP");
