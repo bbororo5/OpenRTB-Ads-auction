@@ -7,6 +7,18 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform {
         excludeTags 'provider-config-replication'
+        excludeTags 'ssp-claim-store'
+    }
+}
+
+tasks.register('sspClaimStoreIntegrationTest', Test) {
+    description = 'Runs the durable SSP billing claim store against a regional PostgreSQL database.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'ssp-claim-store'
     }
 }
 
