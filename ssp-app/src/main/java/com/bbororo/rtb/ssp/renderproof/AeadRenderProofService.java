@@ -111,7 +111,8 @@ public final class AeadRenderProofService implements RenderProofService {
                     cipher.doFinal(encrypted),
                     encodedProof
             );
-            if (completed.receivedAt().isAfter(render.renderExpiresAt())) {
+            if (completed.receivedAt().isBefore(render.auctionIssuedAt())
+                    || completed.receivedAt().isAfter(render.renderExpiresAt())) {
                 return Optional.empty();
             }
             return Optional.of(render);

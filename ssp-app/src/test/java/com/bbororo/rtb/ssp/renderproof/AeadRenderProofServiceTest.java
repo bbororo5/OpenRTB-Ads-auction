@@ -83,6 +83,13 @@ class AeadRenderProofServiceTest {
     }
 
     @Test
+    void rejectsTheProofBeforeItsIssuanceTime() {
+        RenderProof proof = service.issue(issuance());
+
+        assertFalse(service.verify(new RenderCompleted(proof, ISSUED_AT.minusMillis(1))).isPresent());
+    }
+
+    @Test
     void acceptsTheProofAtTheExactTwoSecondBoundary() {
         RenderProof proof = service.issue(issuance());
 
