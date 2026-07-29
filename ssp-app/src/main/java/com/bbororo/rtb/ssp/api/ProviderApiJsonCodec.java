@@ -55,13 +55,13 @@ public final class ProviderApiJsonCodec {
         try {
             AuctionResultJson response = new AuctionResultJson(
                     result.auctionId(),
+                    result.renderCompletionUrl().toString(),
                     result.slots().stream()
                             .map(slot -> new SlotResultJson(
                                     slot.winningBid().impId(),
                                     slot.winningBid().dspId(),
                                     KrwCpm.fromMilliKrw(slot.winningBid().cpmMilliKrw()),
-                                    slot.renderProof().encodedValue(),
-                                    slot.renderCompletionUrl().toString()
+                                    slot.renderProof().encodedValue()
                             ))
                             .toList()
             );
@@ -94,15 +94,14 @@ public final class ProviderApiJsonCodec {
     private record RenderCompletedJson(String renderProof) {
     }
 
-    private record AuctionResultJson(String auctionId, List<SlotResultJson> slots) {
+    private record AuctionResultJson(String auctionId, String renderUrl, List<SlotResultJson> slots) {
     }
 
     private record SlotResultJson(
             String impId,
             String dspId,
             BigDecimal cpmKrw,
-            String renderProof,
-            String renderUrl
+            String renderProof
     ) {
     }
 

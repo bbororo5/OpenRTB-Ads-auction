@@ -30,7 +30,11 @@ class ProviderHttpServerTest {
             @Override
             public AuctionResult auction(AuctionRequest request) {
                 assertEquals("provider-1", request.providerId());
-                return new AuctionResult("auction-1", List.of());
+                return new AuctionResult(
+                        "auction-1",
+                        List.of(),
+                        URI.create("https://region-a.ssp.test/publisher/render")
+                );
             }
 
             @Override

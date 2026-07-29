@@ -43,10 +43,10 @@ public final class AuctionResultAssembler {
                                 winner,
                                 renderProofService.issue(new ProofIssuance(
                                         request, outcome.auctionId(), winner, issuedAt, expiresAt
-                                )),
-                                renderCompletionUrl
+                                ))
                         ))
-                        .toList()
+                        .toList(),
+                renderCompletionUrl
         );
     }
 

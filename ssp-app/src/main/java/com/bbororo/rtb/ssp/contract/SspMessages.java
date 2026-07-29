@@ -62,22 +62,22 @@ public final class SspMessages {
         }
     }
 
-    public record AuctionResult(String auctionId, List<SlotAuctionResult> slots) {
+    public record AuctionResult(
+            String auctionId,
+            List<SlotAuctionResult> slots,
+            URI renderCompletionUrl
+    ) {
         public AuctionResult {
             auctionId = requireNonBlank(auctionId, "auctionId");
             slots = immutableList(slots, "slots");
+            renderCompletionUrl = requireHttpUrl(renderCompletionUrl, "renderCompletionUrl");
         }
     }
 
-    public record SlotAuctionResult(
-            WinningBid winningBid,
-            RenderProof renderProof,
-            URI renderCompletionUrl
-    ) {
+    public record SlotAuctionResult(WinningBid winningBid, RenderProof renderProof) {
         public SlotAuctionResult {
             Objects.requireNonNull(winningBid, "winningBid");
             Objects.requireNonNull(renderProof, "renderProof");
-            renderCompletionUrl = requireHttpUrl(renderCompletionUrl, "renderCompletionUrl");
         }
     }
 

@@ -48,7 +48,7 @@ class AuctionResultAssemblerTest {
         assertEquals(2, result.slots().stream().map(slot -> slot.renderProof().encodedValue()).distinct().count());
         assertEquals(
                 URI.create("https://region-a.ssp.test/publisher/render"),
-                result.slots().getFirst().renderCompletionUrl()
+                result.renderCompletionUrl()
         );
     }
 

@@ -50,9 +50,9 @@ class ProviderApiJsonCodecTest {
                                 "auction-1/imp-1", "imp-1", "dsp-1", "bid-1", 1_000_000,
                                 dspUrl, dspUrl, dspUrl
                         ),
-                        new RenderProof("proof-1"),
-                        renderUrl
-                ))
+                        new RenderProof("proof-1")
+                )),
+                renderUrl
         );
 
         String json = new String(codec.encodeAuctionResult(result), StandardCharsets.UTF_8);
