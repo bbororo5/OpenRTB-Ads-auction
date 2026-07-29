@@ -88,6 +88,33 @@ class AuctionContractTest {
     }
 
     @Test
+    void requiresAProofWinnerToBelongToTheAuctionSlot() {
+        Instant issuedAt = Instant.parse("2026-07-29T00:00:00Z");
+        URI callback = URI.create("https://dsp.example.test/notice");
+        WinningBid unknownSlot = new WinningBid(
+                "auction-1/imp-2", "imp-2", "dsp-1", "bid-1", 1_000,
+                callback, callback, callback
+        );
+        WinningBid wrongAuction = new WinningBid(
+                "another-auction/imp-1", "imp-1", "dsp-1", "bid-1", 1_000,
+                callback, callback, callback
+        );
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new ProofIssuance(
+                        auction(), "auction-1", unknownSlot, issuedAt, issuedAt.plusSeconds(2)
+                )
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new ProofIssuance(
+                        auction(), "auction-1", wrongAuction, issuedAt, issuedAt.plusSeconds(2)
+                )
+        );
+    }
+
+    @Test
     void requiresBidsOnlyForAValidBidOutcome() {
         assertThrows(
                 IllegalArgumentException.class,

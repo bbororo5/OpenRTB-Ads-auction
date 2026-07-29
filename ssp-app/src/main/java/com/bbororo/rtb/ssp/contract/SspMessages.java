@@ -202,6 +202,15 @@ public final class SspMessages {
             Objects.requireNonNull(auction, "auction");
             auctionId = requireNonBlank(auctionId, "auctionId");
             Objects.requireNonNull(winner, "winner");
+            boolean requestedSlot = auction.slots().stream()
+                    .anyMatch(slot -> slot.impId().equals(winner.impId()));
+            if (!requestedSlot) {
+                throw new IllegalArgumentException("winner must belong to a requested auction slot");
+            }
+            String expectedSlotAuctionKey = auctionId + "/" + winner.impId();
+            if (!expectedSlotAuctionKey.equals(winner.slotAuctionKey())) {
+                throw new IllegalArgumentException("winner slotAuctionKey must belong to the auction");
+            }
             requireOrderedInstants(issuedAt, expiresAt, "expiresAt must be after issuedAt");
         }
     }
