@@ -115,6 +115,22 @@ class AuctionContractTest {
     }
 
     @Test
+    void refusesToSealAWinnerBelowTheRequestedSlotFloor() {
+        Instant issuedAt = Instant.parse("2026-07-29T00:00:00Z");
+        AuctionRequest request = new AuctionRequest(
+                "provider-1", "key-1", "request-1", 180,
+                List.of(new AuctionSlot("imp-1", 2_000))
+        );
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new ProofIssuance(
+                        request, "auction-1", winningBid(), issuedAt, issuedAt.plusSeconds(2)
+                )
+        );
+    }
+
+    @Test
     void requiresBidsOnlyForAValidBidOutcome() {
         assertThrows(
                 IllegalArgumentException.class,

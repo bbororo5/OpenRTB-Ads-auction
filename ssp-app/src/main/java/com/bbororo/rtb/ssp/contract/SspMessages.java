@@ -207,10 +207,15 @@ public final class SspMessages {
             Objects.requireNonNull(auction, "auction");
             auctionId = requireNonBlank(auctionId, "auctionId");
             Objects.requireNonNull(winner, "winner");
-            boolean requestedSlot = auction.slots().stream()
-                    .anyMatch(slot -> slot.impId().equals(winner.impId()));
-            if (!requestedSlot) {
+            AuctionSlot requestedSlot = auction.slots().stream()
+                    .filter(slot -> slot.impId().equals(winner.impId()))
+                    .findFirst()
+                    .orElse(null);
+            if (requestedSlot == null) {
                 throw new IllegalArgumentException("winner must belong to a requested auction slot");
+            }
+            if (winner.cpmMilliKrw() < requestedSlot.floorCpmMilliKrw()) {
+                throw new IllegalArgumentException("winner price must meet the requested slot floor");
             }
             String expectedSlotAuctionKey = auctionId + "/" + winner.impId();
             if (!expectedSlotAuctionKey.equals(winner.slotAuctionKey())) {
