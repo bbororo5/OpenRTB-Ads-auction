@@ -13,7 +13,7 @@ public record SspRuntimeSettings(
         URI renderCompletionUrl,
         Map<String, URI> dspEndpoints,
         byte renderProofKeyId,
-        byte[] renderProofKey,
+        Map<Byte, byte[]> renderProofKeys,
         Duration billingWorkerInterval,
         Duration noticeTimeout
 ) {
@@ -24,12 +24,15 @@ public record SspRuntimeSettings(
         }
         renderCompletionUrl = requireHttpUrl(renderCompletionUrl, "renderCompletionUrl");
         dspEndpoints = Map.copyOf(dspEndpoints);
-        renderProofKey = renderProofKey.clone();
+        renderProofKeys = copyKeys(renderProofKeys);
+        if (!renderProofKeys.containsKey(renderProofKeyId)) {
+            throw new IllegalArgumentException("renderProofKeys must contain the active key id");
+        }
     }
 
     @Override
-    public byte[] renderProofKey() {
-        return renderProofKey.clone();
+    public Map<Byte, byte[]> renderProofKeys() {
+        return copyKeys(renderProofKeys);
     }
 
     public static SspRuntimeSettings fromEnvironment(Map<String, String> environment) {
@@ -44,10 +47,7 @@ public record SspRuntimeSettings(
         );
         Map<String, URI> endpoints = parseEndpoints(required("DSP_ENDPOINTS", environment));
         byte keyId = Byte.parseByte(environment.getOrDefault("RENDER_PROOF_KEY_ID", "1"));
-        byte[] key = Base64.getDecoder().decode(required("RENDER_PROOF_KEY_BASE64", environment));
-        if (key.length != 16 && key.length != 24 && key.length != 32) {
-            throw new IllegalArgumentException("RENDER_PROOF_KEY_BASE64 must contain a 128, 192, or 256-bit AES key");
-        }
+        Map<Byte, byte[]> keys = parseRenderProofKeys(environment, keyId);
         Duration workerInterval = Duration.ofMillis(
                 Long.parseLong(environment.getOrDefault("BILLING_WORKER_INTERVAL_MS", "10"))
         );
@@ -60,10 +60,50 @@ public record SspRuntimeSettings(
                 renderCompletionUrl,
                 endpoints,
                 keyId,
-                key,
+                keys,
                 workerInterval,
                 noticeTimeout
         );
+    }
+
+    private static Map<Byte, byte[]> parseRenderProofKeys(
+            Map<String, String> environment,
+            byte activeKeyId
+    ) {
+        String keyRing = environment.get("RENDER_PROOF_KEYS");
+        if (keyRing == null || keyRing.isBlank()) {
+            return Map.of(
+                    activeKeyId,
+                    decodeAesKey(required("RENDER_PROOF_KEY_BASE64", environment))
+            );
+        }
+        Map<Byte, byte[]> keys = new LinkedHashMap<>();
+        for (String item : keyRing.split(",")) {
+            String[] pair = item.trim().split("=", 2);
+            if (pair.length != 2 || pair[0].isBlank() || pair[1].isBlank()) {
+                throw new IllegalArgumentException(
+                        "RENDER_PROOF_KEYS must use key-id=base64 entries"
+                );
+            }
+            byte keyId = Byte.parseByte(pair[0]);
+            if (keys.put(keyId, decodeAesKey(pair[1])) != null) {
+                throw new IllegalArgumentException("RENDER_PROOF_KEYS must not repeat a key id");
+            }
+        }
+        if (!keys.containsKey(activeKeyId)) {
+            throw new IllegalArgumentException("RENDER_PROOF_KEYS must contain the active key id");
+        }
+        return keys;
+    }
+
+    private static byte[] decodeAesKey(String encoded) {
+        byte[] key = Base64.getDecoder().decode(encoded);
+        if (key.length != 16 && key.length != 24 && key.length != 32) {
+            throw new IllegalArgumentException(
+                    "Render proof keys must contain 128, 192, or 256 bits"
+            );
+        }
+        return key;
     }
 
     private static Map<String, URI> parseEndpoints(String value) {
@@ -100,5 +140,11 @@ public record SspRuntimeSettings(
             throw new IllegalArgumentException(name + " must be an absolute HTTP URL");
         }
         return value;
+    }
+
+    private static Map<Byte, byte[]> copyKeys(Map<Byte, byte[]> source) {
+        Map<Byte, byte[]> copy = new LinkedHashMap<>();
+        source.forEach((keyId, key) -> copy.put(keyId, key.clone()));
+        return Map.copyOf(copy);
     }
 }

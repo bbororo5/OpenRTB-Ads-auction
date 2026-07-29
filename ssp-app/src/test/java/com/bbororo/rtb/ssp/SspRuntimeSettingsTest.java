@@ -11,14 +11,16 @@ import org.junit.jupiter.api.Test;
 class SspRuntimeSettingsTest {
 
     @Test
-    void parsesIndependentDspEndpointsAndAeadKey() {
-        String key = Base64.getEncoder().encodeToString(new byte[32]);
+    void parsesIndependentDspEndpointsAndAeadKeyRing() {
+        String oldKey = Base64.getEncoder().encodeToString(new byte[16]);
+        String activeKey = Base64.getEncoder().encodeToString(new byte[32]);
 
         SspRuntimeSettings settings = SspRuntimeSettings.fromEnvironment(Map.of(
                 "SSP_REGION_ID", "region-a",
                 "RENDER_COMPLETION_URL", "https://region-a.ssp.test/publisher/render",
                 "DSP_ENDPOINTS", "project=http://project.test/bid,competitor=http://other.test/bid",
-                "RENDER_PROOF_KEY_BASE64", key
+                "RENDER_PROOF_KEY_ID", "8",
+                "RENDER_PROOF_KEYS", "7=" + oldKey + ",8=" + activeKey
         ));
 
         assertEquals(8080, settings.serverPort());
@@ -28,7 +30,11 @@ class SspRuntimeSettingsTest {
                 settings.renderCompletionUrl()
         );
         assertEquals(URI.create("http://project.test/bid"), settings.dspEndpoints().get("project"));
-        assertEquals(32, settings.renderProofKey().length);
+        assertEquals((byte) 8, settings.renderProofKeyId());
+        assertEquals(16, settings.renderProofKeys().get((byte) 7).length);
+        assertEquals(32, settings.renderProofKeys().get((byte) 8).length);
+        settings.renderProofKeys().get((byte) 8)[0] = 1;
+        assertEquals(0, settings.renderProofKeys().get((byte) 8)[0]);
     }
 
     @Test
@@ -38,6 +44,19 @@ class SspRuntimeSettingsTest {
                 "RENDER_COMPLETION_URL", "https://region-a.ssp.test/publisher/render",
                 "DSP_ENDPOINTS", "project=http://project.test/bid",
                 "RENDER_PROOF_KEY_BASE64", Base64.getEncoder().encodeToString(new byte[10])
+        )));
+    }
+
+    @Test
+    void requiresTheActiveKeyInTheConfiguredKeyRing() {
+        String key = Base64.getEncoder().encodeToString(new byte[32]);
+
+        assertThrows(IllegalArgumentException.class, () -> SspRuntimeSettings.fromEnvironment(Map.of(
+                "SSP_REGION_ID", "region-a",
+                "RENDER_COMPLETION_URL", "https://region-a.ssp.test/publisher/render",
+                "DSP_ENDPOINTS", "project=http://project.test/bid",
+                "RENDER_PROOF_KEY_ID", "8",
+                "RENDER_PROOF_KEYS", "7=" + key
         )));
     }
 }

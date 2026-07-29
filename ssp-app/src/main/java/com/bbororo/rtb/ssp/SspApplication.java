@@ -28,6 +28,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -58,10 +59,11 @@ public final class SspApplication {
         var proofService = new AeadRenderProofService(
                 settings.regionId(),
                 settings.renderProofKeyId(),
-                Map.of(
-                        settings.renderProofKeyId(),
-                        new SecretKeySpec(settings.renderProofKey(), "AES")
-                )
+                settings.renderProofKeys().entrySet().stream()
+                        .collect(Collectors.toUnmodifiableMap(
+                                Map.Entry::getKey,
+                                entry -> new SecretKeySpec(entry.getValue(), "AES")
+                        ))
         );
         var bidExecutor = new HttpOpenRtbDspBidExecutor(
                 httpClient,
