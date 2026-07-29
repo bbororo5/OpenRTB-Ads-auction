@@ -38,9 +38,10 @@ SSP
 
 - `ssp-app`: 공급자 요청과 경매 실행
 - `dsp-app`: 캠페인 선택과 입찰
-- `shared`: OpenRTB 객체와 공통 관측
 - `performance/k6`: 부하 스크립트
 - `docs`: 요구사항과 아키텍처 결과
+
+SSP와 DSP는 서로 다른 업체로 가정하므로 공유 애플리케이션 모듈이나 내부 모델을 두지 않는다. 두 시스템의 경계는 OpenRTB 2.6 HTTP/JSON 요청·응답과 `nurl`·`lurl`·`burl`뿐이다.
 
 ## 현재 상태
 

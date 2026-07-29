@@ -2,20 +2,6 @@ plugins {
     id 'java'
 }
 
-dependencies {
-    testImplementation platform('org.junit:junit-bom:5.11.4')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    testImplementation project(':shared')
-    testImplementation project(':ssp-app')
-    testImplementation project(':dsp-app')
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
-
-test {
-    useJUnitPlatform()
-    failOnNoDiscoveredTests = false
-}
-
 allprojects {
     group = 'com.bbororo.rtb'
     version = '0.1.0-SNAPSHOT'

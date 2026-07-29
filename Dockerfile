@@ -13,7 +13,6 @@ ARG APP_MODULE
 WORKDIR /workspace
 
 COPY settings.gradle build.gradle ./
-COPY shared ./shared
 COPY ssp-app ./ssp-app
 COPY dsp-app ./dsp-app
 

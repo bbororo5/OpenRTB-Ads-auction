@@ -14,6 +14,5 @@ dependencyResolutionManagement {
 
 rootProject.name = 'low-latency-openrtb-auction'
 
-include 'shared'
 include 'ssp-app'
 include 'dsp-app'
