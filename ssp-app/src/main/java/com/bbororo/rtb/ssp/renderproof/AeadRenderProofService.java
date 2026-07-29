@@ -31,6 +31,8 @@ public final class AeadRenderProofService implements RenderProofService {
     private static final byte FORMAT_VERSION = 2;
     private static final int NONCE_BYTES = 12;
     private static final int TAG_BITS = 128;
+    private static final int MAX_ENCODED_TOKEN_CHARS = 4_096;
+    private static final Duration MIN_VALIDITY = Duration.ofMillis(1);
     private static final Duration MAX_VALIDITY = Duration.ofSeconds(2);
 
     private final String localRegion;
@@ -48,31 +50,38 @@ public final class AeadRenderProofService implements RenderProofService {
             Map<Byte, SecretKey> keys,
             SecureRandom secureRandom
     ) {
-        if (localRegion == null || localRegion.isBlank()) {
-            throw new IllegalArgumentException("localRegion must not be blank");
+        if (localRegion == null || localRegion.isBlank() || localRegion.length() > 64) {
+            throw new IllegalArgumentException("localRegion must contain between 1 and 64 characters");
         }
         this.localRegion = localRegion;
         this.activeKeyId = activeKeyId;
-        this.keys = Map.copyOf(keys);
+        this.keys = Map.copyOf(Objects.requireNonNull(keys, "keys"));
         this.secureRandom = Objects.requireNonNull(secureRandom);
         if (!this.keys.containsKey(activeKeyId)) {
             throw new IllegalArgumentException("active render proof key is missing");
         }
+        this.keys.values().forEach(AeadRenderProofService::validateAesKey);
     }
 
     @Override
     public RenderProof issue(ProofIssuance issuance) {
         Objects.requireNonNull(issuance);
-        validateValidity(issuance.issuedAt(), issuance.expiresAt());
+        Instant issuedAt = Instant.ofEpochMilli(issuance.issuedAt().toEpochMilli());
+        Instant expiresAt = Instant.ofEpochMilli(issuance.expiresAt().toEpochMilli());
+        validateValidity(issuedAt, expiresAt);
         try {
             byte[] nonce = new byte[NONCE_BYTES];
             secureRandom.nextBytes(nonce);
             byte[] header = {FORMAT_VERSION, activeKeyId};
             Cipher cipher = cipher(Cipher.ENCRYPT_MODE, keys.get(activeKeyId), nonce, header);
-            byte[] encrypted = cipher.doFinal(encodePayload(issuance));
+            byte[] encrypted = cipher.doFinal(encodePayload(issuance, issuedAt, expiresAt));
             ByteBuffer token = ByteBuffer.allocate(header.length + nonce.length + encrypted.length);
             token.put(header).put(nonce).put(encrypted);
-            return new RenderProof(Base64.getUrlEncoder().withoutPadding().encodeToString(token.array()));
+            String encodedToken = Base64.getUrlEncoder().withoutPadding().encodeToString(token.array());
+            if (encodedToken.length() > MAX_ENCODED_TOKEN_CHARS) {
+                throw new IllegalArgumentException("Render proof exceeds the supported size");
+            }
+            return new RenderProof(encodedToken);
         } catch (Exception exception) {
             throw new IllegalStateException("Could not issue render proof", exception);
         }
@@ -82,7 +91,11 @@ public final class AeadRenderProofService implements RenderProofService {
     public Optional<VerifiedRender> verify(RenderCompleted completed) {
         Objects.requireNonNull(completed);
         try {
-            byte[] token = Base64.getUrlDecoder().decode(completed.renderProof().encodedValue());
+            String encodedProof = completed.renderProof().encodedValue();
+            if (encodedProof.length() > MAX_ENCODED_TOKEN_CHARS) {
+                return Optional.empty();
+            }
+            byte[] token = Base64.getUrlDecoder().decode(encodedProof);
             if (token.length <= 2 + NONCE_BYTES + TAG_BITS / 8 || token[0] != FORMAT_VERSION) {
                 return Optional.empty();
             }
@@ -96,7 +109,7 @@ public final class AeadRenderProofService implements RenderProofService {
             Cipher cipher = cipher(Cipher.DECRYPT_MODE, key, nonce, header);
             VerifiedRender render = decodePayload(
                     cipher.doFinal(encrypted),
-                    completed.renderProof().encodedValue()
+                    encodedProof
             );
             if (completed.receivedAt().isAfter(render.renderExpiresAt())) {
                 return Optional.empty();
@@ -114,9 +127,13 @@ public final class AeadRenderProofService implements RenderProofService {
         return cipher;
     }
 
-    private byte[] encodePayload(ProofIssuance issuance) throws Exception {
+    private byte[] encodePayload(
+            ProofIssuance issuance,
+            Instant issuedAt,
+            Instant expiresAt
+    ) throws Exception {
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream output = new DataOutputStream(bytes)) {
+             DataOutputStream output = new DataOutputStream(bytes)) {
             output.writeUTF(localRegion);
             output.writeUTF(issuance.auction().providerId());
             output.writeUTF(issuance.auction().providerRequestId());
@@ -125,8 +142,8 @@ public final class AeadRenderProofService implements RenderProofService {
             output.writeUTF(issuance.winner().dspId());
             output.writeLong(issuance.winner().cpmMilliKrw());
             output.writeUTF(issuance.winner().burl().toString());
-            output.writeLong(issuance.issuedAt().toEpochMilli());
-            output.writeLong(issuance.expiresAt().toEpochMilli());
+            output.writeLong(issuedAt.toEpochMilli());
+            output.writeLong(expiresAt.toEpochMilli());
             output.flush();
             return bytes.toByteArray();
         }
@@ -162,8 +179,18 @@ public final class AeadRenderProofService implements RenderProofService {
 
     private static void validateValidity(Instant issuedAt, Instant expiresAt) {
         Duration validity = Duration.between(issuedAt, expiresAt);
-        if (validity.isZero() || validity.isNegative() || validity.compareTo(MAX_VALIDITY) > 0) {
+        if (validity.compareTo(MIN_VALIDITY) < 0 || validity.compareTo(MAX_VALIDITY) > 0) {
             throw new IllegalArgumentException("Render proof validity must be between 1 ms and 2 seconds");
+        }
+    }
+
+    private static void validateAesKey(SecretKey key) {
+        if (!"AES".equalsIgnoreCase(key.getAlgorithm())) {
+            throw new IllegalArgumentException("Render proof keys must use AES");
+        }
+        byte[] encoded = key.getEncoded();
+        if (encoded != null && encoded.length != 16 && encoded.length != 24 && encoded.length != 32) {
+            throw new IllegalArgumentException("Render proof AES keys must contain 128, 192, or 256 bits");
         }
     }
 }

@@ -9,6 +9,7 @@ import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 /** 낙찰 결과마다 하나의 짧은 수명 렌더링 증표를 붙인다. */
@@ -33,7 +34,7 @@ public final class AuctionResultAssembler {
     public AuctionResult assemble(AuctionRequest request, AuctionOutcome outcome) {
         Objects.requireNonNull(request);
         Objects.requireNonNull(outcome);
-        Instant issuedAt = clock.instant();
+        Instant issuedAt = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         Instant expiresAt = issuedAt.plus(RENDER_PROOF_VALIDITY);
         return new AuctionResult(
                 outcome.auctionId(),

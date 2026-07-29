@@ -2,6 +2,8 @@ package com.bbororo.rtb.ssp.renderproof;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
@@ -33,10 +35,13 @@ class AeadRenderProofServiceTest {
         var render = service.verify(new RenderCompleted(proof, ISSUED_AT.plusMillis(200))).orElseThrow();
 
         assertEquals("provider-1", render.providerId());
+        assertEquals("request-1", render.providerRequestId());
         assertEquals("imp-1", render.impId());
+        assertEquals("auction-1/imp-1", render.slotAuctionKey());
         assertEquals("project-dsp", render.dspId());
         assertEquals(2_000L, render.cpmMilliKrw());
         assertEquals(URI.create("https://dsp.test/burl/1"), render.billingUrl());
+        assertTrue(render.proofDigest().matches("[0-9a-f]{64}"));
     }
 
     @Test
@@ -67,6 +72,66 @@ class AeadRenderProofServiceTest {
     }
 
     @Test
+    void acceptsTheProofAtTheExactTwoSecondBoundary() {
+        RenderProof proof = service.issue(issuance());
+
+        assertTrue(service.verify(
+                new RenderCompleted(proof, ISSUED_AT.plusSeconds(2))
+        ).isPresent());
+    }
+
+    @Test
+    void rejectsAValidityOutsideTheOneMillisecondToTwoSecondContract() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.issue(issuance(ISSUED_AT.plusNanos(500_000)))
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.issue(issuance(ISSUED_AT.plusSeconds(2).plusMillis(1)))
+        );
+    }
+
+    @Test
+    void rejectsAnOversizedProofBeforeBase64Decoding() {
+        RenderProof oversized = new RenderProof("a".repeat(4_097));
+
+        assertFalse(service.verify(
+                new RenderCompleted(oversized, ISSUED_AT.plusMillis(200))
+        ).isPresent());
+    }
+
+    @Test
+    void verifiesAnOldKeyDuringKeyRotation() {
+        SecretKeySpec oldKey = new SecretKeySpec(new byte[32], "AES");
+        byte[] newKeyBytes = new byte[32];
+        newKeyBytes[0] = 1;
+        SecretKeySpec newKey = new SecretKeySpec(newKeyBytes, "AES");
+        RenderProof proof = new AeadRenderProofService(
+                "region-a", (byte) 7, Map.of((byte) 7, oldKey)
+        ).issue(issuance());
+        var rotated = new AeadRenderProofService(
+                "region-a", (byte) 8, Map.of((byte) 7, oldKey, (byte) 8, newKey)
+        );
+
+        assertTrue(rotated.verify(
+                new RenderCompleted(proof, ISSUED_AT.plusMillis(200))
+        ).isPresent());
+    }
+
+    @Test
+    void rejectsAnInvalidAesKeyAtStartup() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new AeadRenderProofService(
+                        "region-a",
+                        (byte) 7,
+                        Map.of((byte) 7, new SecretKeySpec(new byte[10], "AES"))
+                )
+        );
+    }
+
+    @Test
     void rejectsAProofIssuedByAnotherRegion() {
         RenderProof proof = service.issue(issuance());
         var anotherRegion = new AeadRenderProofService(
@@ -81,6 +146,10 @@ class AeadRenderProofServiceTest {
     }
 
     private static ProofIssuance issuance() {
+        return issuance(ISSUED_AT.plusSeconds(2));
+    }
+
+    private static ProofIssuance issuance(Instant expiresAt) {
         AuctionRequest request = new AuctionRequest(
                 "provider-1", "key-1", "request-1", 50, List.of(new AuctionSlot("imp-1", 1_000))
         );
@@ -88,6 +157,6 @@ class AeadRenderProofServiceTest {
         WinningBid winner = new WinningBid(
                 "auction-1/imp-1", "imp-1", "project-dsp", "bid-1", 2_000, url, url, url
         );
-        return new ProofIssuance(request, "auction-1", winner, ISSUED_AT, ISSUED_AT.plusSeconds(2));
+        return new ProofIssuance(request, "auction-1", winner, ISSUED_AT, expiresAt);
     }
 }
