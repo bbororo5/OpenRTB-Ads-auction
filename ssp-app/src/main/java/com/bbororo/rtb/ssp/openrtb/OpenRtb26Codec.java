@@ -1,5 +1,6 @@
 package com.bbororo.rtb.ssp.openrtb;
 
+import com.bbororo.rtb.ssp.contract.KrwCpm;
 import com.bbororo.rtb.ssp.contract.SspMessages.BidRequestBatch;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspBid;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcome;
@@ -7,6 +8,7 @@ import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcomeKind;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
 import java.util.Objects;
@@ -36,7 +38,7 @@ public final class OpenRtb26Codec {
                 batch.auction().slots().stream()
                         .map(slot -> new ImpJson(
                                 slot.impId(),
-                                (double) slot.floorCpmKrw(),
+                                KrwCpm.fromMilliKrw(slot.floorCpmMilliKrw()),
                                 CURRENCY,
                                 RENDER_EXPIRY_SECONDS
                         ))
@@ -73,7 +75,7 @@ public final class OpenRtb26Codec {
 
     private static DspBid toDspBid(String dspId, BidJson bid) {
         if (bid == null || bid.id() == null || bid.impid() == null
-                || !Double.isFinite(bid.price()) || bid.price() <= 0
+                || bid.price() == null || bid.price().signum() <= 0
                 || bid.nurl() == null || bid.lurl() == null || bid.burl() == null) {
             throw new IllegalArgumentException("Invalid OpenRTB bid");
         }
@@ -81,7 +83,7 @@ public final class OpenRtb26Codec {
                 dspId,
                 bid.impid(),
                 bid.id(),
-                Math.round(bid.price()),
+                KrwCpm.toMilliKrw(bid.price()),
                 URI.create(bid.nurl()),
                 URI.create(bid.lurl()),
                 URI.create(bid.burl())
@@ -102,7 +104,7 @@ public final class OpenRtb26Codec {
 
     private record ImpJson(
             String id,
-            double bidfloor,
+            BigDecimal bidfloor,
             String bidfloorcur,
             int exp
     ) {
@@ -120,7 +122,7 @@ public final class OpenRtb26Codec {
     private record BidJson(
             String id,
             String impid,
-            double price,
+            BigDecimal price,
             String nurl,
             String lurl,
             String burl,

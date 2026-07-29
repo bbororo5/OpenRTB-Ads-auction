@@ -6,7 +6,7 @@ CREATE TABLE ssp_billing_delivery (
     imp_id TEXT NOT NULL,
     slot_auction_key TEXT NOT NULL UNIQUE,
     dsp_id TEXT NOT NULL,
-    cpm_krw BIGINT NOT NULL CHECK (cpm_krw > 0),
+    cpm_milli_krw BIGINT NOT NULL CHECK (cpm_milli_krw > 0),
     billing_url TEXT NOT NULL,
     billing_deadline TIMESTAMPTZ NOT NULL,
     state TEXT NOT NULL CHECK (state IN ('PENDING', 'LEASED', 'DELIVERED', 'UNDELIVERED')),

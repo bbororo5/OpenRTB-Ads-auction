@@ -34,7 +34,7 @@ class AeadRenderProofServiceTest {
         assertEquals("provider-1", render.providerId());
         assertEquals("imp-1", render.impId());
         assertEquals("project-dsp", render.dspId());
-        assertEquals(2_000L, render.cpmKrw());
+        assertEquals(2_000L, render.cpmMilliKrw());
         assertEquals(URI.create("https://dsp.test/burl/1"), render.billingUrl());
     }
 

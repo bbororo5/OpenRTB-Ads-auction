@@ -50,14 +50,14 @@ public final class SspMessages {
         }
     }
 
-    public record AuctionSlot(String impId, long floorCpmKrw) {
+    public record AuctionSlot(String impId, long floorCpmMilliKrw) {
 
         public AuctionSlot {
             if (impId == null || impId.isBlank()) {
                 throw new IllegalArgumentException("impId must not be blank");
             }
-            if (floorCpmKrw < 0) {
-                throw new IllegalArgumentException("floorCpmKrw must not be negative");
+            if (floorCpmMilliKrw < 0) {
+                throw new IllegalArgumentException("floorCpmMilliKrw must not be negative");
             }
         }
     }
@@ -97,7 +97,7 @@ public final class SspMessages {
             String impId,
             String dspId,
             String bidId,
-            long cpmKrw,
+            long cpmMilliKrw,
             URI nurl,
             URI lurl,
             URI burl
@@ -107,7 +107,7 @@ public final class SspMessages {
             impId = requireNonBlank(impId, "impId");
             dspId = requireNonBlank(dspId, "dspId");
             bidId = requireNonBlank(bidId, "bidId");
-            requirePositive(cpmKrw, "cpmKrw");
+            requirePositive(cpmMilliKrw, "cpmMilliKrw");
             nurl = requireHttpUrl(nurl, "nurl");
             lurl = requireHttpUrl(lurl, "lurl");
             burl = requireHttpUrl(burl, "burl");
@@ -133,7 +133,7 @@ public final class SspMessages {
             String dspId,
             String impId,
             String bidId,
-            long cpmKrw,
+            long cpmMilliKrw,
             URI nurl,
             URI lurl,
             URI burl
@@ -142,7 +142,7 @@ public final class SspMessages {
             dspId = requireNonBlank(dspId, "dspId");
             impId = requireNonBlank(impId, "impId");
             bidId = requireNonBlank(bidId, "bidId");
-            requirePositive(cpmKrw, "cpmKrw");
+            requirePositive(cpmMilliKrw, "cpmMilliKrw");
             nurl = requireHttpUrl(nurl, "nurl");
             lurl = requireHttpUrl(lurl, "lurl");
             burl = requireHttpUrl(burl, "burl");
@@ -214,7 +214,7 @@ public final class SspMessages {
             String slotAuctionKey,
             String proofDigest,
             String dspId,
-            long cpmKrw,
+            long cpmMilliKrw,
             URI billingUrl,
             Instant auctionIssuedAt,
             Instant renderExpiresAt
@@ -226,7 +226,7 @@ public final class SspMessages {
             slotAuctionKey = requireNonBlank(slotAuctionKey, "slotAuctionKey");
             proofDigest = requireSha256Hex(proofDigest);
             dspId = requireNonBlank(dspId, "dspId");
-            requirePositive(cpmKrw, "cpmKrw");
+            requirePositive(cpmMilliKrw, "cpmMilliKrw");
             billingUrl = requireHttpUrl(billingUrl, "billingUrl");
             requireOrderedInstants(
                     auctionIssuedAt,
@@ -243,7 +243,7 @@ public final class SspMessages {
             String slotAuctionKey,
             String proofDigest,
             String dspId,
-            long cpmKrw,
+            long cpmMilliKrw,
             URI billingUrl,
             Instant billingDeadline
     ) {
@@ -254,7 +254,7 @@ public final class SspMessages {
             slotAuctionKey = requireNonBlank(slotAuctionKey, "slotAuctionKey");
             proofDigest = requireSha256Hex(proofDigest);
             dspId = requireNonBlank(dspId, "dspId");
-            requirePositive(cpmKrw, "cpmKrw");
+            requirePositive(cpmMilliKrw, "cpmMilliKrw");
             billingUrl = requireHttpUrl(billingUrl, "billingUrl");
             Objects.requireNonNull(billingDeadline, "billingDeadline");
         }

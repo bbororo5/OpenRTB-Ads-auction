@@ -31,7 +31,7 @@ class HmacRenderProofServiceTest {
         assertEquals("imp-1", render.impId());
         assertEquals("auction-1/imp-1", render.slotAuctionKey());
         assertEquals("project-dsp", render.dspId());
-        assertEquals(2_000L, render.cpmKrw());
+        assertEquals(2_000L, render.cpmMilliKrw());
         assertEquals(URI.create("https://dsp.example.test/burl"), render.billingUrl());
     }
 

@@ -89,8 +89,8 @@ class DeadlineBoundAuctionCoordinatorTest {
         return new BidResponses(List.of(outcomes));
     }
 
-    private static DspBid bid(String dspId, long cpmKrw) {
+    private static DspBid bid(String dspId, long cpmMilliKrw) {
         URI callback = URI.create("https://" + dspId + ".example.test/notice");
-        return new DspBid(dspId, "imp-1", "bid-1", cpmKrw, callback, callback, callback);
+        return new DspBid(dspId, "imp-1", "bid-1", cpmMilliKrw, callback, callback, callback);
     }
 }

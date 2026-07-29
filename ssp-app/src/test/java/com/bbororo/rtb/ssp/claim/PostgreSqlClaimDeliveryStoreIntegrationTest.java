@@ -41,7 +41,7 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
             );
             assertEquals(RenderAcceptance.REJECTED, store.recordClaimAndScheduleDelivery(conflictingClaim));
             var leased = store.leaseDueDelivery(now).orElseThrow();
-            assertEquals(2_000L, leased.task().claim().cpmKrw());
+            assertEquals(2_000L, leased.task().claim().cpmMilliKrw());
 
             store.completeOrReleaseDelivery(leased.lease(), DeliveryOutcome.DELIVERED, now.plusMillis(10));
             assertTrue(store.leaseDueDelivery(now.plusMillis(20)).isEmpty());

@@ -1,10 +1,12 @@
 package com.bbororo.rtb.ssp.api;
 
+import com.bbororo.rtb.ssp.contract.KrwCpm;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderProof;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -30,7 +32,10 @@ public final class ProviderApiJsonCodec {
                     request.providerRequestId(),
                     request.tmaxMillis(),
                     request.slots().stream()
-                            .map(slot -> new AuctionSlot(slot.impId(), slot.floorCpmKrw()))
+                            .map(slot -> new AuctionSlot(
+                                    slot.impId(),
+                                    KrwCpm.toMilliKrw(slot.floorCpmKrw())
+                            ))
                             .toList()
             );
         } catch (Exception exception) {
@@ -54,7 +59,7 @@ public final class ProviderApiJsonCodec {
                             .map(slot -> new SlotResultJson(
                                     slot.winningBid().impId(),
                                     slot.winningBid().dspId(),
-                                    slot.winningBid().cpmKrw(),
+                                    KrwCpm.fromMilliKrw(slot.winningBid().cpmMilliKrw()),
                                     slot.renderProof().encodedValue()
                             ))
                             .toList()
@@ -82,7 +87,7 @@ public final class ProviderApiJsonCodec {
     ) {
     }
 
-    private record SlotJson(String impId, long floorCpmKrw) {
+    private record SlotJson(String impId, BigDecimal floorCpmKrw) {
     }
 
     private record RenderCompletedJson(String renderProof) {
@@ -91,7 +96,7 @@ public final class ProviderApiJsonCodec {
     private record AuctionResultJson(String auctionId, List<SlotResultJson> slots) {
     }
 
-    private record SlotResultJson(String impId, String dspId, long cpmKrw, String renderProof) {
+    private record SlotResultJson(String impId, String dspId, BigDecimal cpmKrw, String renderProof) {
     }
 
     private record ErrorJson(String code) {

@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 public final class FirstPriceWinnerSelector implements WinnerSelector {
 
     private static final Comparator<DspBid> WINNER_ORDER = Comparator
-            .comparingLong(DspBid::cpmKrw).reversed()
+            .comparingLong(DspBid::cpmMilliKrw).reversed()
             .thenComparing(DspBid::dspId)
             .thenComparing(DspBid::bidId);
 
@@ -53,8 +53,8 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
         AuctionSlot slot = slotsByImpId.get(bid.impId());
         return bid.dspId().equals(outcome.dspId())
                 && slot != null
-                && bid.cpmKrw() > 0
-                && bid.cpmKrw() >= slot.floorCpmKrw();
+                && bid.cpmMilliKrw() > 0
+                && bid.cpmMilliKrw() >= slot.floorCpmMilliKrw();
     }
 
     private static DspBid betterBid(DspBid first, DspBid second) {
@@ -70,7 +70,7 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
                 bid.impId(),
                 bid.dspId(),
                 bid.bidId(),
-                bid.cpmKrw(),
+                bid.cpmMilliKrw(),
                 bid.nurl(),
                 bid.lurl(),
                 bid.burl()

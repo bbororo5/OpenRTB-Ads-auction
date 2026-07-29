@@ -112,7 +112,7 @@ public final class AeadRenderProofService implements RenderProofService {
             output.writeUTF(issuance.winner().impId());
             output.writeUTF(issuance.winner().slotAuctionKey());
             output.writeUTF(issuance.winner().dspId());
-            output.writeLong(issuance.winner().cpmKrw());
+            output.writeLong(issuance.winner().cpmMilliKrw());
             output.writeUTF(issuance.winner().burl().toString());
             output.writeLong(issuance.issuedAt().toEpochMilli());
             output.writeLong(issuance.expiresAt().toEpochMilli());
@@ -128,19 +128,19 @@ public final class AeadRenderProofService implements RenderProofService {
             String impId = input.readUTF();
             String slotAuctionKey = input.readUTF();
             String dspId = input.readUTF();
-            long cpmKrw = input.readLong();
+            long cpmMilliKrw = input.readLong();
             URI billingUrl = URI.create(input.readUTF());
             Instant issuedAt = Instant.ofEpochMilli(input.readLong());
             Instant expiresAt = Instant.ofEpochMilli(input.readLong());
             validateValidity(issuedAt, expiresAt);
-            if (cpmKrw <= 0 || input.available() != 0) {
+            if (cpmMilliKrw <= 0 || input.available() != 0) {
                 throw new IllegalArgumentException("Invalid render proof payload");
             }
             String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(encodedProof.getBytes(StandardCharsets.UTF_8)));
             return new VerifiedRender(
                     providerId, providerRequestId, impId, slotAuctionKey, digest,
-                    dspId, cpmKrw, billingUrl, issuedAt, expiresAt
+                    dspId, cpmMilliKrw, billingUrl, issuedAt, expiresAt
             );
         }
     }

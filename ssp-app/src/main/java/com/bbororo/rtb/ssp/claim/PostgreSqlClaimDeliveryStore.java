@@ -23,7 +23,7 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
     private static final String INSERT_CLAIM = """
             INSERT INTO ssp_billing_delivery (
                 delivery_id, proof_digest, provider_id, provider_request_id, imp_id,
-                slot_auction_key, dsp_id, cpm_krw, billing_url, billing_deadline, state
+                slot_auction_key, dsp_id, cpm_milli_krw, billing_url, billing_deadline, state
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
             ON CONFLICT (slot_auction_key) DO NOTHING
             """;
@@ -59,7 +59,7 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
              WHERE delivery.delivery_id = candidate.delivery_id
             RETURNING delivery.delivery_id, delivery.proof_digest, delivery.provider_id,
                       delivery.provider_request_id, delivery.imp_id, delivery.slot_auction_key,
-                      delivery.dsp_id, delivery.cpm_krw, delivery.billing_url,
+                      delivery.dsp_id, delivery.cpm_milli_krw, delivery.billing_url,
                       delivery.billing_deadline, delivery.lease_generation, delivery.lease_until
             """;
 
@@ -105,7 +105,7 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
             statement.setString(5, claim.impId());
             statement.setString(6, claim.slotAuctionKey());
             statement.setString(7, claim.dspId());
-            statement.setLong(8, claim.cpmKrw());
+            statement.setLong(8, claim.cpmMilliKrw());
             statement.setString(9, claim.billingUrl().toString());
             statement.setTimestamp(10, Timestamp.from(claim.billingDeadline()));
             return statement.executeUpdate() == 1;
@@ -212,7 +212,7 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
                         result.getString("slot_auction_key"),
                         result.getString("proof_digest").trim(),
                         result.getString("dsp_id"),
-                        result.getLong("cpm_krw"),
+                        result.getLong("cpm_milli_krw"),
                         URI.create(result.getString("billing_url")),
                         result.getTimestamp("billing_deadline").toInstant()
                 );

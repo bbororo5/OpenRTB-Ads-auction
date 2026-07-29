@@ -33,7 +33,7 @@ public final class StoreBackedRenderClaimService implements RenderClaimService {
                 render.slotAuctionKey(),
                 render.proofDigest(),
                 render.dspId(),
-                render.cpmKrw(),
+                render.cpmMilliKrw(),
                 render.billingUrl(),
                 render.auctionIssuedAt().plus(BILLING_DELIVERY_WINDOW)
         ));

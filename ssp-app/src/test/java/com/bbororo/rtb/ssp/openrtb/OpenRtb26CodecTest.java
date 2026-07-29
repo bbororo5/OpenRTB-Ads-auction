@@ -22,7 +22,7 @@ class OpenRtb26CodecTest {
                 "auction-1",
                 new AuctionRequest(
                         "provider-1", "key-1", "request-1", 50,
-                        List.of(new AuctionSlot("imp-1", 1_000))
+                        List.of(new AuctionSlot("imp-1", 1_000_000))
                 ),
                 List.of("dsp-1"),
                 AuctionDeadline.start(50, System::nanoTime)
@@ -31,7 +31,7 @@ class OpenRtb26CodecTest {
 
         assertTrue(text.contains("\"id\":\"auction-1\""));
         assertTrue(text.contains("\"tmax\":50"));
-        assertTrue(text.contains("\"bidfloor\":1000.0"));
+        assertTrue(text.contains("\"bidfloor\":1000.000"));
         assertTrue(text.contains("\"bidfloorcur\":\"KRW\""));
         assertTrue(text.contains("\"exp\":2"));
     }
@@ -44,7 +44,7 @@ class OpenRtb26CodecTest {
                   "seatbid": [{"bid": [{
                     "id": "bid-1",
                     "impid": "imp-1",
-                    "price": 2000.0,
+                    "price": 2000.125,
                     "nurl": "https://dsp.test/nurl/1",
                     "lurl": "https://dsp.test/lurl/1",
                     "burl": "https://dsp.test/burl/1",
@@ -56,7 +56,7 @@ class OpenRtb26CodecTest {
         var result = codec.decodeBidResponse("dsp-1", "auction-1", json.getBytes(StandardCharsets.UTF_8));
 
         assertEquals(DspCallOutcomeKind.VALID_BID, result.kind());
-        assertEquals(2_000L, result.bids().getFirst().cpmKrw());
+        assertEquals(2_000_125L, result.bids().getFirst().cpmMilliKrw());
         assertEquals("imp-1", result.bids().getFirst().impId());
     }
 
@@ -67,6 +67,23 @@ class OpenRtb26CodecTest {
         assertEquals(
                 DspCallOutcomeKind.INVALID_BID,
                 codec.decodeBidResponse("dsp-1", "auction-1", body).kind()
+        );
+    }
+
+    @Test
+    void rejectsAnOpenRtbBidBeyondThreeDecimalPlaces() {
+        String json = """
+                {"id":"auction-1","seatbid":[{"bid":[{
+                  "id":"bid-1","impid":"imp-1","price":2000.0001,
+                  "nurl":"https://dsp.test/nurl/1",
+                  "lurl":"https://dsp.test/lurl/1",
+                  "burl":"https://dsp.test/burl/1"
+                }]}]}
+                """;
+
+        assertEquals(
+                DspCallOutcomeKind.INVALID_BID,
+                codec.decodeBidResponse("dsp-1", "auction-1", json.getBytes(StandardCharsets.UTF_8)).kind()
         );
     }
 }

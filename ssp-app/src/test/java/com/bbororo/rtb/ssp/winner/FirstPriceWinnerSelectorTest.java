@@ -32,7 +32,7 @@ class FirstPriceWinnerSelectorTest {
         );
 
         assertEquals(List.of("external-dsp-1", "external-dsp-1"), winners.winners().stream().map(WinningBid::dspId).toList());
-        assertEquals(List.of(1_500L, 600L), winners.winners().stream().map(WinningBid::cpmKrw).toList());
+        assertEquals(List.of(1_500L, 600L), winners.winners().stream().map(WinningBid::cpmMilliKrw).toList());
         assertEquals(List.of("auction-1/imp-1", "auction-1/imp-2"), winners.winners().stream().map(WinningBid::slotAuctionKey).toList());
     }
 
@@ -101,8 +101,8 @@ class FirstPriceWinnerSelectorTest {
         return new DspCallOutcome(dspId, DspCallOutcomeKind.VALID_BID, List.of(bids));
     }
 
-    private static DspBid bid(String dspId, String impId, String bidId, long cpmKrw) {
+    private static DspBid bid(String dspId, String impId, String bidId, long cpmMilliKrw) {
         URI callback = URI.create("https://" + dspId + ".example.test/notice");
-        return new DspBid(dspId, impId, bidId, cpmKrw, callback, callback, callback);
+        return new DspBid(dspId, impId, bidId, cpmMilliKrw, callback, callback, callback);
     }
 }
