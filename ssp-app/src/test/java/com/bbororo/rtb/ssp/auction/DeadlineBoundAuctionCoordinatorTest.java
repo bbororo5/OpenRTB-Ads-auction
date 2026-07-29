@@ -9,6 +9,7 @@ import com.bbororo.rtb.ssp.contract.SspMessages.BidResponses;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspBid;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcomeKind;
+import com.bbororo.rtb.ssp.contract.SspMessages.NoticeKind;
 import com.bbororo.rtb.ssp.contract.SspMessages.StartAuction;
 import com.bbororo.rtb.ssp.dspbid.DspBidExecutor;
 import com.bbororo.rtb.ssp.winner.FirstPriceWinnerSelector;
@@ -35,6 +36,7 @@ class DeadlineBoundAuctionCoordinatorTest {
         assertEquals(1, calls.get());
         assertEquals(1, winners.winners().winners().size());
         assertEquals("external-dsp", winners.winners().winners().getFirst().dspId());
+        assertEquals(NoticeKind.WIN, winners.notices().getFirst().kind());
     }
 
     @Test

@@ -77,20 +77,23 @@ final class SspE2eFixture {
                 new CoordinatingAuctionStarter(coordinator, Runnable::run)
         );
         Clock clock = Clock.fixed(STARTED_AT, ZoneOffset.UTC);
+        List<URI> delivered = new ArrayList<>();
+        DspNotificationDelivery notificationDelivery = new StoreBackedDspNotificationDelivery(
+                store,
+                url -> {
+                    if (url.getPath().contains("/burl/")) {
+                        delivered.add(url);
+                    }
+                    return com.bbororo.rtb.ssp.contract.SspMessages.DeliveryOutcome.DELIVERED;
+                }
+        );
         AuctionRenderApi api = new DefaultAuctionRenderApi(
                 admission,
                 new AuctionResultAssembler(proofService, clock),
                 proofService,
                 new StoreBackedRenderClaimService(store, trust),
+                notificationDelivery,
                 System::nanoTime
-        );
-        List<URI> delivered = new ArrayList<>();
-        DspNotificationDelivery notificationDelivery = new StoreBackedDspNotificationDelivery(
-                store,
-                url -> {
-                    delivered.add(url);
-                    return com.bbororo.rtb.ssp.contract.SspMessages.DeliveryOutcome.DELIVERED;
-                }
         );
         return new SspE2eFixture(api, store, notificationDelivery, delivered);
     }

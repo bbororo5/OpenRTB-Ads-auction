@@ -25,7 +25,9 @@ import org.junit.jupiter.api.Test;
 
 class AuctionAdmissionServiceTest {
 
-    private static final AuctionOutcome RESULT = new AuctionOutcome("auction-1", new AuctionWinners(List.of()));
+    private static final AuctionOutcome RESULT = new AuctionOutcome(
+            "auction-1", new AuctionWinners(List.of()), List.of()
+    );
 
     @Test
     void rejectsAnUntrustedRequestBeforeItCanStartAnAuction() {

@@ -28,9 +28,11 @@ class AuctionResultAssemblerTest {
                 "provider-1", "key-1", "request-1", 50,
                 List.of(new AuctionSlot("imp-1", 0), new AuctionSlot("imp-2", 0))
         );
-        AuctionOutcome outcome = new AuctionOutcome("auction-1", new AuctionWinners(List.of(
-                winner("imp-1"), winner("imp-2")
-        )));
+        AuctionOutcome outcome = new AuctionOutcome(
+                "auction-1",
+                new AuctionWinners(List.of(winner("imp-1"), winner("imp-2"))),
+                List.of()
+        );
 
         var result = assembler.assemble(request, outcome);
 

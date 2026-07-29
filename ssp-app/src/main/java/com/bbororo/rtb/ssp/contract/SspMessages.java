@@ -64,7 +64,10 @@ public final class SspMessages {
     }
 
     /** 마감 안에 끝난 SSP 경매의 식별자와 슬롯별 낙찰 결과다. */
-    public record AuctionOutcome(String auctionId, AuctionWinners winners) {
+    public record AuctionOutcome(String auctionId, AuctionWinners winners, List<AuctionNotice> notices) {
+        public AuctionOutcome {
+            notices = List.copyOf(notices);
+        }
     }
 
     public record AuctionWinners(List<WinningBid> winners) {
