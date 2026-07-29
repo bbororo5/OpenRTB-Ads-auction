@@ -25,7 +25,7 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
     private static final Duration DEFAULT_LEASE_DURATION = Duration.ofSeconds(1);
 
     private final Duration leaseDuration;
-    private final Map<String, StoredDelivery> deliveriesByProofDigest = new HashMap<>();
+    private final Map<String, StoredDelivery> deliveriesBySlotAuctionKey = new HashMap<>();
 
     public InMemoryClaimDeliveryStore() {
         this(DEFAULT_LEASE_DURATION);
@@ -41,18 +41,21 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
     @Override
     public synchronized RenderAcceptance recordClaimAndScheduleDelivery(BillingClaim claim) {
         Objects.requireNonNull(claim);
-        if (deliveriesByProofDigest.containsKey(claim.proofDigest())) {
-            return RenderAcceptance.DUPLICATE;
+        StoredDelivery existing = deliveriesBySlotAuctionKey.get(claim.slotAuctionKey());
+        if (existing != null) {
+            return existing.hasProofDigest(claim.proofDigest())
+                    ? RenderAcceptance.DUPLICATE
+                    : RenderAcceptance.REJECTED;
         }
         BillingDeliveryTask task = new BillingDeliveryTask(UUID.randomUUID().toString(), claim);
-        deliveriesByProofDigest.put(claim.proofDigest(), new StoredDelivery(task));
+        deliveriesBySlotAuctionKey.put(claim.slotAuctionKey(), new StoredDelivery(task));
         return RenderAcceptance.ACCEPTED;
     }
 
     @Override
     public synchronized Optional<LeasedBillingDelivery> leaseDueDelivery(Instant now) {
         Objects.requireNonNull(now);
-        for (StoredDelivery delivery : deliveriesByProofDigest.values()) {
+        for (StoredDelivery delivery : deliveriesBySlotAuctionKey.values()) {
             if (!delivery.canLeaseAt(now)) {
                 continue;
             }
@@ -66,7 +69,7 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
         Objects.requireNonNull(lease);
         Objects.requireNonNull(outcome);
         Objects.requireNonNull(now);
-        for (StoredDelivery delivery : deliveriesByProofDigest.values()) {
+        for (StoredDelivery delivery : deliveriesBySlotAuctionKey.values()) {
             if (delivery.matches(lease)) {
                 delivery.finish(outcome, now);
                 return;
@@ -76,12 +79,12 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
 
     /** 시험용 어댑터가 현재 보존한 청구 수다. */
     public synchronized int recordedClaimCount() {
-        return deliveriesByProofDigest.size();
+        return deliveriesBySlotAuctionKey.size();
     }
 
     /** 아직 전달 완료·만료로 종결되지 않은 작업 수다. */
     public synchronized int pendingDeliveryCount() {
-        return (int) deliveriesByProofDigest.values().stream()
+        return (int) deliveriesBySlotAuctionKey.values().stream()
                 .filter(StoredDelivery::isPending)
                 .count();
     }
@@ -94,6 +97,10 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
 
         private StoredDelivery(BillingDeliveryTask task) {
             this.task = task;
+        }
+
+        private boolean hasProofDigest(String proofDigest) {
+            return task.claim().proofDigest().equals(proofDigest);
         }
 
         private boolean canLeaseAt(Instant now) {

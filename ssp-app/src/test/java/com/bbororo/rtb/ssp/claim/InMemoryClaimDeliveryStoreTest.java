@@ -61,6 +61,21 @@ class InMemoryClaimDeliveryStoreTest {
         assertEquals(1, store.pendingDeliveryCount());
     }
 
+    @Test
+    void rejectsADifferentProofForTheSameAuctionSlot() {
+        InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
+
+        assertEquals(
+                RenderAcceptance.ACCEPTED,
+                store.recordClaimAndScheduleDelivery(claim("proof-1", NOW.plusSeconds(5)))
+        );
+        assertEquals(
+                RenderAcceptance.REJECTED,
+                store.recordClaimAndScheduleDelivery(claim("proof-2", NOW.plusSeconds(5)))
+        );
+        assertEquals(1, store.recordedClaimCount());
+    }
+
     private static BillingClaim claim(String proofDigest, Instant deadline) {
         return new BillingClaim(
                 "provider-1", "request-1", "imp-1", "auction-1/imp-1", proofDigest,

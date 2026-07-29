@@ -1,10 +1,10 @@
 CREATE TABLE ssp_billing_delivery (
     delivery_id UUID PRIMARY KEY,
-    proof_digest CHAR(64) NOT NULL UNIQUE,
+    proof_digest CHAR(64) NOT NULL,
     provider_id TEXT NOT NULL,
     provider_request_id TEXT NOT NULL,
     imp_id TEXT NOT NULL,
-    slot_auction_key TEXT NOT NULL,
+    slot_auction_key TEXT NOT NULL UNIQUE,
     dsp_id TEXT NOT NULL,
     cpm_krw BIGINT NOT NULL CHECK (cpm_krw > 0),
     billing_url TEXT NOT NULL,

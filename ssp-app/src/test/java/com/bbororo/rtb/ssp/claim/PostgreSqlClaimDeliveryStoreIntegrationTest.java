@@ -34,6 +34,12 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
 
             assertEquals(RenderAcceptance.ACCEPTED, store.recordClaimAndScheduleDelivery(claim));
             assertEquals(RenderAcceptance.DUPLICATE, store.recordClaimAndScheduleDelivery(claim));
+            BillingClaim conflictingClaim = new BillingClaim(
+                    "provider-1", "request-1", "imp-1", "auction-1/imp-1",
+                    "b".repeat(64), "project-dsp", 2_000,
+                    URI.create("https://project-dsp.test/burl/1"), now.plusSeconds(5)
+            );
+            assertEquals(RenderAcceptance.REJECTED, store.recordClaimAndScheduleDelivery(conflictingClaim));
             var leased = store.leaseDueDelivery(now).orElseThrow();
             assertEquals(2_000L, leased.task().claim().cpmKrw());
 

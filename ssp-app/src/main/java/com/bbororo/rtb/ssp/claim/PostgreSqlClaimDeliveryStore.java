@@ -25,7 +25,13 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
                 delivery_id, proof_digest, provider_id, provider_request_id, imp_id,
                 slot_auction_key, dsp_id, cpm_krw, billing_url, billing_deadline, state
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
-            ON CONFLICT (proof_digest) DO NOTHING
+            ON CONFLICT (slot_auction_key) DO NOTHING
+            """;
+
+    private static final String SELECT_PROOF_DIGEST_BY_SLOT = """
+            SELECT proof_digest
+              FROM ssp_billing_delivery
+             WHERE slot_auction_key = ?
             """;
 
     private static final String EXPIRE_DUE = """
@@ -71,8 +77,27 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
     @Override
     public RenderAcceptance recordClaimAndScheduleDelivery(BillingClaim claim) {
         Objects.requireNonNull(claim);
-        try (Connection connection = dataSource.getConnection();
-             var statement = connection.prepareStatement(INSERT_CLAIM)) {
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                if (insertClaim(connection, claim)) {
+                    connection.commit();
+                    return RenderAcceptance.ACCEPTED;
+                }
+                RenderAcceptance conflict = classifyConflict(connection, claim);
+                connection.commit();
+                return conflict;
+            } catch (Exception exception) {
+                connection.rollback();
+                throw exception;
+            }
+        } catch (Exception exception) {
+            return RenderAcceptance.RETRY_LATER;
+        }
+    }
+
+    private static boolean insertClaim(Connection connection, BillingClaim claim) throws Exception {
+        try (var statement = connection.prepareStatement(INSERT_CLAIM)) {
             statement.setObject(1, UUID.randomUUID());
             statement.setString(2, claim.proofDigest());
             statement.setString(3, claim.providerId());
@@ -83,11 +108,21 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
             statement.setLong(8, claim.cpmKrw());
             statement.setString(9, claim.billingUrl().toString());
             statement.setTimestamp(10, Timestamp.from(claim.billingDeadline()));
-            return statement.executeUpdate() == 1
-                    ? RenderAcceptance.ACCEPTED
-                    : RenderAcceptance.DUPLICATE;
-        } catch (Exception exception) {
-            return RenderAcceptance.RETRY_LATER;
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    private static RenderAcceptance classifyConflict(Connection connection, BillingClaim claim) throws Exception {
+        try (var statement = connection.prepareStatement(SELECT_PROOF_DIGEST_BY_SLOT)) {
+            statement.setString(1, claim.slotAuctionKey());
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    throw new IllegalStateException("Conflicting SSP billing claim was not found");
+                }
+                return result.getString("proof_digest").trim().equals(claim.proofDigest())
+                        ? RenderAcceptance.DUPLICATE
+                        : RenderAcceptance.REJECTED;
+            }
         }
     }
 
