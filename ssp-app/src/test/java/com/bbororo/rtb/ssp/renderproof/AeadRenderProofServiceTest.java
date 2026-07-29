@@ -45,6 +45,17 @@ class AeadRenderProofServiceTest {
     }
 
     @Test
+    void givesTheSameVerifiedIdentityForARepeatedProof() {
+        RenderProof proof = service.issue(issuance());
+        RenderCompleted completed = new RenderCompleted(proof, ISSUED_AT.plusMillis(200));
+
+        var first = service.verify(completed).orElseThrow();
+        var repeated = service.verify(completed).orElseThrow();
+
+        assertEquals(first, repeated);
+    }
+
+    @Test
     void rejectsOneBitOfCiphertextTampering() {
         RenderProof proof = service.issue(issuance());
         byte[] token = Base64.getUrlDecoder().decode(proof.encodedValue());
