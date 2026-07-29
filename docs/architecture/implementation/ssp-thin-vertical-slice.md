@@ -1,6 +1,6 @@
 # SSP 얇은 수직 흐름 구현 계획
 
-상태: 얇은 수직 흐름 0~5단계 완료 · 컴포넌트 강화 1단계 완료
+상태: 얇은 수직 흐름 0~5단계 완료 · 컴포넌트 강화 2단계 완료
 
 이 문서의 0~5단계 완료는 SSP 전체 구현 완료가 아니다. 한 번 관통하는 실제 기술 흐름을 만든 상태이며, 이제 8개 컴포넌트의 정상·경계·실패 계약을 하나씩 강화한다.
 
@@ -139,7 +139,7 @@ DspNotificationDelivery.deliverDueBilling(now)
 |---|---|---|---|
 | 메모리 공급자 스냅숏 | PostgreSQL 논리 복제 사본을 읽어 원자 교체 | `ProviderTrustSnapshot` | 완료 |
 | 고정 DSP 응답 | HTTP/JSON OpenRTB 2.6 fan-out·통지 클라이언트 | `DspBidExecutor`, `DspNotificationDelivery` | 완료 |
-| HMAC 시험 증표 | 버전형 이진 AES-GCM·Base64URL 증표 | `RenderProofService` | 완료 |
+| 시험·런타임 공통 증표 | 버전형 이진 AES-GCM·Base64URL 증표 | `RenderProofService` | 완료 |
 | 인메모리 청구 저장소 | PostgreSQL 원자 기록·작업 임대 | `ClaimDeliveryStore` | 완료 |
 | 동기 `burl` 호출 | 백그라운드 실행기와 제한 재시도 | `DspNotificationDelivery` | 완료 |
 | Java 내부 진입 | 공급자 경매·렌더링 HTTP/JSON 서버 | `AuctionRenderApi` | 완료 |
@@ -152,8 +152,8 @@ DspNotificationDelivery.deliverDueBilling(now)
 |---|---|---|---|
 | 준비 | 공통 메시지 계약 | 식별자·가격·기한·중복 의미와 외부 표현 경계 일치 | 완료 |
 | 1 | 낙찰 결정 | 유효성·최저가·1가격·응답 순서와 무관한 분산 동점 규칙 | 완료 |
-| 2 | 렌더링 증표 | 발급·변조·귀속·기한 계약의 경계 시험 | 다음 |
-| 3 | DSP 입찰 실행 | DSP별 시간 초과·불량 응답·연결 실패 격리 | 대기 |
+| 2 | 렌더링 증표 | 발급·변조·슬롯·리전 귀속·재사용·키 교체·기한 계약 | 완료 |
+| 3 | DSP 입찰 실행 | DSP별 시간 초과·불량 응답·연결 실패 격리 | 다음 |
 | 4 | 렌더링 청구 | 슬롯별 멱등성과 저장 실패 응답 계약 | 대기 |
 | 5 | DSP 통지 전달 | 임대·재시도·기한·늦은 작업자 결과 방어 | 대기 |
 | 6 | 경매 중복 방지 | 만료·충돌·동시 최초 실행과 메모리 상한 | 대기 |

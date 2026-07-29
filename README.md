@@ -45,7 +45,7 @@ SSP와 DSP는 서로 다른 업체로 가정하므로 공유 애플리케이션 
 
 ## 현재 상태
 
-요구사항·아키텍처 동인과 주요 ADR을 바탕으로 SSP의 첫 수직 흐름을 구현했다. 공급자 설정 적재, 경매 입장과 중복 방지, OpenRTB DSP fan-out, 1가격 낙찰, AEAD 렌더링 증표, PostgreSQL 청구 기록과 `burl` 전달까지 연결된다. 다음 개발 축은 DSP 구현과 SSP 기준선·용량·장애 측정이다.
+요구사항·아키텍처 동인과 주요 ADR을 바탕으로 SSP의 첫 수직 흐름을 구현했다. 공급자 설정 적재, 경매 입장과 중복 방지, OpenRTB DSP fan-out, 1가격 낙찰, AEAD 렌더링 증표, PostgreSQL 청구 기록과 `burl` 전달까지 연결된다. 현재는 SSP 컴포넌트를 하나씩 강화하고 있으며 SSP를 마친 뒤 DSP 구현과 기준선·용량·장애 측정으로 넘어간다.
 
 - [문서 안내](docs/README.md)
 - [제품·도메인 요구사항](docs/requirements/product.md)
