@@ -1,6 +1,8 @@
 # SSP 얇은 수직 흐름 구현 계획
 
-상태: 0~5단계 완료
+상태: 얇은 수직 흐름 0~5단계 완료 · 컴포넌트별 강화 준비 완료
+
+이 문서의 0~5단계 완료는 SSP 전체 구현 완료가 아니다. 한 번 관통하는 실제 기술 흐름을 만든 상태이며, 이제 8개 컴포넌트의 정상·경계·실패 계약을 하나씩 강화한다.
 
 목표는 [SSP E2E 인수 시나리오](../../../ssp-app/src/test/java/com/bbororo/rtb/ssp/e2e/SspAuctionBillingE2eTest.java)를 녹색으로 만드는 것이다. 단계 1~4에서는 각 컴포넌트와 경계의 단위·통합 시험으로 규칙을 검증하고, 네 결과가 모두 연결된 뒤에만 SSP 전체 E2E를 실행한다.
 
@@ -77,8 +79,8 @@
 ```text
 AuctionCoordinator.runAuction(StartAuction)
   → DspBidExecutor.requestBids(BidRequestBatch)
-  → WinnerSelector.selectWinners(EligibleBids)
-  → AuctionWinners
+  → WinnerSelector.selectWinners(auctionId, AuctionRequest, BidResponses)
+  → AuctionOutcome
 ```
 
 | 항목 | 내용 |
@@ -86,7 +88,7 @@ AuctionCoordinator.runAuction(StartAuction)
 | 참여 컴포넌트 | 경매 조정, DSP 입찰 실행, 낙찰 결정 |
 | 호출 인터페이스 | `runAuction`, `requestBids`, `selectWinners` |
 | 입력 메시지 | `StartAuction`, `BidRequestBatch`, `BidResponses` |
-| 출력 메시지 | `AuctionWinners` |
+| 출력 메시지 | `AuctionOutcome` |
 | 현재 구현 | DSP별 OpenRTB 2.6 HTTP 요청을 동시에 보내고, 응답·무응답·오류를 DSP 단위로 격리한다. |
 | 완료 조건 | 완료. 절대 마감 안의 유효 입찰만 비교하고, 1가격·결정적 동점 규칙으로 슬롯별 낙찰자가 나오며 `nurl`·`lurl`을 비동기로 보낸다. |
 
@@ -109,7 +111,7 @@ ProofIssuance
 | 입력 메시지 | `ProofIssuance`, `RenderCompleted`, `VerifiedRender` |
 | 출력 메시지 | `RenderProof`, `RenderAcceptance`, `BillingClaim`, `BillingDeliveryTask` |
 | 현재 구현 | 버전·키 ID를 가진 이진 증표가 공급자·요청·슬롯·낙찰 가격·DSP `burl`·2초 기한을 AES-GCM으로 봉인한다. PostgreSQL 한 행이 청구 근거와 전달 작업을 함께 보존한다. |
-| 완료 조건 | 완료. 유효하고 현재 활성인 공급자에 귀속된 증표만 `ACCEPTED`가 되며, 같은 증표의 재전송은 `DUPLICATE`가 되고 청구와 전달 작업은 함께 정확히 1개만 증가한다. |
+| 완료 조건 | 완료. 유효하고 현재 활성인 공급자에 귀속된 증표만 `ACCEPTED`가 된다. 같은 증표의 재전송은 `DUPLICATE`, 다른 증표가 같은 `slotAuctionKey`를 주장하면 `REJECTED`이며 청구와 전달 작업은 정확히 1개만 생긴다. |
 
 ## 4. 전달 — 대기 작업을 `burl`로 종결하기
 
@@ -141,6 +143,22 @@ DspNotificationDelivery.deliverDueBilling(now)
 | 인메모리 청구 저장소 | PostgreSQL 원자 기록·작업 임대 | `ClaimDeliveryStore` | 완료 |
 | 동기 `burl` 호출 | 백그라운드 실행기와 제한 재시도 | `DspNotificationDelivery` | 완료 |
 | Java 내부 진입 | 공급자 경매·렌더링 HTTP/JSON 서버 | `AuctionRenderApi` | 완료 |
+
+## 다음 작업: 컴포넌트별 강화
+
+공통 계약 정리를 먼저 끝낸 뒤, 외부 I/O가 없는 핵심 정책에서 바깥 경계 순으로 진행한다.
+
+| 순서 | 대상 | 핵심 완료 조건 |
+|---|---|---|
+| 준비 | 공통 메시지 계약 | 식별자·가격·기한·중복 의미와 외부 표현 경계 일치 |
+| 1 | 낙찰 결정 | 유효성·최저가·1가격·동점 규칙의 경계 시험 |
+| 2 | 렌더링 증표 | 발급·변조·귀속·기한 계약의 경계 시험 |
+| 3 | DSP 입찰 실행 | DSP별 시간 초과·불량 응답·연결 실패 격리 |
+| 4 | 렌더링 청구 | 슬롯별 멱등성과 저장 실패 응답 계약 |
+| 5 | DSP 통지 전달 | 임대·재시도·기한·늦은 작업자 결과 방어 |
+| 6 | 경매 중복 방지 | 만료·충돌·동시 최초 실행과 메모리 상한 |
+| 7 | 경매 조정 | 절대 기한과 부분 실패 아래 전체 결과 조립 |
+| 8 | 경매·렌더링 API | 외부 오류 표현·요청 제한·실행 경계 |
 
 ## 구현 원칙
 
