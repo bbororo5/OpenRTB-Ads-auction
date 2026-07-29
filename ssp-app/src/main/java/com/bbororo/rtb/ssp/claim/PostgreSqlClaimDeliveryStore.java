@@ -128,7 +128,8 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
                        END,
                        lease_until = NULL,
                        completed_at = CASE
-                         WHEN ? IN ('DELIVERED', 'UNDELIVERED') OR billing_deadline <= ? THEN ?
+                         WHEN ? IN ('DELIVERED', 'UNDELIVERED') OR billing_deadline <= ?
+                           THEN CAST(? AS TIMESTAMPTZ)
                          ELSE NULL
                        END
                  WHERE delivery_id = ?
