@@ -9,6 +9,8 @@ import java.util.Map;
 /** 배포 환경이 SSP 런타임에 주입하는 비밀값과 외부 주소를 검증한다. */
 public record SspRuntimeSettings(
         int serverPort,
+        String regionId,
+        URI renderCompletionUrl,
         Map<String, URI> dspEndpoints,
         byte renderProofKeyId,
         byte[] renderProofKey,
@@ -17,6 +19,10 @@ public record SspRuntimeSettings(
 ) {
 
     public SspRuntimeSettings {
+        if (regionId == null || regionId.isBlank()) {
+            throw new IllegalArgumentException("regionId must not be blank");
+        }
+        renderCompletionUrl = requireHttpUrl(renderCompletionUrl, "renderCompletionUrl");
         dspEndpoints = Map.copyOf(dspEndpoints);
         renderProofKey = renderProofKey.clone();
     }
@@ -31,6 +37,11 @@ public record SspRuntimeSettings(
         if (port < 1 || port > 65_535) {
             throw new IllegalArgumentException("SERVER_PORT must be between 1 and 65535");
         }
+        String regionId = required("SSP_REGION_ID", environment);
+        URI renderCompletionUrl = requireHttpUrl(
+                URI.create(required("RENDER_COMPLETION_URL", environment)),
+                "RENDER_COMPLETION_URL"
+        );
         Map<String, URI> endpoints = parseEndpoints(required("DSP_ENDPOINTS", environment));
         byte keyId = Byte.parseByte(environment.getOrDefault("RENDER_PROOF_KEY_ID", "1"));
         byte[] key = Base64.getDecoder().decode(required("RENDER_PROOF_KEY_BASE64", environment));
@@ -43,7 +54,16 @@ public record SspRuntimeSettings(
         Duration noticeTimeout = Duration.ofMillis(
                 Long.parseLong(environment.getOrDefault("DSP_NOTICE_TIMEOUT_MS", "500"))
         );
-        return new SspRuntimeSettings(port, endpoints, keyId, key, workerInterval, noticeTimeout);
+        return new SspRuntimeSettings(
+                port,
+                regionId,
+                renderCompletionUrl,
+                endpoints,
+                keyId,
+                key,
+                workerInterval,
+                noticeTimeout
+        );
     }
 
     private static Map<String, URI> parseEndpoints(String value) {
@@ -68,6 +88,16 @@ public record SspRuntimeSettings(
         String value = environment.get(name);
         if (value == null || value.isBlank()) {
             throw new IllegalStateException("Environment variable %s is required".formatted(name));
+        }
+        return value;
+    }
+
+    private static URI requireHttpUrl(URI value, String name) {
+        if (value == null
+                || !value.isAbsolute()
+                || (!"http".equalsIgnoreCase(value.getScheme())
+                && !"https".equalsIgnoreCase(value.getScheme()))) {
+            throw new IllegalArgumentException(name + " must be an absolute HTTP URL");
         }
         return value;
     }

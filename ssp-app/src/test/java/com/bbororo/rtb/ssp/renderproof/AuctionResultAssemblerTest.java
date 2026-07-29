@@ -22,7 +22,8 @@ class AuctionResultAssemblerTest {
         Instant now = Instant.parse("2026-07-27T00:00:00Z");
         AuctionResultAssembler assembler = new AuctionResultAssembler(
                 new HmacRenderProofService("test-key".getBytes(StandardCharsets.UTF_8)),
-                Clock.fixed(now, ZoneOffset.UTC)
+                Clock.fixed(now, ZoneOffset.UTC),
+                URI.create("https://region-a.ssp.test/publisher/render")
         );
         AuctionRequest request = new AuctionRequest(
                 "provider-1", "key-1", "request-1", 50,
@@ -40,6 +41,10 @@ class AuctionResultAssemblerTest {
         assertEquals(List.of("imp-1", "imp-2"), result.slots().stream()
                 .map(slot -> slot.winningBid().impId()).toList());
         assertEquals(2, result.slots().stream().map(slot -> slot.renderProof().encodedValue()).distinct().count());
+        assertEquals(
+                URI.create("https://region-a.ssp.test/publisher/render"),
+                result.slots().getFirst().renderCompletionUrl()
+        );
     }
 
     private static WinningBid winner(String impId) {

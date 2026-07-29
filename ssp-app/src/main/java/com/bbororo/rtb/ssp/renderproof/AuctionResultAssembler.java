@@ -5,6 +5,7 @@ import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
 import com.bbororo.rtb.ssp.contract.SspMessages.ProofIssuance;
 import com.bbororo.rtb.ssp.contract.SspMessages.SlotAuctionResult;
+import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -17,10 +18,16 @@ public final class AuctionResultAssembler {
 
     private final RenderProofService renderProofService;
     private final Clock clock;
+    private final URI renderCompletionUrl;
 
-    public AuctionResultAssembler(RenderProofService renderProofService, Clock clock) {
+    public AuctionResultAssembler(
+            RenderProofService renderProofService,
+            Clock clock,
+            URI renderCompletionUrl
+    ) {
         this.renderProofService = Objects.requireNonNull(renderProofService);
         this.clock = Objects.requireNonNull(clock);
+        this.renderCompletionUrl = requireHttpUrl(renderCompletionUrl);
     }
 
     public AuctionResult assemble(AuctionRequest request, AuctionOutcome outcome) {
@@ -35,9 +42,20 @@ public final class AuctionResultAssembler {
                                 winner,
                                 renderProofService.issue(new ProofIssuance(
                                         request, outcome.auctionId(), winner, issuedAt, expiresAt
-                                ))
+                                )),
+                                renderCompletionUrl
                         ))
                         .toList()
         );
+    }
+
+    private static URI requireHttpUrl(URI value) {
+        Objects.requireNonNull(value, "renderCompletionUrl");
+        if (!value.isAbsolute()
+                || (!"http".equalsIgnoreCase(value.getScheme())
+                && !"https".equalsIgnoreCase(value.getScheme()))) {
+            throw new IllegalArgumentException("renderCompletionUrl must be an absolute HTTP URL");
+        }
+        return value;
     }
 }

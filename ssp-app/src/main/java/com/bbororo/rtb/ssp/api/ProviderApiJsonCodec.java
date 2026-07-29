@@ -60,7 +60,8 @@ public final class ProviderApiJsonCodec {
                                     slot.winningBid().impId(),
                                     slot.winningBid().dspId(),
                                     KrwCpm.fromMilliKrw(slot.winningBid().cpmMilliKrw()),
-                                    slot.renderProof().encodedValue()
+                                    slot.renderProof().encodedValue(),
+                                    slot.renderCompletionUrl().toString()
                             ))
                             .toList()
             );
@@ -96,7 +97,13 @@ public final class ProviderApiJsonCodec {
     private record AuctionResultJson(String auctionId, List<SlotResultJson> slots) {
     }
 
-    private record SlotResultJson(String impId, String dspId, BigDecimal cpmKrw, String renderProof) {
+    private record SlotResultJson(
+            String impId,
+            String dspId,
+            BigDecimal cpmKrw,
+            String renderProof,
+            String renderUrl
+    ) {
     }
 
     private record ErrorJson(String code) {

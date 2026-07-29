@@ -89,7 +89,11 @@ final class SspE2eFixture {
         );
         AuctionRenderApi api = new DefaultAuctionRenderApi(
                 admission,
-                new AuctionResultAssembler(proofService, clock),
+                new AuctionResultAssembler(
+                        proofService,
+                        clock,
+                        URI.create("https://region-a.ssp.test/publisher/render")
+                ),
                 proofService,
                 new StoreBackedRenderClaimService(store, trust),
                 notificationDelivery,

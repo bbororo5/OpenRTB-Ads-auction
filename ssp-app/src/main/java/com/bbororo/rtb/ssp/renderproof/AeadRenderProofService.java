@@ -28,20 +28,30 @@ import javax.crypto.spec.GCMParameterSpec;
 /** 버전형 이진 페이로드를 AES-GCM으로 봉인하는 실제 렌더링 증표 구현이다. */
 public final class AeadRenderProofService implements RenderProofService {
 
-    private static final byte FORMAT_VERSION = 1;
+    private static final byte FORMAT_VERSION = 2;
     private static final int NONCE_BYTES = 12;
     private static final int TAG_BITS = 128;
     private static final Duration MAX_VALIDITY = Duration.ofSeconds(2);
 
+    private final String localRegion;
     private final byte activeKeyId;
     private final Map<Byte, SecretKey> keys;
     private final SecureRandom secureRandom;
 
-    public AeadRenderProofService(byte activeKeyId, Map<Byte, SecretKey> keys) {
-        this(activeKeyId, keys, new SecureRandom());
+    public AeadRenderProofService(String localRegion, byte activeKeyId, Map<Byte, SecretKey> keys) {
+        this(localRegion, activeKeyId, keys, new SecureRandom());
     }
 
-    AeadRenderProofService(byte activeKeyId, Map<Byte, SecretKey> keys, SecureRandom secureRandom) {
+    AeadRenderProofService(
+            String localRegion,
+            byte activeKeyId,
+            Map<Byte, SecretKey> keys,
+            SecureRandom secureRandom
+    ) {
+        if (localRegion == null || localRegion.isBlank()) {
+            throw new IllegalArgumentException("localRegion must not be blank");
+        }
+        this.localRegion = localRegion;
         this.activeKeyId = activeKeyId;
         this.keys = Map.copyOf(keys);
         this.secureRandom = Objects.requireNonNull(secureRandom);
@@ -104,9 +114,10 @@ public final class AeadRenderProofService implements RenderProofService {
         return cipher;
     }
 
-    private static byte[] encodePayload(ProofIssuance issuance) throws Exception {
+    private byte[] encodePayload(ProofIssuance issuance) throws Exception {
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-             DataOutputStream output = new DataOutputStream(bytes)) {
+            DataOutputStream output = new DataOutputStream(bytes)) {
+            output.writeUTF(localRegion);
             output.writeUTF(issuance.auction().providerId());
             output.writeUTF(issuance.auction().providerRequestId());
             output.writeUTF(issuance.winner().impId());
@@ -121,8 +132,12 @@ public final class AeadRenderProofService implements RenderProofService {
         }
     }
 
-    private static VerifiedRender decodePayload(byte[] payload, String encodedProof) throws Exception {
+    private VerifiedRender decodePayload(byte[] payload, String encodedProof) throws Exception {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(payload))) {
+            String issuerRegion = input.readUTF();
+            if (!localRegion.equals(issuerRegion)) {
+                throw new IllegalArgumentException("Render proof belongs to another region");
+            }
             String providerId = input.readUTF();
             String providerRequestId = input.readUTF();
             String impId = input.readUTF();

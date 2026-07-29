@@ -21,6 +21,7 @@ class AeadRenderProofServiceTest {
 
     private static final Instant ISSUED_AT = Instant.parse("2026-07-29T00:00:00Z");
     private final AeadRenderProofService service = new AeadRenderProofService(
+            "region-a",
             (byte) 7,
             Map.of((byte) 7, new SecretKeySpec(new byte[32], "AES"))
     );
@@ -49,10 +50,34 @@ class AeadRenderProofServiceTest {
     }
 
     @Test
+    void rejectsAnUnknownProofFormatVersion() {
+        RenderProof proof = service.issue(issuance());
+        byte[] token = Base64.getUrlDecoder().decode(proof.encodedValue());
+        token[0] = 99;
+        RenderProof changed = new RenderProof(Base64.getUrlEncoder().withoutPadding().encodeToString(token));
+
+        assertFalse(service.verify(new RenderCompleted(changed, ISSUED_AT.plusMillis(200))).isPresent());
+    }
+
+    @Test
     void rejectsTheProofAfterTwoSeconds() {
         RenderProof proof = service.issue(issuance());
 
         assertFalse(service.verify(new RenderCompleted(proof, ISSUED_AT.plusSeconds(2).plusMillis(1))).isPresent());
+    }
+
+    @Test
+    void rejectsAProofIssuedByAnotherRegion() {
+        RenderProof proof = service.issue(issuance());
+        var anotherRegion = new AeadRenderProofService(
+                "region-b",
+                (byte) 7,
+                Map.of((byte) 7, new SecretKeySpec(new byte[32], "AES"))
+        );
+
+        assertFalse(anotherRegion.verify(
+                new RenderCompleted(proof, ISSUED_AT.plusMillis(200))
+        ).isPresent());
     }
 
     private static ProofIssuance issuance() {

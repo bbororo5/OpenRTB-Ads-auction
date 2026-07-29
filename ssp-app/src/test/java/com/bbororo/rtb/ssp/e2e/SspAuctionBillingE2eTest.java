@@ -37,6 +37,10 @@ class SspAuctionBillingE2eTest {
         assertEquals("project-dsp", result.slots().getFirst().winningBid().dspId());
         assertEquals(2_000L, result.slots().getFirst().winningBid().cpmMilliKrw());
         assertFalse(result.slots().getFirst().renderProof().encodedValue().isBlank());
+        assertEquals(
+                URI.create("https://region-a.ssp.test/publisher/render"),
+                result.slots().getFirst().renderCompletionUrl()
+        );
 
         RenderAcceptance acceptance = ssp.completeRender(new RenderCompleted(
                 new RenderProof(result.slots().getFirst().renderProof().encodedValue()),

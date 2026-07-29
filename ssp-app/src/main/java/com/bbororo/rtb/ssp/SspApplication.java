@@ -56,6 +56,7 @@ public final class SspApplication {
         );
         var notificationDelivery = new AsyncAuctionNoticeDelivery(noticeDelegate);
         var proofService = new AeadRenderProofService(
+                settings.regionId(),
                 settings.renderProofKeyId(),
                 Map.of(
                         settings.renderProofKeyId(),
@@ -79,7 +80,7 @@ public final class SspApplication {
         );
         var api = new DefaultAuctionRenderApi(
                 admission,
-                new AuctionResultAssembler(proofService, clock),
+                new AuctionResultAssembler(proofService, clock, settings.renderCompletionUrl()),
                 proofService,
                 new StoreBackedRenderClaimService(store, trustControl.trustSnapshot()),
                 notificationDelivery,

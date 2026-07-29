@@ -69,10 +69,15 @@ public final class SspMessages {
         }
     }
 
-    public record SlotAuctionResult(WinningBid winningBid, RenderProof renderProof) {
+    public record SlotAuctionResult(
+            WinningBid winningBid,
+            RenderProof renderProof,
+            URI renderCompletionUrl
+    ) {
         public SlotAuctionResult {
             Objects.requireNonNull(winningBid, "winningBid");
             Objects.requireNonNull(renderProof, "renderProof");
+            renderCompletionUrl = requireHttpUrl(renderCompletionUrl, "renderCompletionUrl");
         }
     }
 
