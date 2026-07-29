@@ -1,6 +1,6 @@
 # SSP 얇은 수직 흐름 구현 계획
 
-상태: 0단계 설정 제어 완료 · 1단계 입장 완료 · 2단계 경매 완료 · 3단계 청구 완료
+상태: 0~5단계 완료
 
 목표는 [SSP E2E 인수 시나리오](../../../ssp-app/src/test/java/com/bbororo/rtb/ssp/e2e/SspAuctionBillingE2eTest.java)를 녹색으로 만드는 것이다. 단계 1~4에서는 각 컴포넌트와 경계의 단위·통합 시험으로 규칙을 검증하고, 네 결과가 모두 연결된 뒤에만 SSP 전체 E2E를 실행한다.
 
@@ -18,14 +18,14 @@
 
 ## 전체 지도
 
-| 단계 | 단계 완료 시 보장하는 사실 | 참여 컴포넌트 | 아직 의도적으로 하지 않는 것 |
+| 단계 | 단계 완료 시 보장하는 사실 | 참여 컴포넌트 | 구현 경계 |
 |---|---|---|---|
-| 0. 설정 제어 | 지역 SSP가 완결된 공급자 설정 버전을 읽을 수 있다 | 공급자 신뢰 스냅숏 제어 경로 | 계약 관리 UI·실제 비밀키 발급 |
-| 1. 입장 | 신뢰된 공급자 요청만 경매에 들어간다 | 경매·렌더링 API, 경매 중복 방지 | 실제 HTTP·PostgreSQL |
-| 2. 경매 | 세 DSP 입찰 중 1가격 낙찰 결과가 나온다 | 경매 조정, DSP 입찰 실행, 낙찰 결정 | 실제 DSP HTTP·OpenRTB 직렬화 |
-| 3. 청구 | 증표를 받은 렌더링 완료가 청구와 전달 작업으로 확정된다 | 렌더링 증표, 렌더링 청구 | 실제 AEAD 최적화·PostgreSQL |
-| 4. 전달 | 대기 작업이 DSP의 `burl` 호출로 종결된다 | DSP 통지 전달 | 실제 백그라운드 실행기·네트워크 재시도 |
-| 5. 강화 | 같은 E2E가 실제 저장소·통신·암호화에서도 통과한다 | 모든 컴포넌트의 어댑터 | 새 업무 규칙 |
+| 0. 설정 제어 | 지역 SSP가 완결된 공급자 설정 버전을 읽을 수 있다 | 공급자 신뢰 스냅숏 제어 경로 | PostgreSQL 논리 복제·10초 지역 스냅숏 |
+| 1. 입장 | 신뢰된 공급자 요청만 경매에 들어간다 | 경매·렌더링 API, 경매 중복 방지 | 5초 로컬 single-flight |
+| 2. 경매 | DSP 입찰 중 1가격 낙찰 결과가 나온다 | 경매 조정, DSP 입찰 실행, 낙찰 결정 | OpenRTB HTTP fan-out·절대 기한 |
+| 3. 청구 | 증표를 받은 렌더링 완료가 청구와 전달 작업으로 확정된다 | 렌더링 증표, 렌더링 청구 | AES-GCM 증표·PostgreSQL 원자 기록 |
+| 4. 전달 | 대기 작업이 DSP의 `burl` 호출로 종결된다 | DSP 통지 전달 | 작업 임대·백그라운드 재시도 |
+| 5. 강화 | 같은 흐름이 실제 저장소·통신·암호화에서 유지된다 | 모든 컴포넌트의 어댑터 | Java 21 HTTP 런타임·전체 시험 |
 
 ## 0. 설정 제어 — 완결된 공급자 설정을 지역에 준비하기
 
@@ -87,8 +87,8 @@ AuctionCoordinator.runAuction(StartAuction)
 | 호출 인터페이스 | `runAuction`, `requestBids`, `selectWinners` |
 | 입력 메시지 | `StartAuction`, `BidRequestBatch`, `BidResponses` |
 | 출력 메시지 | `AuctionWinners` |
-| 시험용 구현 | 세 DSP의 고정 입찰 응답. 프로젝트 DSP가 CPM 2,000으로 이기는 시나리오 |
-| 완료 조건 | 완료. 절대 마감 안의 유효 입찰만 비교하고, 1가격·결정적 동점 규칙으로 슬롯별 낙찰자가 나온다 |
+| 현재 구현 | DSP별 OpenRTB 2.6 HTTP 요청을 동시에 보내고, 응답·무응답·오류를 DSP 단위로 격리한다. |
+| 완료 조건 | 완료. 절대 마감 안의 유효 입찰만 비교하고, 1가격·결정적 동점 규칙으로 슬롯별 낙찰자가 나오며 `nurl`·`lurl`을 비동기로 보낸다. |
 
 ## 3. 청구 — 증표를 내구 작업으로 바꾸기
 
@@ -108,8 +108,7 @@ ProofIssuance
 | 저장소 포트 | `ClaimDeliveryStore.recordClaimAndScheduleDelivery` |
 | 입력 메시지 | `ProofIssuance`, `RenderCompleted`, `VerifiedRender` |
 | 출력 메시지 | `RenderProof`, `RenderAcceptance`, `BillingClaim`, `BillingDeliveryTask` |
-| 시험용 구현 | 공급자·요청·슬롯 귀속과 2초 기한을 검증하는 시험 증표, 인메모리 원자 저장소 |
-| 현재 구현 | HMAC 서명 시험 증표가 공급자·요청·슬롯·DSP `burl`·2초 기한을 봉인한다. 인메모리 저장소는 같은 증표의 청구 근거와 전달 작업을 하나의 임계 구역에서 함께 만든다. |
+| 현재 구현 | 버전·키 ID를 가진 이진 증표가 공급자·요청·슬롯·낙찰 가격·DSP `burl`·2초 기한을 AES-GCM으로 봉인한다. PostgreSQL 한 행이 청구 근거와 전달 작업을 함께 보존한다. |
 | 완료 조건 | 완료. 유효하고 현재 활성인 공급자에 귀속된 증표만 `ACCEPTED`가 되며, 같은 증표의 재전송은 `DUPLICATE`가 되고 청구와 전달 작업은 함께 정확히 1개만 증가한다. |
 
 ## 4. 전달 — 대기 작업을 `burl`로 종결하기
@@ -127,20 +126,21 @@ DspNotificationDelivery.deliverDueBilling(now)
 | 저장소 포트 | `leaseDueDelivery`, `completeOrReleaseDelivery` |
 | 입력 메시지 | `BillingDeliveryTask`, `DeliveryLease` |
 | 출력 메시지 | `DeliveryOutcome.DELIVERED` |
-| 시험용 구현 | 동기 호출되는 시험용 DSP 통지 수신기와 인메모리 작업 임대 |
-| 완료 조건 | 대기 작업 하나가 프로젝트 DSP의 `burl` 주소로 한 번 전달되고, 대기 수가 0이 된다 |
+| 현재 구현 | PostgreSQL `FOR UPDATE SKIP LOCKED` 작업 임대, 세대번호, Java 21 HTTP 통지 클라이언트와 인스턴스 내부 실행기 |
+| 완료 조건 | 완료. 성공은 종결하고 일시 실패는 5초 기한 안에서 재시도하며, 작업자 장애 뒤 오래된 세대의 결과는 현재 작업을 덮어쓰지 않는다. |
 
-이 시점에 네 결과가 연결되므로 SSP 전체 E2E를 처음 실행한다. 시험용 어댑터는 업무 규칙을 흉내 내지 않고, 이후 실제 어댑터로 교체할 수 있는 각 포트만 구현한다.
+이 시점에 네 결과를 연결한 SSP 전체 E2E가 통과한다.
 
 ## 5. 강화 — 시험용 어댑터를 실제 기술로 교체하기
 
-| 시험용 경계 | 교체할 실제 어댑터 | 관련 인터페이스 | 유지해야 하는 E2E 사실 |
+| 기존 시험 경계 | 실제 어댑터 | 관련 인터페이스 | 상태 |
 |---|---|---|---|
-| 메모리 공급자 스냅숏 | PostgreSQL 논리 복제 설정 사본을 읽어 원자 교체하는 스냅숏 | `ProviderTrustSnapshot` | 지역별 최신 설정 범위 안에서만 요청을 허용 |
-| 고정 DSP 응답 | HTTP/JSON OpenRTB 2.6 DSP 클라이언트 | `DspBidExecutor`, `DspNotificationDelivery` | 기한 안의 유효 입찰·표준 `nurl/lurl/burl` 의미 |
-| HMAC 시험 증표 | 이진 직렬화·AEAD·Base64URL 증표 | `RenderProofService` | 공급자 귀속·기한·낙찰 사실의 변조 불가 검증 |
-| 인메모리 청구 저장소 | PostgreSQL 청구·전달 작업 트랜잭션과 작업 임대 | `ClaimDeliveryStore` | 청구와 작업의 원자 생성, 이전 작업자의 결과 덮어쓰기 방지 |
-| 동기 `burl` 호출 | 인스턴스 내부 백그라운드 실행기와 제한 재시도 | `DspNotificationDelivery` | 5초 안의 내구 재시도와 중복 호출 허용 |
+| 메모리 공급자 스냅숏 | PostgreSQL 논리 복제 사본을 읽어 원자 교체 | `ProviderTrustSnapshot` | 완료 |
+| 고정 DSP 응답 | HTTP/JSON OpenRTB 2.6 fan-out·통지 클라이언트 | `DspBidExecutor`, `DspNotificationDelivery` | 완료 |
+| HMAC 시험 증표 | 버전형 이진 AES-GCM·Base64URL 증표 | `RenderProofService` | 완료 |
+| 인메모리 청구 저장소 | PostgreSQL 원자 기록·작업 임대 | `ClaimDeliveryStore` | 완료 |
+| 동기 `burl` 호출 | 백그라운드 실행기와 제한 재시도 | `DspNotificationDelivery` | 완료 |
+| Java 내부 진입 | 공급자 경매·렌더링 HTTP/JSON 서버 | `AuctionRenderApi` | 완료 |
 
 ## 구현 원칙
 

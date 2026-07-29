@@ -32,6 +32,14 @@ gradle :ssp-app:providerConfigReplicationIntegrationTest
 
 이 시험은 publisher 연결로 새 설정 버전을 발행하고, subscriber 연결로 구성한 `PostgreSqlProviderConfigReader`가 복제된 활성 버전과 공급자·키 상태를 읽는지 확인한다. 연결 주소는 Gradle 속성으로 바꿀 수 있으며, 애플리케이션 코드에는 지역 이름이나 DB 선택 분기가 없다.
 
+같은 지역 DB에 독립 생성되는 SSP 청구·전달 작업 저장소는 다음으로 검증한다.
+
+```bash
+gradle :ssp-app:sspClaimStoreIntegrationTest
+```
+
+`ssp_billing_delivery`는 논리 복제 대상이 아니다. 서울과 도쿄 SSP는 각자 자기 지역의 청구 근거와 `burl` 전달 책임만 기록한다.
+
 초기화부터 다시 하려면 볼륨도 제거한다.
 
 ```bash
@@ -43,6 +51,7 @@ docker compose -f docker-compose.provider-config.yml down -v
 | 파일 | 역할 |
 |---|---|
 | `schema.sql` | 서울·도쿄에 동일하게 적용하는 설정 테이블, 기본 키, 외래 키 |
+| `../ssp-claims/schema.sql` | 각 지역이 독립 소유하는 SSP 청구·전달 작업 테이블 |
 | `init-publisher.sh` | 서울의 복제 계정과 publication 생성 |
 | `bootstrap-subscription.sh` | 두 DB가 준비된 뒤 도쿄 subscription 생성 |
 | `verify-replication.sh` | 서울 발행이 도쿄에 자동 반영되는지 확인 |
