@@ -44,8 +44,7 @@ class FirstPriceWinnerSelectorTest {
                 responses(outcome(
                         "project-dsp",
                         bid("project-dsp", "unknown", "bid-1", 9_999),
-                        bid("project-dsp", "imp-1", "bid-2", 999),
-                        bid("project-dsp", "imp-2", "bid-3", 0)
+                        bid("project-dsp", "imp-1", "bid-2", 999)
                 ))
         );
 

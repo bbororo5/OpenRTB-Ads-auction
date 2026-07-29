@@ -34,7 +34,7 @@ class StoreBackedRenderClaimServiceTest {
     private static VerifiedRender verifiedRender() {
         Instant issuedAt = Instant.parse("2026-07-27T00:00:00Z");
         return new VerifiedRender(
-                "provider-1", "request-1", "imp-1", "auction-1/imp-1", "proof-digest",
+                "provider-1", "request-1", "imp-1", "auction-1/imp-1", "a".repeat(64),
                 "project-dsp", 2_000, URI.create("https://dsp.example.test/burl"),
                 issuedAt, issuedAt.plusSeconds(2)
         );

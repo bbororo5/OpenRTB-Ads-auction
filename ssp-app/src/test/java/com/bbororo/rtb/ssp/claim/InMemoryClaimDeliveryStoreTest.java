@@ -18,7 +18,7 @@ class InMemoryClaimDeliveryStoreTest {
     @Test
     void leasesAndCompletesOnePendingDelivery() {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore(Duration.ofSeconds(1));
-        store.recordClaimAndScheduleDelivery(claim("proof-1", NOW.plusSeconds(5)));
+        store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusSeconds(5)));
 
         var delivery = store.leaseDueDelivery(NOW).orElseThrow();
         store.completeOrReleaseDelivery(delivery.lease(), DeliveryOutcome.DELIVERED, NOW.plusMillis(10));
@@ -30,7 +30,7 @@ class InMemoryClaimDeliveryStoreTest {
     @Test
     void retriesWithANewerLeaseAndIgnoresTheOldWorkerResult() {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore(Duration.ofMillis(100));
-        store.recordClaimAndScheduleDelivery(claim("proof-1", NOW.plusSeconds(5)));
+        store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusSeconds(5)));
         var first = store.leaseDueDelivery(NOW).orElseThrow();
 
         var second = store.leaseDueDelivery(NOW.plusMillis(100)).orElseThrow();
@@ -44,7 +44,7 @@ class InMemoryClaimDeliveryStoreTest {
     @Test
     void doesNotLeaseAClaimAfterItsBillingDeadline() {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
-        store.recordClaimAndScheduleDelivery(claim("proof-1", NOW.plusSeconds(5)));
+        store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusSeconds(5)));
 
         assertTrue(store.leaseDueDelivery(NOW.plusSeconds(5)).isEmpty());
         assertEquals(0, store.pendingDeliveryCount());
@@ -53,7 +53,7 @@ class InMemoryClaimDeliveryStoreTest {
     @Test
     void recordsTheSameProofOnlyOnce() {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
-        BillingClaim claim = claim("proof-1", NOW.plusSeconds(5));
+        BillingClaim claim = claim("a".repeat(64), NOW.plusSeconds(5));
 
         assertEquals(RenderAcceptance.ACCEPTED, store.recordClaimAndScheduleDelivery(claim));
         assertEquals(RenderAcceptance.DUPLICATE, store.recordClaimAndScheduleDelivery(claim));
@@ -67,11 +67,11 @@ class InMemoryClaimDeliveryStoreTest {
 
         assertEquals(
                 RenderAcceptance.ACCEPTED,
-                store.recordClaimAndScheduleDelivery(claim("proof-1", NOW.plusSeconds(5)))
+                store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusSeconds(5)))
         );
         assertEquals(
                 RenderAcceptance.REJECTED,
-                store.recordClaimAndScheduleDelivery(claim("proof-2", NOW.plusSeconds(5)))
+                store.recordClaimAndScheduleDelivery(claim("b".repeat(64), NOW.plusSeconds(5)))
         );
         assertEquals(1, store.recordedClaimCount());
     }
