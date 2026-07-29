@@ -99,17 +99,6 @@ class FirstPriceWinnerSelectorTest {
     }
 
     @Test
-    void ignoresABidClaimedByADifferentDspOutcome() {
-        AuctionWinners winners = selector.selectWinners(
-                "auction-1",
-                auction(),
-                responses(outcome("dsp-a", bid("dsp-b", "imp-1", "bid-1", 9_999)))
-        );
-
-        assertTrue(winners.winners().isEmpty());
-    }
-
-    @Test
     void rejectsABlankAuctionIdentifier() {
         assertThrows(
                 IllegalArgumentException.class,

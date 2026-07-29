@@ -99,9 +99,21 @@ class AuctionContractTest {
         );
     }
 
+    @Test
+    void requiresEveryBidToBelongToItsDspOutcome() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DspCallOutcome("dsp-1", DspCallOutcomeKind.VALID_BID, List.of(bid("dsp-2")))
+        );
+    }
+
     private static DspBid bid() {
+        return bid("dsp-1");
+    }
+
+    private static DspBid bid(String dspId) {
         URI callback = URI.create("https://dsp.example.test/notice");
-        return new DspBid("dsp-1", "imp-1", "bid-1", 1_000, callback, callback, callback);
+        return new DspBid(dspId, "imp-1", "bid-1", 1_000, callback, callback, callback);
     }
 
     private static AuctionRequest auction() {

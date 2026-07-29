@@ -5,7 +5,6 @@ import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
 import com.bbororo.rtb.ssp.contract.SspMessages.BidResponses;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspBid;
-import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcomeKind;
 import com.bbororo.rtb.ssp.contract.SspMessages.WinningBid;
 import java.util.Comparator;
@@ -37,7 +36,8 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
 
         Map<String, RankedBid> winnersByImpId = responses.outcomes().stream()
                 .filter(outcome -> outcome.kind() == DspCallOutcomeKind.VALID_BID)
-                .flatMap(outcome -> outcome.bids().stream().filter(bid -> isValid(bid, outcome, slotsByImpId)))
+                .flatMap(outcome -> outcome.bids().stream())
+                .filter(bid -> isEligible(bid, slotsByImpId))
                 .map(bid -> new RankedBid(bid, tieRank(auctionId, bid)))
                 .collect(Collectors.toMap(
                         ranked -> ranked.bid().impId(),
@@ -53,10 +53,9 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
         return new AuctionWinners(winners);
     }
 
-    private static boolean isValid(DspBid bid, DspCallOutcome outcome, Map<String, AuctionSlot> slotsByImpId) {
+    private static boolean isEligible(DspBid bid, Map<String, AuctionSlot> slotsByImpId) {
         AuctionSlot slot = slotsByImpId.get(bid.impId());
-        return bid.dspId().equals(outcome.dspId())
-                && slot != null
+        return slot != null
                 && bid.cpmMilliKrw() >= slot.floorCpmMilliKrw();
     }
 
