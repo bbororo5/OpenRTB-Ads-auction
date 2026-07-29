@@ -34,13 +34,29 @@ class AuctionRequestFingerprintTest {
         assertNotEquals(original.fingerprint(), changed.fingerprint());
     }
 
+    @Test
+    void changesWhenASlotFloorChanges() {
+        AuctionRequest original = requestWithSlots("key-1", 180, List.of(new AuctionSlot("imp-1", 1_000_000)));
+        AuctionRequest changed = requestWithSlots("key-1", 180, List.of(new AuctionSlot("imp-1", 1_000_001)));
+
+        assertNotEquals(original.fingerprint(), changed.fingerprint());
+    }
+
     private static AuctionRequest request(String keyId, int tmaxMillis, List<String> impIds) {
+        return requestWithSlots(
+                keyId,
+                tmaxMillis,
+                impIds.stream().map(impId -> new AuctionSlot(impId, 0)).toList()
+        );
+    }
+
+    private static AuctionRequest requestWithSlots(String keyId, int tmaxMillis, List<AuctionSlot> slots) {
         return new AuctionRequest(
                 "provider-1",
                 keyId,
                 "request-1",
                 tmaxMillis,
-                impIds.stream().map(impId -> new AuctionSlot(impId, 0)).toList()
+                slots
         );
     }
 }

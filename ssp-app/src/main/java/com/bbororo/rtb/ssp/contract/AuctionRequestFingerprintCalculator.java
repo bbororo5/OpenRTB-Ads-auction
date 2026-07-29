@@ -19,7 +19,10 @@ final class AuctionRequestFingerprintCalculator {
         update(digest, request.providerRequestId());
         update(digest, Integer.toString(request.tmaxMillis()));
         update(digest, Integer.toString(request.slots().size()));
-        request.slots().forEach(slot -> update(digest, slot.impId()));
+        request.slots().forEach(slot -> {
+            update(digest, slot.impId());
+            update(digest, Long.toString(slot.floorCpmMilliKrw()));
+        });
 
         return new AuctionRequestFingerprint(HexFormat.of().formatHex(digest.digest()));
     }
