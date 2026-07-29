@@ -1,0 +1,72 @@
+package com.bbororo.rtb.ssp.openrtb;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.bbororo.rtb.ssp.contract.AuctionDeadline;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
+import com.bbororo.rtb.ssp.contract.SspMessages.BidRequestBatch;
+import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcomeKind;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class OpenRtb26CodecTest {
+
+    private final OpenRtb26Codec codec = new OpenRtb26Codec();
+
+    @Test
+    void encodesTheAuctionAsAnOpenRtbRequest() {
+        byte[] json = codec.encodeBidRequest(new BidRequestBatch(
+                "auction-1",
+                new AuctionRequest(
+                        "provider-1", "key-1", "request-1", 50,
+                        List.of(new AuctionSlot("imp-1", 1_000))
+                ),
+                List.of("dsp-1"),
+                AuctionDeadline.start(50, System::nanoTime)
+        ));
+        String text = new String(json, StandardCharsets.UTF_8);
+
+        assertTrue(text.contains("\"id\":\"auction-1\""));
+        assertTrue(text.contains("\"tmax\":50"));
+        assertTrue(text.contains("\"bidfloor\":1000.0"));
+        assertTrue(text.contains("\"bidfloorcur\":\"KRW\""));
+        assertTrue(text.contains("\"exp\":2"));
+    }
+
+    @Test
+    void decodesAValidOpenRtbBidWithoutSharingAnInternalModel() {
+        String json = """
+                {
+                  "id": "auction-1",
+                  "seatbid": [{"bid": [{
+                    "id": "bid-1",
+                    "impid": "imp-1",
+                    "price": 2000.0,
+                    "nurl": "https://dsp.test/nurl/1",
+                    "lurl": "https://dsp.test/lurl/1",
+                    "burl": "https://dsp.test/burl/1",
+                    "exp": 2
+                  }]}]
+                }
+                """;
+
+        var result = codec.decodeBidResponse("dsp-1", "auction-1", json.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(DspCallOutcomeKind.VALID_BID, result.kind());
+        assertEquals(2_000L, result.bids().getFirst().cpmKrw());
+        assertEquals("imp-1", result.bids().getFirst().impId());
+    }
+
+    @Test
+    void rejectsAMismatchedAuctionId() {
+        byte[] body = "{\"id\":\"another-auction\",\"seatbid\":[]}".getBytes(StandardCharsets.UTF_8);
+
+        assertEquals(
+                DspCallOutcomeKind.INVALID_BID,
+                codec.decodeBidResponse("dsp-1", "auction-1", body).kind()
+        );
+    }
+}
