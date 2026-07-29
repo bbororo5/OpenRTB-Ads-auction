@@ -74,8 +74,16 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
         }
     }
 
-    synchronized int recordedClaimCount() {
+    /** 시험용 어댑터가 현재 보존한 청구 수다. */
+    public synchronized int recordedClaimCount() {
         return deliveriesByProofDigest.size();
+    }
+
+    /** 아직 전달 완료·만료로 종결되지 않은 작업 수다. */
+    public synchronized int pendingDeliveryCount() {
+        return (int) deliveriesByProofDigest.values().stream()
+                .filter(StoredDelivery::isPending)
+                .count();
     }
 
     private static final class StoredDelivery {
@@ -97,6 +105,10 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
                 return false;
             }
             return state == DeliveryState.PENDING || !now.isBefore(lease.leaseUntil());
+        }
+
+        private boolean isPending() {
+            return state == DeliveryState.PENDING || state == DeliveryState.LEASED;
         }
 
         private LeasedBillingDelivery lease(Instant now, Duration duration) {
