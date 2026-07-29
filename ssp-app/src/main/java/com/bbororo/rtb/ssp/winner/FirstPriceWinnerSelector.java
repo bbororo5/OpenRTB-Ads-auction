@@ -18,25 +18,29 @@ import java.util.stream.Collectors;
 /** 유효 입찰 중 슬롯별 최고 CPM을 1가격으로 선택한다. */
 public final class FirstPriceWinnerSelector implements WinnerSelector {
 
-    private static final Comparator<DspBid> WINNER_ORDER = Comparator
-            .comparingLong(DspBid::cpmMilliKrw).reversed()
-            .thenComparing(DspBid::dspId)
-            .thenComparing(DspBid::bidId);
+    private static final Comparator<RankedBid> WINNER_ORDER = Comparator
+            .comparingLong((RankedBid ranked) -> ranked.bid().cpmMilliKrw()).reversed()
+            .thenComparing((left, right) -> Long.compareUnsigned(left.tieRank(), right.tieRank()))
+            .thenComparing(ranked -> ranked.bid().dspId())
+            .thenComparing(ranked -> ranked.bid().bidId());
 
     @Override
     public AuctionWinners selectWinners(String auctionId, AuctionRequest auction, BidResponses responses) {
-        Objects.requireNonNull(auctionId);
+        if (auctionId == null || auctionId.isBlank()) {
+            throw new IllegalArgumentException("auctionId must not be blank");
+        }
         Objects.requireNonNull(auction);
         Objects.requireNonNull(responses);
 
         Map<String, AuctionSlot> slotsByImpId = auction.slots().stream()
                 .collect(Collectors.toUnmodifiableMap(AuctionSlot::impId, Function.identity()));
 
-        Map<String, DspBid> winnersByImpId = responses.outcomes().stream()
+        Map<String, RankedBid> winnersByImpId = responses.outcomes().stream()
                 .filter(outcome -> outcome.kind() == DspCallOutcomeKind.VALID_BID)
                 .flatMap(outcome -> outcome.bids().stream().filter(bid -> isValid(bid, outcome, slotsByImpId)))
+                .map(bid -> new RankedBid(bid, tieRank(auctionId, bid)))
                 .collect(Collectors.toMap(
-                        DspBid::impId,
+                        ranked -> ranked.bid().impId(),
                         Function.identity(),
                         FirstPriceWinnerSelector::betterBid
                 ));
@@ -53,18 +57,18 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
         AuctionSlot slot = slotsByImpId.get(bid.impId());
         return bid.dspId().equals(outcome.dspId())
                 && slot != null
-                && bid.cpmMilliKrw() > 0
                 && bid.cpmMilliKrw() >= slot.floorCpmMilliKrw();
     }
 
-    private static DspBid betterBid(DspBid first, DspBid second) {
+    private static RankedBid betterBid(RankedBid first, RankedBid second) {
         return WINNER_ORDER.compare(first, second) <= 0 ? first : second;
     }
 
-    private static WinningBid toWinningBid(String auctionId, DspBid bid) {
-        if (bid == null) {
+    private static WinningBid toWinningBid(String auctionId, RankedBid ranked) {
+        if (ranked == null) {
             return null;
         }
+        DspBid bid = ranked.bid();
         return new WinningBid(
                 auctionId + "/" + bid.impId(),
                 bid.impId(),
@@ -75,5 +79,33 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
                 bid.lurl(),
                 bid.burl()
         );
+    }
+
+    /**
+     * 동가 입찰을 응답 도착 순서나 고정 DSP 우선순위에 의존하지 않고 분산하는 순위다.
+     *
+     * <p>보안용 해시가 아니므로 할당 없이 계산 가능한 64비트 FNV-1a를 사용한다.</p>
+     */
+    private static long tieRank(String auctionId, DspBid bid) {
+        long hash = 0xcbf29ce484222325L;
+        hash = hash(hash, auctionId);
+        hash = hash(hash, bid.impId());
+        hash = hash(hash, bid.dspId());
+        return hash(hash, bid.bidId());
+    }
+
+    private static long hash(long initial, String value) {
+        long hash = initial ^ value.length();
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            hash ^= character & 0xff;
+            hash *= 0x100000001b3L;
+            hash ^= character >>> 8;
+            hash *= 0x100000001b3L;
+        }
+        return hash;
+    }
+
+    private record RankedBid(DspBid bid, long tieRank) {
     }
 }
