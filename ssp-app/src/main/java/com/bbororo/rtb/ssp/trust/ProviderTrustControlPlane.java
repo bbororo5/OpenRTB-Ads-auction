@@ -31,6 +31,11 @@ public final class ProviderTrustControlPlane implements AutoCloseable {
     /** 배포 환경이 제공한 현재 지역 DB에 연결해 제어 경로를 시작한다. */
     public static ProviderTrustControlPlane startFromEnvironment() {
         HikariDataSource dataSource = RegionalDataSourceFactory.createFromEnvironment();
+        return start(dataSource);
+    }
+
+    /** 애플리케이션이 청구 저장소와 공유하는 지역 연결 풀로 제어 경로를 시작한다. */
+    public static ProviderTrustControlPlane start(HikariDataSource dataSource) {
         return start(
                 new PostgreSqlProviderConfigReader(dataSource),
                 dataSource,
