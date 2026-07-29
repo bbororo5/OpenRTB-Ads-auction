@@ -7,7 +7,6 @@ import com.bbororo.rtb.ssp.contract.SspMessages.BidResponses;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspBid;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcomeKind;
 import com.bbororo.rtb.ssp.contract.SspMessages.WinningBid;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -16,12 +15,6 @@ import java.util.stream.Collectors;
 
 /** 유효 입찰 중 슬롯별 최고 CPM을 1가격으로 선택한다. */
 public final class FirstPriceWinnerSelector implements WinnerSelector {
-
-    private static final Comparator<RankedBid> WINNER_ORDER = Comparator
-            .comparingLong((RankedBid ranked) -> ranked.bid().cpmMilliKrw()).reversed()
-            .thenComparing((left, right) -> Long.compareUnsigned(left.tieRank(), right.tieRank()))
-            .thenComparing(ranked -> ranked.bid().dspId())
-            .thenComparing(ranked -> ranked.bid().bidId());
 
     @Override
     public AuctionWinners selectWinners(String auctionId, AuctionRequest auction, BidResponses responses) {
@@ -34,15 +27,14 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
         Map<String, AuctionSlot> slotsByImpId = auction.slots().stream()
                 .collect(Collectors.toUnmodifiableMap(AuctionSlot::impId, Function.identity()));
 
-        Map<String, RankedBid> winnersByImpId = responses.outcomes().stream()
+        Map<String, DspBid> winnersByImpId = responses.outcomes().stream()
                 .filter(outcome -> outcome.kind() == DspCallOutcomeKind.VALID_BID)
                 .flatMap(outcome -> outcome.bids().stream())
                 .filter(bid -> isEligible(bid, slotsByImpId))
-                .map(bid -> new RankedBid(bid, tieRank(auctionId, bid)))
                 .collect(Collectors.toMap(
-                        ranked -> ranked.bid().impId(),
+                        DspBid::impId,
                         Function.identity(),
-                        FirstPriceWinnerSelector::betterBid
+                        (first, second) -> betterBid(auctionId, first, second)
                 ));
 
         List<WinningBid> winners = auction.slots().stream()
@@ -59,15 +51,26 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
                 && bid.cpmMilliKrw() >= slot.floorCpmMilliKrw();
     }
 
-    private static RankedBid betterBid(RankedBid first, RankedBid second) {
-        return WINNER_ORDER.compare(first, second) <= 0 ? first : second;
+    private static DspBid betterBid(String auctionId, DspBid first, DspBid second) {
+        int priceOrder = Long.compare(first.cpmMilliKrw(), second.cpmMilliKrw());
+        if (priceOrder != 0) {
+            return priceOrder > 0 ? first : second;
+        }
+        int rankOrder = Long.compareUnsigned(tieRank(auctionId, first), tieRank(auctionId, second));
+        if (rankOrder != 0) {
+            return rankOrder < 0 ? first : second;
+        }
+        int dspOrder = first.dspId().compareTo(second.dspId());
+        if (dspOrder != 0) {
+            return dspOrder < 0 ? first : second;
+        }
+        return first.bidId().compareTo(second.bidId()) <= 0 ? first : second;
     }
 
-    private static WinningBid toWinningBid(String auctionId, RankedBid ranked) {
-        if (ranked == null) {
+    private static WinningBid toWinningBid(String auctionId, DspBid bid) {
+        if (bid == null) {
             return null;
         }
-        DspBid bid = ranked.bid();
         return new WinningBid(
                 auctionId + "/" + bid.impId(),
                 bid.impId(),
@@ -105,6 +108,4 @@ public final class FirstPriceWinnerSelector implements WinnerSelector {
         return hash;
     }
 
-    private record RankedBid(DspBid bid, long tieRank) {
-    }
 }

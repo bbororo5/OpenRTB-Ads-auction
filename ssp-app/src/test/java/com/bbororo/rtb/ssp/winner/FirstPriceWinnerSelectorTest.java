@@ -67,6 +67,21 @@ class FirstPriceWinnerSelectorTest {
     }
 
     @Test
+    void preservesAOneMilliKrwCpmPriceDifference() {
+        WinningBid winner = selector.selectWinners(
+                "auction-1",
+                auction(),
+                responses(
+                        outcome("dsp-a", bid("dsp-a", "imp-1", "bid-a", 2_000_000)),
+                        outcome("dsp-b", bid("dsp-b", "imp-1", "bid-b", 2_000_001))
+                )
+        ).winners().getFirst();
+
+        assertEquals("dsp-b", winner.dspId());
+        assertEquals(2_000_001L, winner.cpmMilliKrw());
+    }
+
+    @Test
     void makesEqualPriceResultsIndependentOfResponseOrder() {
         DspCallOutcome dspA = outcome("dsp-a", bid("dsp-a", "imp-1", "bid-a", 2_000));
         DspCallOutcome dspB = outcome("dsp-b", bid("dsp-b", "imp-1", "bid-b", 2_000));
