@@ -1,6 +1,7 @@
 package com.bbororo.rtb.ssp.auction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
@@ -13,6 +14,7 @@ import com.bbororo.rtb.ssp.contract.SspMessages.NoticeKind;
 import com.bbororo.rtb.ssp.contract.SspMessages.StartAuction;
 import com.bbororo.rtb.ssp.dspbid.DspBidExecutor;
 import com.bbororo.rtb.ssp.winner.FirstPriceWinnerSelector;
+import com.bbororo.rtb.ssp.winner.WinnerSelector;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -27,15 +29,15 @@ class DeadlineBoundAuctionCoordinatorTest {
         AtomicInteger calls = new AtomicInteger();
         AuctionCoordinator coordinator = coordinator(batch -> {
             calls.incrementAndGet();
-            return responses(new DspCallOutcome("external-dsp", DspCallOutcomeKind.VALID_BID,
-                    List.of(bid("external-dsp", 2_000))));
+            return responses(new DspCallOutcome("external-dsp-1", DspCallOutcomeKind.VALID_BID,
+                    List.of(bid("external-dsp-1", 2_000))));
         });
 
         var winners = coordinator.runAuction(start(AuctionDeadline.start(180, System::nanoTime)));
 
         assertEquals(1, calls.get());
         assertEquals(1, winners.winners().winners().size());
-        assertEquals("external-dsp", winners.winners().winners().getFirst().dspId());
+        assertEquals("external-dsp-1", winners.winners().winners().getFirst().dspId());
         assertEquals(NoticeKind.WIN, winners.notices().getFirst().kind());
     }
 
@@ -50,10 +52,12 @@ class DeadlineBoundAuctionCoordinatorTest {
             return responses();
         });
 
-        var winners = coordinator.runAuction(start(deadline));
+        assertThrows(
+                AuctionDeadlineExceededException.class,
+                () -> coordinator.runAuction(start(deadline))
+        );
 
         assertEquals(0, calls.get());
-        assertEquals(List.of(), winners.winners().winners());
     }
 
     @Test
@@ -62,13 +66,74 @@ class DeadlineBoundAuctionCoordinatorTest {
         AuctionDeadline deadline = AuctionDeadline.start(1, nanos::get);
         AuctionCoordinator coordinator = coordinator(batch -> {
             nanos.addAndGet(Duration.ofMillis(1).toNanos());
-            return responses(new DspCallOutcome("external-dsp", DspCallOutcomeKind.VALID_BID,
-                    List.of(bid("external-dsp", 2_000))));
+            return responses(new DspCallOutcome("external-dsp-1", DspCallOutcomeKind.VALID_BID,
+                    List.of(bid("external-dsp-1", 2_000))));
         });
 
-        var winners = coordinator.runAuction(start(deadline));
+        assertThrows(
+                AuctionDeadlineExceededException.class,
+                () -> coordinator.runAuction(start(deadline))
+        );
+    }
 
-        assertEquals(List.of(), winners.winners().winners());
+    @Test
+    void keepsAValidBidWhenOtherDspCallsFail() {
+        AuctionCoordinator coordinator = coordinator(batch -> responses(
+                new DspCallOutcome("project-dsp", DspCallOutcomeKind.TIMEOUT, List.of()),
+                new DspCallOutcome("external-dsp-1", DspCallOutcomeKind.ERROR, List.of()),
+                new DspCallOutcome(
+                        "external-dsp-2",
+                        DspCallOutcomeKind.VALID_BID,
+                        List.of(bid("external-dsp-2", 2_000))
+                )
+        ));
+
+        var outcome = coordinator.runAuction(
+                start(AuctionDeadline.start(180, System::nanoTime))
+        );
+
+        assertEquals("external-dsp-2", outcome.winners().winners().getFirst().dspId());
+        assertEquals(List.of(NoticeKind.WIN), outcome.notices().stream()
+                .map(notice -> notice.kind())
+                .toList());
+    }
+
+    @Test
+    void rejectsAnOutcomeFromAnUnrequestedDsp() {
+        AuctionCoordinator coordinator = coordinator(batch -> responses(
+                new DspCallOutcome(
+                        "unknown-dsp",
+                        DspCallOutcomeKind.VALID_BID,
+                        List.of(bid("unknown-dsp", 2_000))
+                )
+        ));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> coordinator.runAuction(
+                        start(AuctionDeadline.start(180, System::nanoTime))
+                )
+        );
+    }
+
+    @Test
+    void failsWhenWinnerSelectionConsumesTheRemainingDeadline() {
+        AtomicLong nanos = new AtomicLong();
+        AuctionDeadline deadline = AuctionDeadline.start(1, nanos::get);
+        WinnerSelector slowSelector = (auctionId, request, responses) -> {
+            nanos.addAndGet(Duration.ofMillis(1).toNanos());
+            return new com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners(List.of());
+        };
+        AuctionCoordinator coordinator = new DeadlineBoundAuctionCoordinator(
+                batch -> responses(),
+                slowSelector,
+                List.of("project-dsp")
+        );
+
+        assertThrows(
+                AuctionDeadlineExceededException.class,
+                () -> coordinator.runAuction(start(deadline))
+        );
     }
 
     private static AuctionCoordinator coordinator(DspBidExecutor executor) {
