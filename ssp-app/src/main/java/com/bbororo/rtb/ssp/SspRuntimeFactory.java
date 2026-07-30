@@ -5,6 +5,7 @@ import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer;
 import com.bbororo.rtb.ssp.api.DefaultAuctionRenderApi;
 import com.bbororo.rtb.ssp.api.ProviderApiJsonCodec;
 import com.bbororo.rtb.ssp.api.ProviderHttpServer;
+import com.bbororo.rtb.ssp.api.ProviderHttpLimits;
 import com.bbororo.rtb.ssp.auction.CoordinatingAuctionStarter;
 import com.bbororo.rtb.ssp.auction.DeadlineBoundAuctionCoordinator;
 import com.bbororo.rtb.ssp.claim.PostgreSqlClaimDeliveryStore;
@@ -115,7 +116,12 @@ public final class SspRuntimeFactory {
                     new InetSocketAddress("0.0.0.0", settings.serverPort()),
                     api,
                     new ProviderApiJsonCodec(),
-                    clock
+                    clock,
+                    new ProviderHttpLimits(
+                            settings.providerMaxInFlight(),
+                            settings.providerMaxAuctionRequestBytes(),
+                            settings.providerMaxRenderRequestBytes()
+                    )
             );
             return new SspRuntime(
                     server,

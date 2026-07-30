@@ -11,6 +11,9 @@ public record SspRuntimeSettings(
         int serverPort,
         String regionId,
         URI renderCompletionUrl,
+        int providerMaxInFlight,
+        int providerMaxAuctionRequestBytes,
+        int providerMaxRenderRequestBytes,
         Map<String, URI> dspEndpoints,
         Duration dspBidTimeout,
         int dspMaxInFlight,
@@ -28,6 +31,21 @@ public record SspRuntimeSettings(
             throw new IllegalArgumentException("regionId must not be blank");
         }
         renderCompletionUrl = requireHttpUrl(renderCompletionUrl, "renderCompletionUrl");
+        if (providerMaxInFlight <= 0 || providerMaxInFlight > 100_000) {
+            throw new IllegalArgumentException(
+                    "providerMaxInFlight must be between 1 and 100000"
+            );
+        }
+        requireByteLimit(
+                providerMaxAuctionRequestBytes,
+                "providerMaxAuctionRequestBytes",
+                1_048_576
+        );
+        requireByteLimit(
+                providerMaxRenderRequestBytes,
+                "providerMaxRenderRequestBytes",
+                65_536
+        );
         dspEndpoints = Map.copyOf(dspEndpoints);
         if (dspEndpoints.isEmpty()) {
             throw new IllegalArgumentException("dspEndpoints must include at least one DSP");
@@ -83,6 +101,15 @@ public record SspRuntimeSettings(
                 URI.create(required("RENDER_COMPLETION_URL", environment)),
                 "RENDER_COMPLETION_URL"
         );
+        int providerMaxInFlight = Integer.parseInt(
+                environment.getOrDefault("PROVIDER_MAX_IN_FLIGHT", "128")
+        );
+        int providerMaxAuctionRequestBytes = Integer.parseInt(
+                environment.getOrDefault("PROVIDER_MAX_AUCTION_REQUEST_BYTES", "65536")
+        );
+        int providerMaxRenderRequestBytes = Integer.parseInt(
+                environment.getOrDefault("PROVIDER_MAX_RENDER_REQUEST_BYTES", "8192")
+        );
         Map<String, URI> endpoints = parseEndpoints(required("DSP_ENDPOINTS", environment));
         Duration bidTimeout = Duration.ofMillis(
                 Long.parseLong(environment.getOrDefault("DSP_BID_TIMEOUT_MS", "35"))
@@ -111,6 +138,9 @@ public record SspRuntimeSettings(
                 port,
                 regionId,
                 renderCompletionUrl,
+                providerMaxInFlight,
+                providerMaxAuctionRequestBytes,
+                providerMaxRenderRequestBytes,
                 endpoints,
                 bidTimeout,
                 maxInFlight,
@@ -203,6 +233,14 @@ public record SspRuntimeSettings(
     private static void requirePositive(Duration value, String name) {
         if (value == null || value.isZero() || value.isNegative()) {
             throw new IllegalArgumentException(name + " must be positive");
+        }
+    }
+
+    private static void requireByteLimit(int value, String name, int maximum) {
+        if (value < 1_024 || value > maximum) {
+            throw new IllegalArgumentException(
+                    name + " must be between 1024 and " + maximum
+            );
         }
     }
 
