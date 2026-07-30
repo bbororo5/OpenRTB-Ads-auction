@@ -107,6 +107,28 @@ class OpenRtb26CodecTest {
         );
     }
 
+    @Test
+    void rejectsTheWholeDspResponseWhenOneBidIsInvalid() {
+        String json = """
+                {"id":"auction-1","seatbid":[{"bid":[{
+                  "id":"valid","impid":"imp-1","price":2000.000,
+                  "nurl":"https://dsp.test/nurl/1",
+                  "lurl":"https://dsp.test/lurl/1",
+                  "burl":"https://dsp.test/burl/1","exp":2
+                },{
+                  "id":"invalid","impid":"unknown","price":3000.000,
+                  "nurl":"https://dsp.test/nurl/2",
+                  "lurl":"https://dsp.test/lurl/2",
+                  "burl":"https://dsp.test/burl/2","exp":2
+                }]}]}
+                """;
+
+        assertEquals(
+                DspCallOutcomeKind.INVALID_BID,
+                codec.decodeBidResponse("dsp-1", batch(), json.getBytes(StandardCharsets.UTF_8)).kind()
+        );
+    }
+
     private static BidRequestBatch batch() {
         return new BidRequestBatch(
                 "auction-1",

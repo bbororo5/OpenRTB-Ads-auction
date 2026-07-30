@@ -26,6 +26,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -99,6 +100,29 @@ class HttpOpenRtbDspBidExecutorTest {
 
             assertEquals(DspCallOutcomeKind.VALID_BID, responses.outcomes().get(0).kind());
             assertEquals(DspCallOutcomeKind.ERROR, responses.outcomes().get(1).kind());
+        }
+    }
+
+    @Test
+    void doesNotRetryARejectedBidRequest() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        try (TestServer server = new TestServer()) {
+            server.context("/rejected", exchange -> {
+                calls.incrementAndGet();
+                respond(exchange, 503, null, new byte[0]);
+            });
+            server.start();
+            DspBidExecutor executor = executor(
+                    Map.of("dsp-a", server.uri("/rejected")),
+                    Duration.ofMillis(100),
+                    64,
+                    64 * 1_024
+            );
+
+            BidResponses responses = executor.requestBids(batch("dsp-a"));
+
+            assertEquals(DspCallOutcomeKind.ERROR, responses.outcomes().getFirst().kind());
+            assertEquals(1, calls.get());
         }
     }
 
