@@ -1,6 +1,6 @@
 # SSP 애플리케이션 컴포넌트
 
-상태: C3 책임·협력·인터페이스 경계 확정 · 구현 기술 미정
+상태: C3 책임·협력·인터페이스 경계 확정 · 첫 구현 기준선 적용
 
 범위는 [SSP 컨테이너](ssp-containers.md)의 `SSP 애플리케이션` 하나다. 이 문서의 8개 컴포넌트는 배포 단위나 Java 패키지 수가 아니라, 각자 바꿀 수 있는 규칙과 데이터 책임을 나타낸다.
 
@@ -102,7 +102,7 @@ flowchart LR
 | 낙찰 결정 | `selectWinners` | `auctionId` + `AuctionRequest` + `BidResponses` → `AuctionWinners` | 최저가 이상 최고 CPM을 제출가로 낙찰한다. 동가는 경매·슬롯·입찰 식별자의 결정적 해시로 분산하며 응답 순서에 영향받지 않는다. |
 | 렌더링 증표 | `issue` / `verify` | `ProofIssuance` → `RenderProof`, `RenderCompleted` → `Optional<VerifiedRender>` | 공급자·요청·슬롯·낙찰 사실·발급 리전·1ms~2초 기한을 봉인한다. 같은 증표의 재검증은 같은 신원을 내며 금액 중복 판정은 렌더링 청구가 소유한다. |
 | 렌더링 청구 | `acceptRender` | `VerifiedRender` → `RenderAcceptance` | 현재 지역 공급자 스냅숏에서 활성 상태를 확인하고, 청구와 `burl` 전달 작업을 함께 저장한 뒤에만 수락한다. |
-| DSP 통지 전달 | `sendAuctionNotice` / `deliverBilling` | `AuctionNotice` / `BillingDeliveryTask` → 전달 결과 | `burl`은 중복될 수 있음을 전제로 하며 5초 마감 뒤 미전달로 종결한다. |
+| DSP 통지 전달 | `sendAuctionNotices` / `deliverDueBilling` | `AuctionNotice` / `BillingDeliveryTask` → 전달 결과 | `burl`은 중복될 수 있음을 전제로 한다. 제한된 작업자들이 세대번호가 붙은 작업을 임대하고, 일시 실패는 지수 지연해 재시도하며 5초 마감 뒤 미전달로 종결한다. |
 
 ### 저장소 포트
 
@@ -111,8 +111,8 @@ PostgreSQL 접근은 C3 컴포넌트가 아니라 구현 내부의 저장소 포
 | 포트 | 호출자 | 보장 |
 |---|---|---|
 | `recordClaimAndScheduleDelivery` | 렌더링 청구 | `slotAuctionKey` 고유 제약 아래 최초 증표만 청구 사건과 전달 작업으로 저장한다. 같은 증표는 중복, 다른 증표는 충돌로 판정하며 저장 불확실성은 재시도 결과로 반환한다. |
-| `leaseDueDelivery` | DSP 통지 전달 | 만료되지 않은 대기 작업 하나에 짧은 임대와 새 작업 세대번호를 원자 부여한다. |
-| `completeOrReleaseDelivery` | DSP 통지 전달 | 같은 작업 세대번호를 가진 실행기만 성공·재시도·미전달 결과를 기록한다. |
+| `leaseDueDelivery` | DSP 통지 전달 | 재시도 시각이 된 대기 작업 하나에 짧은 임대와 새 작업 세대번호를 원자 부여한다. 여러 작업자는 `SKIP LOCKED`로 서로 다른 작업을 가져간다. |
+| `completeOrReleaseDelivery` | DSP 통지 전달 | 같은 작업 세대번호를 가진 실행기만 성공·재시도·미전달 결과를 기록한다. 재시도는 기한 안에서만 다음 실행 시각을 갖는다. |
 
 작업 세대번호는 금액·인증 토큰이 아니다. 임대가 끝난 뒤 늦게 실행된 이전 작업자가 새 작업자의 결과를 덮어쓰지 못하게 하는 DB 조건값이다.
 
