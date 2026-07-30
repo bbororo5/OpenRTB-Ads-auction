@@ -78,6 +78,48 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
         }
     }
 
+    @Test
+    void keepsTheFirstProofWhenDifferentProofsRaceForOneSlot() throws Exception {
+        try (HikariDataSource dataSource = dataSource();
+             ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            truncate(dataSource);
+            var store = new PostgreSqlClaimDeliveryStore(dataSource, Duration.ofSeconds(1));
+            Instant now = Instant.now();
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<ClaimAttempt>> attempts = new ArrayList<>();
+            for (int index = 0; index < 32; index++) {
+                String digest = (index % 2 == 0 ? "a" : "b").repeat(64);
+                attempts.add(executor.submit(() -> {
+                    start.await();
+                    return new ClaimAttempt(
+                            digest,
+                            store.recordClaimAndScheduleDelivery(claim(digest, now))
+                    );
+                }));
+            }
+
+            start.countDown();
+            List<ClaimAttempt> results = new ArrayList<>();
+            for (Future<ClaimAttempt> attempt : attempts) {
+                results.add(attempt.get());
+            }
+            String storedDigest = storedProofDigest(dataSource);
+
+            assertEquals(1, results.stream()
+                    .filter(attempt -> attempt.result() == RenderAcceptance.ACCEPTED)
+                    .count());
+            assertEquals(15, results.stream()
+                    .filter(attempt -> attempt.digest().equals(storedDigest))
+                    .filter(attempt -> attempt.result() == RenderAcceptance.DUPLICATE)
+                    .count());
+            assertEquals(16, results.stream()
+                    .filter(attempt -> !attempt.digest().equals(storedDigest))
+                    .filter(attempt -> attempt.result() == RenderAcceptance.REJECTED)
+                    .count());
+            assertEquals(1, rowCount(dataSource));
+        }
+    }
+
     private static BillingClaim claim(String proofDigest, Instant now) {
         return new BillingClaim(
                 "provider-1", "request-1", "imp-1", "auction-1/imp-1",
@@ -100,6 +142,20 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
             result.next();
             return result.getInt(1);
         }
+    }
+
+    private static String storedProofDigest(HikariDataSource dataSource) throws Exception {
+        try (var connection = dataSource.getConnection();
+             var statement = connection.createStatement();
+             var result = statement.executeQuery(
+                     "SELECT proof_digest FROM ssp_billing_delivery"
+             )) {
+            result.next();
+            return result.getString(1).trim();
+        }
+    }
+
+    private record ClaimAttempt(String digest, RenderAcceptance result) {
     }
 
     private static HikariDataSource dataSource() {
