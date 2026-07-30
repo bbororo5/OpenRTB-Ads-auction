@@ -74,7 +74,7 @@ flowchart LR
 | DSP 입찰 실행 | DSP별 요청 변환·하위 기한·연결·동시 호출 격리와 응답 상한 | `BidRequestBatch` → `BidResponses` | 낙찰과 예산 판단 |
 | 낙찰 결정 | 입찰 유효성, 1가격, 경매별 분산 동점 처리 | `auctionId` + `AuctionRequest` + `BidResponses` → `AuctionWinners` | 네트워크·시계·저장소 |
 | 렌더링 증표 | 공급자·요청·슬롯·발급 리전 귀속을 가진 AEAD 증표 발급·검증, 2초 기한 | `ProofIssuance` → `RenderProof`, `RenderCompleted` → `VerifiedRender` | 청구 기록·`burl` 전달 |
-| 렌더링 청구 | 유효 증표와 현재 공급자 활성 상태의 청구 판정, 청구와 전달 작업의 원자 생성 | `VerifiedRender` → `RenderAcceptance` | `burl` HTTP 호출·재시도 |
+| 렌더링 청구 | 유효 증표와 현재 공급자 활성 상태의 청구 판정, 슬롯별 멱등 청구와 전달 작업의 원자 생성 | `VerifiedRender` → `RenderAcceptance` | `burl` HTTP 호출·재시도 |
 | DSP 통지 전달 | `nurl`·`lurl` 단발 통지, `burl` 작업 임대·전달·종결 | `AuctionNotice`, `BillingDeliveryTask` | DSP 내부 금액 판정 |
 
 `BillingClaimRecorded`와 `BillingDeliveryPending`은 같은 DB 트랜잭션에서 생성한다. 이 커밋이 성공한 뒤에만 API가 렌더링 성공을 응답한다. 따라서 성공 응답은 “청구와 `burl` 전달 책임이 내구화됐다”는 뜻이다.
@@ -110,7 +110,7 @@ PostgreSQL 접근은 C3 컴포넌트가 아니라 구현 내부의 저장소 포
 
 | 포트 | 호출자 | 보장 |
 |---|---|---|
-| `recordClaimAndScheduleDelivery` | 렌더링 청구 | `slotAuctionKey` 고유 제약 아래 청구 사건과 전달 대기 작업을 하나의 트랜잭션으로 저장한다. |
+| `recordClaimAndScheduleDelivery` | 렌더링 청구 | `slotAuctionKey` 고유 제약 아래 최초 증표만 청구 사건과 전달 작업으로 저장한다. 같은 증표는 중복, 다른 증표는 충돌로 판정하며 저장 불확실성은 재시도 결과로 반환한다. |
 | `leaseDueDelivery` | DSP 통지 전달 | 만료되지 않은 대기 작업 하나에 짧은 임대와 새 작업 세대번호를 원자 부여한다. |
 | `completeOrReleaseDelivery` | DSP 통지 전달 | 같은 작업 세대번호를 가진 실행기만 성공·재시도·미전달 결과를 기록한다. |
 
