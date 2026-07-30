@@ -1,6 +1,7 @@
 package com.bbororo.rtb.ssp.claim;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.bbororo.rtb.ssp.contract.SspMessages.BillingClaim;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderAcceptance;
@@ -16,7 +17,26 @@ class PostgreSqlClaimDeliveryStoreFailureTest {
 
     @Test
     void returnsRetryLaterWhenTheClaimCannotReachPostgreSql() {
-        DataSource unavailable = (DataSource) Proxy.newProxyInstance(
+        DataSource unavailable = unavailableDataSource();
+        var store = new PostgreSqlClaimDeliveryStore(unavailable, Duration.ofSeconds(1));
+
+        RenderAcceptance result = store.recordClaimAndScheduleDelivery(claim());
+
+        assertEquals(RenderAcceptance.RETRY_LATER, result);
+    }
+
+    @Test
+    void failsReadinessWhenPostgreSqlIsUnavailableAtStartup() {
+        var store = new PostgreSqlClaimDeliveryStore(
+                unavailableDataSource(),
+                Duration.ofSeconds(1)
+        );
+
+        assertThrows(IllegalStateException.class, store::verifyReady);
+    }
+
+    private static DataSource unavailableDataSource() {
+        return (DataSource) Proxy.newProxyInstance(
                 DataSource.class.getClassLoader(),
                 new Class<?>[]{DataSource.class},
                 (proxy, method, arguments) -> {
@@ -26,11 +46,6 @@ class PostgreSqlClaimDeliveryStoreFailureTest {
                     throw new UnsupportedOperationException(method.getName());
                 }
         );
-        var store = new PostgreSqlClaimDeliveryStore(unavailable, Duration.ofSeconds(1));
-
-        RenderAcceptance result = store.recordClaimAndScheduleDelivery(claim());
-
-        assertEquals(RenderAcceptance.RETRY_LATER, result);
     }
 
     private static BillingClaim claim() {

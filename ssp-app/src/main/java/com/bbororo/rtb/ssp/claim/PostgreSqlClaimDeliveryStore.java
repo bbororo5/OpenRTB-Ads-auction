@@ -74,6 +74,38 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
         this.leaseDuration = leaseDuration;
     }
 
+    /**
+     * 서버 시작 전에 연결·스키마·쓰기 권한을 확인한다.
+     *
+     * <p>실제와 같은 행을 삽입한 뒤 트랜잭션을 롤백하므로 청구 근거는 남지 않는다.</p>
+     */
+    public void verifyReady() {
+        Instant now = Instant.now();
+        BillingClaim readinessClaim = new BillingClaim(
+                "__readiness__",
+                UUID.randomUUID().toString(),
+                "__readiness__",
+                "__readiness__/" + UUID.randomUUID(),
+                "0".repeat(64),
+                "__readiness__",
+                1,
+                URI.create("https://readiness.invalid/burl"),
+                now.plusSeconds(1)
+        );
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                if (!insertClaim(connection, readinessClaim)) {
+                    throw new IllegalStateException("SSP billing readiness row conflicted");
+                }
+            } finally {
+                connection.rollback();
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("SSP billing storage is not ready", exception);
+        }
+    }
+
     @Override
     public RenderAcceptance recordClaimAndScheduleDelivery(BillingClaim claim) {
         Objects.requireNonNull(claim);

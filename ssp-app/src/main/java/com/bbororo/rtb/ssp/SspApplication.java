@@ -49,6 +49,7 @@ public final class SspApplication {
         ExecutorService auctionExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
         var store = new PostgreSqlClaimDeliveryStore(dataSource, Duration.ofSeconds(1));
+        store.verifyReady();
         HttpClient noticeHttpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(500))
                 .build();
