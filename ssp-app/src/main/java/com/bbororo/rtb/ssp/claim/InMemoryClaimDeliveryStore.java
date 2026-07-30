@@ -25,17 +25,26 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
     private static final Duration DEFAULT_LEASE_DURATION = Duration.ofSeconds(1);
 
     private final Duration leaseDuration;
+    private final DeliveryRetryPolicy retryPolicy;
     private final Map<String, StoredDelivery> deliveriesBySlotAuctionKey = new HashMap<>();
 
     public InMemoryClaimDeliveryStore() {
-        this(DEFAULT_LEASE_DURATION);
+        this(DEFAULT_LEASE_DURATION, DeliveryRetryPolicy.standard());
     }
 
     public InMemoryClaimDeliveryStore(Duration leaseDuration) {
+        this(leaseDuration, DeliveryRetryPolicy.standard());
+    }
+
+    public InMemoryClaimDeliveryStore(
+            Duration leaseDuration,
+            DeliveryRetryPolicy retryPolicy
+    ) {
         if (leaseDuration.isNegative() || leaseDuration.isZero()) {
             throw new IllegalArgumentException("leaseDuration must be positive");
         }
         this.leaseDuration = leaseDuration;
+        this.retryPolicy = Objects.requireNonNull(retryPolicy);
     }
 
     @Override
@@ -48,7 +57,10 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
                     : RenderAcceptance.REJECTED;
         }
         BillingDeliveryTask task = new BillingDeliveryTask(UUID.randomUUID().toString(), claim);
-        deliveriesBySlotAuctionKey.put(claim.slotAuctionKey(), new StoredDelivery(task));
+        deliveriesBySlotAuctionKey.put(
+                claim.slotAuctionKey(),
+                new StoredDelivery(task, retryPolicy)
+        );
         return RenderAcceptance.ACCEPTED;
     }
 
@@ -92,11 +104,17 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
     private static final class StoredDelivery {
 
         private final BillingDeliveryTask task;
+        private final DeliveryRetryPolicy retryPolicy;
         private DeliveryLease lease;
         private DeliveryState state = DeliveryState.PENDING;
+        private Instant nextAttemptAt = Instant.MIN;
 
-        private StoredDelivery(BillingDeliveryTask task) {
+        private StoredDelivery(
+                BillingDeliveryTask task,
+                DeliveryRetryPolicy retryPolicy
+        ) {
             this.task = task;
+            this.retryPolicy = retryPolicy;
         }
 
         private boolean hasProofDigest(String proofDigest) {
@@ -111,7 +129,9 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
                 state = DeliveryState.UNDELIVERED;
                 return false;
             }
-            return state == DeliveryState.PENDING || !now.isBefore(lease.leaseUntil());
+            return state == DeliveryState.PENDING
+                    ? !now.isBefore(nextAttemptAt)
+                    : !now.isBefore(lease.leaseUntil());
         }
 
         private boolean isPending() {
@@ -134,11 +154,19 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
         private void finish(DeliveryOutcome outcome, Instant now) {
             if (outcome == DeliveryOutcome.DELIVERED) {
                 state = DeliveryState.DELIVERED;
-            } else if (outcome == DeliveryOutcome.RETRY && now.isBefore(task.claim().billingDeadline())) {
-                state = DeliveryState.PENDING;
-            } else {
-                state = DeliveryState.UNDELIVERED;
+                return;
             }
+            if (outcome == DeliveryOutcome.UNDELIVERED) {
+                state = DeliveryState.UNDELIVERED;
+                return;
+            }
+            Instant retryAt = now.plus(retryPolicy.delayAfter(lease.generation()));
+            if (retryAt.isBefore(task.claim().billingDeadline())) {
+                nextAttemptAt = retryAt;
+                state = DeliveryState.PENDING;
+                return;
+            }
+            state = DeliveryState.UNDELIVERED;
         }
     }
 

@@ -120,6 +120,35 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
         }
     }
 
+    @Test
+    void delaysRetryAndRejectsAStaleWorkerCompletion() throws Exception {
+        try (HikariDataSource dataSource = dataSource()) {
+            truncate(dataSource);
+            var store = new PostgreSqlClaimDeliveryStore(
+                    dataSource,
+                    Duration.ofMillis(100),
+                    new DeliveryRetryPolicy(Duration.ofMillis(50), Duration.ofMillis(500))
+            );
+            Instant now = Instant.now();
+            assertEquals(
+                    RenderAcceptance.ACCEPTED,
+                    store.recordClaimAndScheduleDelivery(claim("a".repeat(64), now))
+            );
+
+            var first = store.leaseDueDelivery(now.plusMillis(10)).orElseThrow();
+            store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.RETRY, now.plusMillis(20));
+            assertTrue(store.leaseDueDelivery(now.plusMillis(69)).isEmpty());
+
+            var second = store.leaseDueDelivery(now.plusMillis(70)).orElseThrow();
+            store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.DELIVERED, now.plusMillis(80));
+            assertEquals("LEASED", deliveryState(dataSource));
+
+            store.completeOrReleaseDelivery(second.lease(), DeliveryOutcome.DELIVERED, now.plusMillis(90));
+            assertEquals("DELIVERED", deliveryState(dataSource));
+            assertTrue(store.leaseDueDelivery(now.plusMillis(100)).isEmpty());
+        }
+    }
+
     private static BillingClaim claim(String proofDigest, Instant now) {
         return new BillingClaim(
                 "provider-1", "request-1", "imp-1", "auction-1/imp-1",
@@ -152,6 +181,15 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
              )) {
             result.next();
             return result.getString(1).trim();
+        }
+    }
+
+    private static String deliveryState(HikariDataSource dataSource) throws Exception {
+        try (var connection = dataSource.getConnection();
+             var statement = connection.createStatement();
+             var result = statement.executeQuery("SELECT state FROM ssp_billing_delivery")) {
+            result.next();
+            return result.getString(1);
         }
     }
 

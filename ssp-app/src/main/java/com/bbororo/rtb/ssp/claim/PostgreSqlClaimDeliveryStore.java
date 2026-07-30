@@ -36,7 +36,7 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
 
     private static final String EXPIRE_DUE = """
             UPDATE ssp_billing_delivery
-               SET state = 'UNDELIVERED', completed_at = ?
+               SET state = 'UNDELIVERED', lease_until = NULL, completed_at = ?
              WHERE state IN ('PENDING', 'LEASED')
                AND billing_deadline <= ?
             """;
@@ -44,8 +44,9 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
     private static final String LEASE_ONE = """
             WITH candidate AS (
                 SELECT delivery_id
-                  FROM ssp_billing_delivery
+                 FROM ssp_billing_delivery
                  WHERE billing_deadline > ?
+                   AND next_attempt_at <= ?
                    AND (state = 'PENDING' OR (state = 'LEASED' AND lease_until <= ?))
                  ORDER BY created_at
                  FOR UPDATE SKIP LOCKED
@@ -65,13 +66,23 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
 
     private final DataSource dataSource;
     private final Duration leaseDuration;
+    private final DeliveryRetryPolicy retryPolicy;
 
     public PostgreSqlClaimDeliveryStore(DataSource dataSource, Duration leaseDuration) {
+        this(dataSource, leaseDuration, DeliveryRetryPolicy.standard());
+    }
+
+    public PostgreSqlClaimDeliveryStore(
+            DataSource dataSource,
+            Duration leaseDuration,
+            DeliveryRetryPolicy retryPolicy
+    ) {
         this.dataSource = Objects.requireNonNull(dataSource);
         if (leaseDuration.isZero() || leaseDuration.isNegative()) {
             throw new IllegalArgumentException("leaseDuration must be positive");
         }
         this.leaseDuration = leaseDuration;
+        this.retryPolicy = Objects.requireNonNull(retryPolicy);
     }
 
     /**
@@ -182,22 +193,55 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
         Objects.requireNonNull(lease);
         Objects.requireNonNull(outcome);
         Objects.requireNonNull(now);
-        String nextState = switch (outcome) {
-            case DELIVERED -> "DELIVERED";
-            case RETRY -> "PENDING";
-            case UNDELIVERED -> "UNDELIVERED";
-        };
+        switch (outcome) {
+            case DELIVERED -> completeTerminal(lease, "DELIVERED", now);
+            case UNDELIVERED -> completeTerminal(lease, "UNDELIVERED", now);
+            case RETRY -> releaseForRetry(lease, now);
+        }
+    }
+
+    private void completeTerminal(
+            DeliveryLease lease,
+            String state,
+            Instant completedAt
+    ) {
+        String sql = """
+                UPDATE ssp_billing_delivery
+                   SET state = ?,
+                       lease_until = NULL,
+                       completed_at = ?
+                 WHERE delivery_id = ?
+                   AND state = 'LEASED'
+                   AND lease_generation = ?
+                """;
+        try (Connection connection = dataSource.getConnection();
+             var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, state);
+            statement.setTimestamp(2, Timestamp.from(completedAt));
+            statement.setObject(3, UUID.fromString(lease.deliveryId()));
+            statement.setLong(4, lease.generation());
+            statement.executeUpdate();
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not complete SSP billing delivery", exception);
+        }
+    }
+
+    private void releaseForRetry(DeliveryLease lease, Instant completedAt) {
+        Instant retryAt = completedAt.plus(retryPolicy.delayAfter(lease.generation()));
         String sql = """
                 UPDATE ssp_billing_delivery
                    SET state = CASE
-                         WHEN ? = 'PENDING' AND billing_deadline <= ? THEN 'UNDELIVERED'
-                         ELSE ?
+                         WHEN billing_deadline <= ? THEN 'UNDELIVERED'
+                         ELSE 'PENDING'
                        END,
                        lease_until = NULL,
+                       next_attempt_at = CASE
+                         WHEN billing_deadline <= ? THEN next_attempt_at
+                         ELSE ?
+                       END,
                        completed_at = CASE
-                         WHEN ? IN ('DELIVERED', 'UNDELIVERED') OR billing_deadline <= ?
-                           THEN CAST(? AS TIMESTAMPTZ)
-                         ELSE NULL
+                         WHEN billing_deadline <= ? THEN ?
+                         ELSE NULL::timestamptz
                        END
                  WHERE delivery_id = ?
                    AND state = 'LEASED'
@@ -205,17 +249,16 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
                 """;
         try (Connection connection = dataSource.getConnection();
              var statement = connection.prepareStatement(sql)) {
-            statement.setString(1, nextState);
-            statement.setTimestamp(2, Timestamp.from(now));
-            statement.setString(3, nextState);
-            statement.setString(4, nextState);
-            statement.setTimestamp(5, Timestamp.from(now));
-            statement.setTimestamp(6, Timestamp.from(now));
-            statement.setObject(7, UUID.fromString(lease.deliveryId()));
-            statement.setLong(8, lease.generation());
+            statement.setTimestamp(1, Timestamp.from(retryAt));
+            statement.setTimestamp(2, Timestamp.from(retryAt));
+            statement.setTimestamp(3, Timestamp.from(retryAt));
+            statement.setTimestamp(4, Timestamp.from(retryAt));
+            statement.setTimestamp(5, Timestamp.from(completedAt));
+            statement.setObject(6, UUID.fromString(lease.deliveryId()));
+            statement.setLong(7, lease.generation());
             statement.executeUpdate();
         } catch (Exception exception) {
-            throw new IllegalStateException("Could not complete SSP billing delivery", exception);
+            throw new IllegalStateException("Could not release SSP billing delivery", exception);
         }
     }
 
@@ -231,7 +274,8 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
         try (var statement = connection.prepareStatement(LEASE_ONE)) {
             statement.setTimestamp(1, Timestamp.from(now));
             statement.setTimestamp(2, Timestamp.from(now));
-            statement.setTimestamp(3, Timestamp.from(now.plus(leaseDuration)));
+            statement.setTimestamp(3, Timestamp.from(now));
+            statement.setTimestamp(4, Timestamp.from(now.plus(leaseDuration)));
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) {
                     return Optional.empty();

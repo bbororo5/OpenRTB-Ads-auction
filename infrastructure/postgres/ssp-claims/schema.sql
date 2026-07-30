@@ -12,10 +12,11 @@ CREATE TABLE ssp_billing_delivery (
     state TEXT NOT NULL CHECK (state IN ('PENDING', 'LEASED', 'DELIVERED', 'UNDELIVERED')),
     lease_generation BIGINT NOT NULL DEFAULT 0,
     lease_until TIMESTAMPTZ,
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     completed_at TIMESTAMPTZ
 );
 
 CREATE INDEX ssp_billing_delivery_due_idx
-    ON ssp_billing_delivery (state, lease_until, created_at)
+    ON ssp_billing_delivery (state, next_attempt_at, lease_until, created_at)
     WHERE state IN ('PENDING', 'LEASED');

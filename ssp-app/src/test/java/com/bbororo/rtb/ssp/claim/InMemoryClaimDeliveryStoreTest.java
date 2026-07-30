@@ -48,6 +48,33 @@ class InMemoryClaimDeliveryStoreTest {
     }
 
     @Test
+    void backsOffBeforeLeasingAFailedDeliveryAgain() {
+        InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore(
+                Duration.ofSeconds(1),
+                new DeliveryRetryPolicy(Duration.ofMillis(50), Duration.ofMillis(500))
+        );
+        store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusSeconds(5)));
+        var first = store.leaseDueDelivery(NOW).orElseThrow();
+
+        store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.RETRY, NOW);
+
+        assertTrue(store.leaseDueDelivery(NOW.plusMillis(49)).isEmpty());
+        assertEquals(2, store.leaseDueDelivery(NOW.plusMillis(50)).orElseThrow().lease().generation());
+    }
+
+    @Test
+    void terminalizesARetryThatCannotStartBeforeTheDeadline() {
+        InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
+        store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusMillis(40)));
+        var first = store.leaseDueDelivery(NOW).orElseThrow();
+
+        store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.RETRY, NOW);
+
+        assertEquals(0, store.pendingDeliveryCount());
+        assertTrue(store.leaseDueDelivery(NOW.plusMillis(50)).isEmpty());
+    }
+
+    @Test
     void doesNotLeaseAClaimAfterItsBillingDeadline() {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
         store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusSeconds(5)));
