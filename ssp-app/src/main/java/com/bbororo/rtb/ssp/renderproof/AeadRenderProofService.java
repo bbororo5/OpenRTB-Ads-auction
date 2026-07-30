@@ -61,6 +61,19 @@ public final class AeadRenderProofService implements RenderProofService {
             throw new IllegalArgumentException("active render proof key is missing");
         }
         this.keys.values().forEach(AeadRenderProofService::validateAesKey);
+        warmUpActiveEncryption();
+    }
+
+    private void warmUpActiveEncryption() {
+        try {
+            byte[] nonce = new byte[NONCE_BYTES];
+            secureRandom.nextBytes(nonce);
+            byte[] header = {FORMAT_VERSION, activeKeyId};
+            cipher(Cipher.ENCRYPT_MODE, keys.get(activeKeyId), nonce, header)
+                    .doFinal(new byte[0]);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Render proof encryption is not ready", exception);
+        }
     }
 
     @Override
