@@ -71,7 +71,7 @@ flowchart LR
 | 경매·렌더링 API | 프로젝트 공급자 HTTP 표현 검증, 지역 렌더링 URL로의 응답 | `AuctionRequest`, `RenderCompleted` | 경매·청구 규칙 |
 | 경매 중복 방지 | 요청 키·지문, 최초 실행과 5초 결과 재사용 | 최초 `StartAuction` 또는 동일 완료 결과 | DSP 호출·낙찰 규칙 |
 | 경매 조정 | 요청별 `tmax` 절대 기한, DSP 실행·낙찰·`nurl`·`lurl` 연결 | `StartAuction` → `AuctionOutcome` | DSP별 통신 세부·가격 규칙 |
-| DSP 입찰 실행 | DSP별 요청 변환·기한·연결 격리 | `BidRequestBatch` → `BidResponses` | 낙찰과 예산 판단 |
+| DSP 입찰 실행 | DSP별 요청 변환·하위 기한·연결·동시 호출 격리와 응답 상한 | `BidRequestBatch` → `BidResponses` | 낙찰과 예산 판단 |
 | 낙찰 결정 | 입찰 유효성, 1가격, 경매별 분산 동점 처리 | `auctionId` + `AuctionRequest` + `BidResponses` → `AuctionWinners` | 네트워크·시계·저장소 |
 | 렌더링 증표 | 공급자·요청·슬롯·발급 리전 귀속을 가진 AEAD 증표 발급·검증, 2초 기한 | `ProofIssuance` → `RenderProof`, `RenderCompleted` → `VerifiedRender` | 청구 기록·`burl` 전달 |
 | 렌더링 청구 | 유효 증표와 현재 공급자 활성 상태의 청구 판정, 청구와 전달 작업의 원자 생성 | `VerifiedRender` → `RenderAcceptance` | `burl` HTTP 호출·재시도 |
@@ -87,7 +87,7 @@ flowchart LR
 |---|---|---|---|
 | 공급자 시스템 | 프로젝트 공급자 경매 요청 | 낙찰 결과·렌더링 증표 또는 no-bid | 지역 설정 스냅숏의 공급자 ID·키 ID·활성 상태를 검증한다. 같은 요청은 중복 방지가 최초 결과를 재사용한다. |
 | 광고 표시 클라이언트 | 발급 리전 URL의 `RenderCompleted(renderProof)` | `204 No Content` | `204`는 청구·전달 작업 커밋 뒤에만 반환한다. 증표의 공급자 귀속과 현재 활성 상태를 함께 확인한다. 같은 증표는 다시 `204`, 다른 증표로 같은 키를 주장하면 거부한다. 저장 실패는 `5xx`로 재시도를 유도한다. |
-| DSP 회사 | OpenRTB 입찰 요청 | DSP별 입찰 응답 | DSP 응답은 절대 기한 뒤 무시한다. |
+| DSP 회사 | OpenRTB 입찰 요청 | DSP별 `200` 입찰 또는 `204` 무입찰 | 하위 기한 뒤 응답은 무시한다. 잘못된 형식·요청 귀속·크기 초과는 해당 DSP만 제외한다. |
 | DSP 회사 | `nurl`·`lurl`·`burl` HTTP 호출 | 일반 HTTP 성공 | `nurl`·`lurl`은 단발 최선 노력이다. `burl`은 5초 상한 안에서만 재시도하며 HTTP 성공은 전달 성공일 뿐 과금 확정의 증거가 아니다. |
 
 ### 내부 협력 인터페이스
@@ -98,7 +98,7 @@ flowchart LR
 |---|---|---|---|
 | 경매 중복 방지 | `execute` | `AuctionRequest` → 최초 `StartAuction` 또는 동일 완료 결과 | `providerId + providerRequestId`와 요청 지문을 함께 판정한다. |
 | 경매 조정 | `runAuction` | `StartAuction` → `AuctionOutcome` | 절대 마감 시각을 하위 호출에 전달하며 마감 뒤 결과를 만들지 않는다. |
-| DSP 입찰 실행 | `requestBids` | `BidRequestBatch` → `BidResponses` | DSP별 실패는 해당 DSP만 탈락시킨다. |
+| DSP 입찰 실행 | `requestBids` | `BidRequestBatch` → `BidResponses` | DSP마다 별도 HTTP 클라이언트와 동시 호출 허가를 사용한다. 허가가 없으면 대기하지 않고 해당 DSP만 탈락시킨다. |
 | 낙찰 결정 | `selectWinners` | `auctionId` + `AuctionRequest` + `BidResponses` → `AuctionWinners` | 최저가 이상 최고 CPM을 제출가로 낙찰한다. 동가는 경매·슬롯·입찰 식별자의 결정적 해시로 분산하며 응답 순서에 영향받지 않는다. |
 | 렌더링 증표 | `issue` / `verify` | `ProofIssuance` → `RenderProof`, `RenderCompleted` → `Optional<VerifiedRender>` | 공급자·요청·슬롯·낙찰 사실·발급 리전·1ms~2초 기한을 봉인한다. 같은 증표의 재검증은 같은 신원을 내며 금액 중복 판정은 렌더링 청구가 소유한다. |
 | 렌더링 청구 | `acceptRender` | `VerifiedRender` → `RenderAcceptance` | 현재 지역 공급자 스냅숏에서 활성 상태를 확인하고, 청구와 `burl` 전달 작업을 함께 저장한 뒤에만 수락한다. |
