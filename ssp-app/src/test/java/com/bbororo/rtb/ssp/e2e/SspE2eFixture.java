@@ -84,12 +84,14 @@ final class SspE2eFixture {
         List<URI> delivered = new ArrayList<>();
         DspNotificationDelivery notificationDelivery = new StoreBackedDspNotificationDelivery(
                 store,
-                url -> {
+                (url, timeout) -> {
                     if (url.getPath().contains("/burl/")) {
                         delivered.add(url);
                     }
                     return com.bbororo.rtb.ssp.contract.SspMessages.DeliveryOutcome.DELIVERED;
-                }
+                },
+                clock,
+                java.time.Duration.ofMillis(500)
         );
         AuctionRenderApi api = new DefaultAuctionRenderApi(
                 admission,

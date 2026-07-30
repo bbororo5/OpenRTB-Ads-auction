@@ -30,11 +30,12 @@ class HttpDspNoticeClientTest {
         server.start();
         try {
             URI base = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
-            DspNoticeClient client = new HttpDspNoticeClient(HttpClient.newHttpClient(), Duration.ofSeconds(1));
+            DspNoticeClient client = new HttpDspNoticeClient(HttpClient.newHttpClient());
 
-            assertEquals(DeliveryOutcome.DELIVERED, client.send(base.resolve("/accepted")));
-            assertEquals(DeliveryOutcome.RETRY, client.send(base.resolve("/temporary")));
-            assertEquals(DeliveryOutcome.UNDELIVERED, client.send(base.resolve("/invalid")));
+            Duration timeout = Duration.ofSeconds(1);
+            assertEquals(DeliveryOutcome.DELIVERED, client.send(base.resolve("/accepted"), timeout));
+            assertEquals(DeliveryOutcome.RETRY, client.send(base.resolve("/temporary"), timeout));
+            assertEquals(DeliveryOutcome.UNDELIVERED, client.send(base.resolve("/invalid"), timeout));
         } finally {
             server.stop(0);
         }

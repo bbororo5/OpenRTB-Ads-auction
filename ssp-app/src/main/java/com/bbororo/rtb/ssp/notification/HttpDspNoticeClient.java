@@ -12,19 +12,17 @@ import java.util.Objects;
 public final class HttpDspNoticeClient implements DspNoticeClient {
 
     private final HttpClient client;
-    private final Duration timeout;
 
-    public HttpDspNoticeClient(HttpClient client, Duration timeout) {
+    public HttpDspNoticeClient(HttpClient client) {
         this.client = Objects.requireNonNull(client);
-        if (timeout.isZero() || timeout.isNegative()) {
-            throw new IllegalArgumentException("timeout must be positive");
-        }
-        this.timeout = timeout;
     }
 
     @Override
-    public DeliveryOutcome send(URI noticeUrl) {
+    public DeliveryOutcome send(URI noticeUrl, Duration timeout) {
         Objects.requireNonNull(noticeUrl);
+        if (timeout.isZero() || timeout.isNegative()) {
+            throw new IllegalArgumentException("timeout must be positive");
+        }
         HttpRequest request = HttpRequest.newBuilder(noticeUrl)
                 .timeout(timeout)
                 .GET()

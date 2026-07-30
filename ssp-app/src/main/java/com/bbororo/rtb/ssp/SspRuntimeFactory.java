@@ -72,7 +72,8 @@ public final class SspRuntimeFactory {
             notificationDelivery = createNotificationDelivery(
                     store,
                     noticeClient,
-                    settings
+                    settings,
+                    clock
             );
             RenderProofService proofService = createProofService(settings);
             DspBidExecutor bidExecutor = createBidExecutor(
@@ -137,15 +138,15 @@ public final class SspRuntimeFactory {
     private static AsyncAuctionNoticeDelivery createNotificationDelivery(
             PostgreSqlClaimDeliveryStore store,
             HttpClient noticeClient,
-            SspRuntimeSettings settings
+            SspRuntimeSettings settings,
+            Clock clock
     ) {
         return new AsyncAuctionNoticeDelivery(
                 new StoreBackedDspNotificationDelivery(
                         store,
-                        new HttpDspNoticeClient(
-                                noticeClient,
-                                settings.noticeTimeout()
-                        )
+                        new HttpDspNoticeClient(noticeClient),
+                        clock,
+                        settings.noticeTimeout()
                 )
         );
     }
