@@ -4,9 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderAcceptance;
 import com.bbororo.rtb.ssp.contract.SspMessages.VerifiedRender;
+import com.bbororo.rtb.ssp.contract.SspMessages.BillingClaim;
+import com.bbororo.rtb.ssp.contract.SspMessages.DeliveryLease;
+import com.bbororo.rtb.ssp.contract.SspMessages.DeliveryOutcome;
+import com.bbororo.rtb.ssp.contract.SspMessages.LeasedBillingDelivery;
 import com.bbororo.rtb.ssp.trust.ProviderTrustSnapshot;
 import java.net.URI;
 import java.time.Instant;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class StoreBackedRenderClaimServiceTest {
@@ -29,6 +34,16 @@ class StoreBackedRenderClaimServiceTest {
 
         assertEquals(RenderAcceptance.REJECTED, service.acceptRender(verifiedRender()));
         assertEquals(0, store.recordedClaimCount());
+    }
+
+    @Test
+    void exposesAnUnavailableStoreAsRetryLater() {
+        RenderClaimService service = new StoreBackedRenderClaimService(
+                unavailableStore(),
+                trust(true)
+        );
+
+        assertEquals(RenderAcceptance.RETRY_LATER, service.acceptRender(verifiedRender()));
     }
 
     private static VerifiedRender verifiedRender() {
@@ -55,6 +70,29 @@ class StoreBackedRenderClaimServiceTest {
             @Override
             public boolean isActive(String providerId) {
                 return active;
+            }
+        };
+    }
+
+    private static ClaimDeliveryStore unavailableStore() {
+        return new ClaimDeliveryStore() {
+            @Override
+            public RenderAcceptance recordClaimAndScheduleDelivery(BillingClaim claim) {
+                return RenderAcceptance.RETRY_LATER;
+            }
+
+            @Override
+            public Optional<LeasedBillingDelivery> leaseDueDelivery(Instant now) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void completeOrReleaseDelivery(
+                    DeliveryLease lease,
+                    DeliveryOutcome outcome,
+                    Instant now
+            ) {
+                throw new UnsupportedOperationException();
             }
         };
     }

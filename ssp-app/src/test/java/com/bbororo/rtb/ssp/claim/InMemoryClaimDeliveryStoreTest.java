@@ -9,6 +9,12 @@ import com.bbororo.rtb.ssp.contract.SspMessages.RenderAcceptance;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 
 class InMemoryClaimDeliveryStoreTest {
@@ -74,6 +80,33 @@ class InMemoryClaimDeliveryStoreTest {
                 store.recordClaimAndScheduleDelivery(claim("b".repeat(64), NOW.plusSeconds(5)))
         );
         assertEquals(1, store.recordedClaimCount());
+    }
+
+    @Test
+    void acceptsExactlyOneOfManyConcurrentCopiesOfTheSameProof() throws Exception {
+        InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
+        BillingClaim claim = claim("a".repeat(64), NOW.plusSeconds(5));
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<RenderAcceptance>> attempts = new ArrayList<>();
+
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int index = 0; index < 32; index++) {
+                attempts.add(executor.submit(() -> {
+                    start.await();
+                    return store.recordClaimAndScheduleDelivery(claim);
+                }));
+            }
+            start.countDown();
+
+            List<RenderAcceptance> results = new ArrayList<>();
+            for (Future<RenderAcceptance> attempt : attempts) {
+                results.add(attempt.get());
+            }
+            assertEquals(1, results.stream().filter(RenderAcceptance.ACCEPTED::equals).count());
+            assertEquals(31, results.stream().filter(RenderAcceptance.DUPLICATE::equals).count());
+        }
+        assertEquals(1, store.recordedClaimCount());
+        assertEquals(1, store.pendingDeliveryCount());
     }
 
     private static BillingClaim claim(String proofDigest, Instant deadline) {

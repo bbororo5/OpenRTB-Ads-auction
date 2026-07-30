@@ -73,6 +73,47 @@ class ProviderHttpServerTest {
         }
     }
 
+    @Test
+    void mapsRenderClaimResultsWithoutHidingStorageFailure() throws Exception {
+        AtomicReference<RenderAcceptance> result = new AtomicReference<>(RenderAcceptance.DUPLICATE);
+        AuctionRenderApi api = new AuctionRenderApi() {
+            @Override
+            public AuctionResult auction(AuctionRequest request) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public RenderAcceptance completeRender(RenderCompleted render) {
+                return result.get();
+            }
+        };
+        try (ProviderHttpServer server = new ProviderHttpServer(
+                new InetSocketAddress("127.0.0.1", 0),
+                api,
+                new ProviderApiJsonCodec(),
+                Clock.systemUTC()
+        )) {
+            server.start();
+            URI renderUrl = URI.create(
+                    "http://127.0.0.1:" + server.port() + "/publisher/render"
+            );
+            HttpClient client = HttpClient.newHttpClient();
+
+            assertEquals(204, sendRender(client, renderUrl).statusCode());
+            result.set(RenderAcceptance.REJECTED);
+            assertEquals(400, sendRender(client, renderUrl).statusCode());
+            result.set(RenderAcceptance.RETRY_LATER);
+            assertEquals(503, sendRender(client, renderUrl).statusCode());
+        }
+    }
+
+    private static HttpResponse<String> sendRender(HttpClient client, URI url) throws Exception {
+        return client.send(
+                post(url, "{\"renderProof\":\"proof-1\"}"),
+                HttpResponse.BodyHandlers.ofString()
+        );
+    }
+
     private static HttpRequest post(URI uri, String body) {
         return HttpRequest.newBuilder(uri)
                 .header("Content-Type", "application/json")
