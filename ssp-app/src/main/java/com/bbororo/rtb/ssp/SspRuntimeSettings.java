@@ -12,6 +12,9 @@ public record SspRuntimeSettings(
         String regionId,
         URI renderCompletionUrl,
         Map<String, URI> dspEndpoints,
+        Duration dspBidTimeout,
+        int dspMaxInFlight,
+        int dspMaxResponseBytes,
         byte renderProofKeyId,
         Map<Byte, byte[]> renderProofKeys,
         Duration billingWorkerInterval,
@@ -24,6 +27,27 @@ public record SspRuntimeSettings(
         }
         renderCompletionUrl = requireHttpUrl(renderCompletionUrl, "renderCompletionUrl");
         dspEndpoints = Map.copyOf(dspEndpoints);
+        if (dspEndpoints.isEmpty()) {
+            throw new IllegalArgumentException("dspEndpoints must include at least one DSP");
+        }
+        dspEndpoints.forEach((dspId, endpoint) -> {
+            if (dspId == null || dspId.isBlank()) {
+                throw new IllegalArgumentException("DSP id must not be blank");
+            }
+            requireHttpUrl(endpoint, "DSP endpoint");
+        });
+        requirePositive(dspBidTimeout, "dspBidTimeout");
+        if (dspBidTimeout.compareTo(Duration.ofMillis(180)) >= 0) {
+            throw new IllegalArgumentException("dspBidTimeout must be shorter than 180 ms");
+        }
+        if (dspMaxInFlight <= 0) {
+            throw new IllegalArgumentException("dspMaxInFlight must be positive");
+        }
+        if (dspMaxResponseBytes < 1_024 || dspMaxResponseBytes > 1_048_576) {
+            throw new IllegalArgumentException(
+                    "dspMaxResponseBytes must be between 1024 and 1048576"
+            );
+        }
         renderProofKeys = copyKeys(renderProofKeys);
         if (!renderProofKeys.containsKey(renderProofKeyId)) {
             throw new IllegalArgumentException("renderProofKeys must contain the active key id");
@@ -46,6 +70,15 @@ public record SspRuntimeSettings(
                 "RENDER_COMPLETION_URL"
         );
         Map<String, URI> endpoints = parseEndpoints(required("DSP_ENDPOINTS", environment));
+        Duration bidTimeout = Duration.ofMillis(
+                Long.parseLong(environment.getOrDefault("DSP_BID_TIMEOUT_MS", "35"))
+        );
+        int maxInFlight = Integer.parseInt(
+                environment.getOrDefault("DSP_MAX_IN_FLIGHT", "64")
+        );
+        int maxResponseBytes = Integer.parseInt(
+                environment.getOrDefault("DSP_MAX_RESPONSE_BYTES", "65536")
+        );
         byte keyId = Byte.parseByte(environment.getOrDefault("RENDER_PROOF_KEY_ID", "1"));
         Map<Byte, byte[]> keys = parseRenderProofKeys(environment, keyId);
         Duration workerInterval = Duration.ofMillis(
@@ -59,6 +92,9 @@ public record SspRuntimeSettings(
                 regionId,
                 renderCompletionUrl,
                 endpoints,
+                bidTimeout,
+                maxInFlight,
+                maxResponseBytes,
                 keyId,
                 keys,
                 workerInterval,
@@ -140,6 +176,12 @@ public record SspRuntimeSettings(
             throw new IllegalArgumentException(name + " must be an absolute HTTP URL");
         }
         return value;
+    }
+
+    private static void requirePositive(Duration value, String name) {
+        if (value == null || value.isZero() || value.isNegative()) {
+            throw new IllegalArgumentException(name + " must be positive");
+        }
     }
 
     private static Map<Byte, byte[]> copyKeys(Map<Byte, byte[]> source) {

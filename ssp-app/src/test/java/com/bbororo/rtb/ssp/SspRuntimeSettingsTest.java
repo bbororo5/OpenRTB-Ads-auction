@@ -30,6 +30,9 @@ class SspRuntimeSettingsTest {
                 settings.renderCompletionUrl()
         );
         assertEquals(URI.create("http://project.test/bid"), settings.dspEndpoints().get("project"));
+        assertEquals(java.time.Duration.ofMillis(35), settings.dspBidTimeout());
+        assertEquals(64, settings.dspMaxInFlight());
+        assertEquals(65_536, settings.dspMaxResponseBytes());
         assertEquals((byte) 8, settings.renderProofKeyId());
         assertEquals(16, settings.renderProofKeys().get((byte) 7).length);
         assertEquals(32, settings.renderProofKeys().get((byte) 8).length);
@@ -58,5 +61,22 @@ class SspRuntimeSettingsTest {
                 "RENDER_PROOF_KEY_ID", "8",
                 "RENDER_PROOF_KEYS", "7=" + key
         )));
+    }
+
+    @Test
+    void rejectsAnUnsafeDspBidBoundary() {
+        String key = Base64.getEncoder().encodeToString(new byte[32]);
+        Map<String, String> environment = Map.of(
+                "SSP_REGION_ID", "region-a",
+                "RENDER_COMPLETION_URL", "https://region-a.ssp.test/publisher/render",
+                "DSP_ENDPOINTS", "project=http://project.test/bid",
+                "DSP_BID_TIMEOUT_MS", "180",
+                "RENDER_PROOF_KEY_BASE64", key
+        );
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> SspRuntimeSettings.fromEnvironment(environment)
+        );
     }
 }

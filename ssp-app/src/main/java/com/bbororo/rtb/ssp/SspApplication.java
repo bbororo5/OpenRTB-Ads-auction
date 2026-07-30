@@ -10,6 +10,7 @@ import com.bbororo.rtb.ssp.auction.DeadlineBoundAuctionCoordinator;
 import com.bbororo.rtb.ssp.claim.PostgreSqlClaimDeliveryStore;
 import com.bbororo.rtb.ssp.claim.StoreBackedRenderClaimService;
 import com.bbororo.rtb.ssp.deduplication.InMemoryAuctionDeduplicator;
+import com.bbororo.rtb.ssp.dspbid.DspBidChannel;
 import com.bbororo.rtb.ssp.dspbid.HttpOpenRtbDspBidExecutor;
 import com.bbororo.rtb.ssp.notification.AsyncAuctionNoticeDelivery;
 import com.bbororo.rtb.ssp.notification.BillingDeliveryWorker;
@@ -48,12 +49,12 @@ public final class SspApplication {
         ExecutorService auctionExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
         var store = new PostgreSqlClaimDeliveryStore(dataSource, Duration.ofSeconds(1));
-        HttpClient httpClient = HttpClient.newBuilder()
+        HttpClient noticeHttpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(500))
                 .build();
         var noticeDelegate = new StoreBackedDspNotificationDelivery(
                 store,
-                new HttpDspNoticeClient(httpClient, settings.noticeTimeout())
+                new HttpDspNoticeClient(noticeHttpClient, settings.noticeTimeout())
         );
         var notificationDelivery = new AsyncAuctionNoticeDelivery(noticeDelegate);
         var proofService = new AeadRenderProofService(
@@ -65,10 +66,22 @@ public final class SspApplication {
                                 entry -> new SecretKeySpec(entry.getValue(), "AES")
                         ))
         );
+        Map<String, DspBidChannel> bidChannels = settings.dspEndpoints().entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey,
+                        entry -> new DspBidChannel(
+                                entry.getValue(),
+                                HttpClient.newBuilder()
+                                        .connectTimeout(settings.dspBidTimeout())
+                                        .build(),
+                                settings.dspMaxInFlight()
+                        )
+                ));
         var bidExecutor = new HttpOpenRtbDspBidExecutor(
-                httpClient,
                 new OpenRtb26Codec(),
-                settings.dspEndpoints()
+                bidChannels,
+                settings.dspBidTimeout(),
+                settings.dspMaxResponseBytes()
         );
         var coordinator = new DeadlineBoundAuctionCoordinator(
                 bidExecutor,
