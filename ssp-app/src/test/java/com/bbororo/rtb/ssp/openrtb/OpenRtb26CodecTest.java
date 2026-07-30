@@ -53,7 +53,7 @@ class OpenRtb26CodecTest {
                 }
                 """;
 
-        var result = codec.decodeBidResponse("dsp-1", "auction-1", json.getBytes(StandardCharsets.UTF_8));
+        var result = codec.decodeBidResponse("dsp-1", batch(), json.getBytes(StandardCharsets.UTF_8));
 
         assertEquals(DspCallOutcomeKind.VALID_BID, result.kind());
         assertEquals(2_000_125L, result.bids().getFirst().cpmMilliKrw());
@@ -66,7 +66,7 @@ class OpenRtb26CodecTest {
 
         assertEquals(
                 DspCallOutcomeKind.INVALID_BID,
-                codec.decodeBidResponse("dsp-1", "auction-1", body).kind()
+                codec.decodeBidResponse("dsp-1", batch(), body).kind()
         );
     }
 
@@ -83,7 +83,50 @@ class OpenRtb26CodecTest {
 
         assertEquals(
                 DspCallOutcomeKind.INVALID_BID,
-                codec.decodeBidResponse("dsp-1", "auction-1", json.getBytes(StandardCharsets.UTF_8)).kind()
+                codec.decodeBidResponse("dsp-1", batch(), json.getBytes(StandardCharsets.UTF_8)).kind()
         );
+    }
+
+    @Test
+    void rejectsABidForAnImpressionOutsideTheRequest() {
+        String json = validBidJson("\"impid\":\"unknown\",\"exp\":2");
+
+        assertEquals(
+                DspCallOutcomeKind.INVALID_BID,
+                codec.decodeBidResponse("dsp-1", batch(), json.getBytes(StandardCharsets.UTF_8)).kind()
+        );
+    }
+
+    @Test
+    void rejectsABidWithoutTheContractedRenderExpiry() {
+        String json = validBidJson("\"impid\":\"imp-1\",\"exp\":3");
+
+        assertEquals(
+                DspCallOutcomeKind.INVALID_BID,
+                codec.decodeBidResponse("dsp-1", batch(), json.getBytes(StandardCharsets.UTF_8)).kind()
+        );
+    }
+
+    private static BidRequestBatch batch() {
+        return new BidRequestBatch(
+                "auction-1",
+                new AuctionRequest(
+                        "provider-1", "key-1", "request-1", 50,
+                        List.of(new AuctionSlot("imp-1", 1_000))
+                ),
+                List.of("dsp-1"),
+                AuctionDeadline.start(50, System::nanoTime)
+        );
+    }
+
+    private static String validBidJson(String impressionAndExpiry) {
+        return """
+                {"id":"auction-1","seatbid":[{"bid":[{
+                  "id":"bid-1",%s,"price":2000.000,
+                  "nurl":"https://dsp.test/nurl/1",
+                  "lurl":"https://dsp.test/lurl/1",
+                  "burl":"https://dsp.test/burl/1"
+                }]}]}
+                """.formatted(impressionAndExpiry);
     }
 }

@@ -67,7 +67,7 @@ public final class HttpOpenRtbDspBidExecutor implements DspBidExecutor {
                     continue;
                 }
                 HttpResponse<byte[]> response = call.get(remaining.toNanos(), TimeUnit.NANOSECONDS);
-                outcomes.add(toOutcome(dspId, batch.auctionId(), response));
+                outcomes.add(toOutcome(dspId, batch, response));
             } catch (java.util.concurrent.TimeoutException exception) {
                 call.cancel(true);
                 outcomes.add(outcome(dspId, DspCallOutcomeKind.TIMEOUT));
@@ -82,14 +82,14 @@ public final class HttpOpenRtbDspBidExecutor implements DspBidExecutor {
         return new BidResponses(outcomes);
     }
 
-    private DspCallOutcome toOutcome(String dspId, String auctionId, HttpResponse<byte[]> response) {
+    private DspCallOutcome toOutcome(String dspId, BidRequestBatch batch, HttpResponse<byte[]> response) {
         if (response.statusCode() == 204) {
             return outcome(dspId, DspCallOutcomeKind.NO_BID);
         }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             return outcome(dspId, DspCallOutcomeKind.ERROR);
         }
-        return codec.decodeBidResponse(dspId, auctionId, response.body());
+        return codec.decodeBidResponse(dspId, batch, response.body());
     }
 
     private static DspCallOutcome outcome(String dspId, DspCallOutcomeKind kind) {

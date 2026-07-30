@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /** SSP가 소유하는 OpenRTB 2.6 하위 규격 JSON 변환기다. */
 public final class OpenRtb26Codec {
@@ -51,19 +52,22 @@ public final class OpenRtb26Codec {
         }
     }
 
-    public DspCallOutcome decodeBidResponse(String dspId, String expectedAuctionId, byte[] body) {
+    public DspCallOutcome decodeBidResponse(String dspId, BidRequestBatch batch, byte[] body) {
         Objects.requireNonNull(dspId);
-        Objects.requireNonNull(expectedAuctionId);
+        Objects.requireNonNull(batch);
         Objects.requireNonNull(body);
         try {
             BidResponseJson response = mapper.readValue(body, BidResponseJson.class);
-            if (!expectedAuctionId.equals(response.id())) {
+            if (!batch.auctionId().equals(response.id())) {
                 return invalid(dspId);
             }
+            Set<String> requestedImpressions = batch.auction().slots().stream()
+                    .map(slot -> slot.impId())
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
             List<DspBid> bids = response.seatbid() == null ? List.of() : response.seatbid().stream()
-                    .filter(Objects::nonNull)
+                    .map(OpenRtb26Codec::requireSeat)
                     .flatMap(seat -> seat.bid() == null ? java.util.stream.Stream.empty() : seat.bid().stream())
-                    .map(bid -> toDspBid(dspId, bid))
+                    .map(bid -> toDspBid(dspId, bid, requestedImpressions))
                     .toList();
             return bids.isEmpty()
                     ? new DspCallOutcome(dspId, DspCallOutcomeKind.NO_BID, List.of())
@@ -73,10 +77,19 @@ public final class OpenRtb26Codec {
         }
     }
 
-    private static DspBid toDspBid(String dspId, BidJson bid) {
+    private static SeatBidJson requireSeat(SeatBidJson seat) {
+        if (seat == null) {
+            throw new IllegalArgumentException("OpenRTB seatbid must not contain null");
+        }
+        return seat;
+    }
+
+    private static DspBid toDspBid(String dspId, BidJson bid, Set<String> requestedImpressions) {
         if (bid == null || bid.id() == null || bid.impid() == null
+                || !requestedImpressions.contains(bid.impid())
                 || bid.price() == null || bid.price().signum() <= 0
-                || bid.nurl() == null || bid.lurl() == null || bid.burl() == null) {
+                || bid.nurl() == null || bid.lurl() == null || bid.burl() == null
+                || bid.expirySeconds() == null || bid.expirySeconds() != RENDER_EXPIRY_SECONDS) {
             throw new IllegalArgumentException("Invalid OpenRTB bid");
         }
         return new DspBid(
