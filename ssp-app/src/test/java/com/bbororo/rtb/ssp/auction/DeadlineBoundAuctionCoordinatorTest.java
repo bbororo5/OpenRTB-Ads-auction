@@ -136,6 +136,18 @@ class DeadlineBoundAuctionCoordinatorTest {
         );
     }
 
+    @Test
+    void rejectsDuplicateConfiguredDspParticipantsAtAssembly() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DeadlineBoundAuctionCoordinator(
+                        ignored -> responses(),
+                        new FirstPriceWinnerSelector(),
+                        List.of("project-dsp", "project-dsp")
+                )
+        );
+    }
+
     private static AuctionCoordinator coordinator(DspBidExecutor executor) {
         return new DeadlineBoundAuctionCoordinator(
                 executor,
