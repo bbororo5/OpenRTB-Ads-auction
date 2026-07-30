@@ -14,28 +14,39 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** 리전 SSP 인스턴스 안에서만 사용하는 5초 single-flight 중복 방어 구현이다. */
 public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
 
     private static final Duration DEFAULT_RETENTION = Duration.ofSeconds(5);
-    private static final Duration DEFAULT_CLEANUP_INTERVAL = Duration.ofSeconds(1);
+    private static final int DEFAULT_MAXIMUM_ENTRIES = 10_000;
 
     private final Map<AuctionRequestKey, Flight> flights = new ConcurrentHashMap<>();
+    private final PriorityBlockingQueue<Expiration> expirations = new PriorityBlockingQueue<>();
+    private final Semaphore capacity;
     private final Clock clock;
     private final Duration retention;
-    private final Duration cleanupInterval;
-    private final AtomicReference<Instant> lastCleanupAt = new AtomicReference<>();
+    private final int maximumEntries;
 
     public InMemoryAuctionDeduplicator() {
-        this(Clock.systemUTC(), DEFAULT_RETENTION, DEFAULT_CLEANUP_INTERVAL);
+        this(Clock.systemUTC(), DEFAULT_RETENTION, DEFAULT_MAXIMUM_ENTRIES);
     }
 
-    InMemoryAuctionDeduplicator(Clock clock, Duration retention, Duration cleanupInterval) {
+    public InMemoryAuctionDeduplicator(int maximumEntries) {
+        this(Clock.systemUTC(), DEFAULT_RETENTION, maximumEntries);
+    }
+
+    InMemoryAuctionDeduplicator(Clock clock, Duration retention, int maximumEntries) {
         this.clock = Objects.requireNonNull(clock);
         this.retention = requirePositive(retention, "retention");
-        this.cleanupInterval = requirePositive(cleanupInterval, "cleanupInterval");
+        if (maximumEntries <= 0) {
+            throw new IllegalArgumentException("maximumEntries must be positive");
+        }
+        this.maximumEntries = maximumEntries;
+        this.capacity = new Semaphore(maximumEntries);
     }
 
     @Override
@@ -45,7 +56,7 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
         Objects.requireNonNull(starter);
 
         Instant now = clock.instant();
-        cleanupIfDue(now);
+        removeExpired(now);
 
         AuctionRequestKey key = new AuctionRequestKey(request.providerId(), request.providerRequestId());
         AuctionRequestFingerprint fingerprint = request.fingerprint();
@@ -53,10 +64,10 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
         AtomicReference<FlightResolution> resolution = new AtomicReference<>();
         flights.compute(key, (ignored, existing) -> {
             FlightResolution next = existing == null
-                    ? new StartFlight(new Flight(fingerprint))
+                    ? createFlight(key, fingerprint)
                     : existing.resolve(fingerprint, now);
             if (next == ExpiredFlight.INSTANCE) {
-                next = new StartFlight(new Flight(fingerprint));
+                next = new StartFlight(new Flight(key, fingerprint));
             }
             resolution.set(next);
 
@@ -64,6 +75,7 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
                 case StartFlight start -> start.flight();
                 case ReuseFlight reuse -> reuse.flight();
                 case ChangedFlight ignoredChanged -> existing;
+                case CapacityExceeded ignoredCapacity -> null;
                 case ExpiredFlight ignoredExpired -> throw new IllegalStateException("Expired flight must be replaced");
             };
         });
@@ -75,8 +87,20 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
             }
             case ReuseFlight reuse -> reuse.flight().result();
             case ChangedFlight ignored -> CompletableFuture.failedFuture(new ChangedAuctionRequestException(key));
+            case CapacityExceeded ignored -> CompletableFuture.failedFuture(
+                    new AuctionDeduplicationCapacityException(maximumEntries)
+            );
             case ExpiredFlight ignored -> throw new IllegalStateException("Expired flight must be replaced");
         };
+    }
+
+    private FlightResolution createFlight(
+            AuctionRequestKey key,
+            AuctionRequestFingerprint fingerprint
+    ) {
+        return capacity.tryAcquire()
+                ? new StartFlight(new Flight(key, fingerprint))
+                : CapacityExceeded.INSTANCE;
     }
 
     private void start(Flight flight, AuctionRequest request, AuctionDeadline deadline, AuctionStarter starter) {
@@ -91,13 +115,16 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
         }
     }
 
-    private void cleanupIfDue(Instant now) {
-        Instant previous = lastCleanupAt.get();
-        if (previous != null && now.isBefore(previous.plus(cleanupInterval))) {
-            return;
-        }
-        if (lastCleanupAt.compareAndSet(previous, now)) {
-            flights.entrySet().removeIf(entry -> entry.getValue().isExpiredAt(now));
+    private void removeExpired(Instant now) {
+        while (true) {
+            Expiration next = expirations.peek();
+            if (next == null || next.expiresAfter(now)) {
+                return;
+            }
+            Expiration expired = expirations.poll();
+            if (expired != null && flights.remove(expired.key(), expired.flight())) {
+                capacity.release();
+            }
         }
     }
 
@@ -111,16 +138,18 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
 
     private final class Flight {
 
+        private final AuctionRequestKey key;
         private final AuctionRequestFingerprint fingerprint;
         private final CompletableFuture<AuctionOutcome> result = new CompletableFuture<>();
         private final AtomicReference<Instant> retainUntil = new AtomicReference<>();
 
-        private Flight(AuctionRequestFingerprint fingerprint) {
+        private Flight(AuctionRequestKey key, AuctionRequestFingerprint fingerprint) {
+            this.key = key;
             this.fingerprint = fingerprint;
         }
 
         private CompletionStage<AuctionOutcome> result() {
-            return result;
+            return result.copy();
         }
 
         private FlightResolution resolve(AuctionRequestFingerprint candidate, Instant now) {
@@ -134,16 +163,21 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
         }
 
         private void complete(AuctionOutcome auctionOutcome, Throwable failure) {
+            boolean completed;
             if (failure == null) {
-                if (auctionOutcome == null) {
-                    result.completeExceptionally(new NullPointerException("Auction outcome must not be null"));
-                } else {
-                    result.complete(auctionOutcome);
-                }
+                completed = auctionOutcome == null
+                        ? result.completeExceptionally(
+                                new NullPointerException("Auction outcome must not be null")
+                        )
+                        : result.complete(auctionOutcome);
             } else {
-                result.completeExceptionally(failure);
+                completed = result.completeExceptionally(failure);
             }
-            retainUntil.compareAndSet(null, clock.instant().plus(retention));
+            if (completed) {
+                Instant expiration = clock.instant().plus(retention);
+                retainUntil.set(expiration);
+                expirations.add(new Expiration(expiration, key, this));
+            }
         }
 
         private boolean isExpiredAt(Instant now) {
@@ -152,7 +186,32 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
         }
     }
 
-    private sealed interface FlightResolution permits StartFlight, ReuseFlight, ExpiredFlight, ChangedFlight {
+    int entryCount() {
+        return flights.size();
+    }
+
+    private record Expiration(
+            Instant expiresAt,
+            AuctionRequestKey key,
+            Flight flight
+    ) implements Comparable<Expiration> {
+
+        private boolean expiresAfter(Instant now) {
+            return expiresAt.isAfter(now);
+        }
+
+        @Override
+        public int compareTo(Expiration other) {
+            return expiresAt.compareTo(other.expiresAt);
+        }
+    }
+
+    private sealed interface FlightResolution permits
+            StartFlight,
+            ReuseFlight,
+            ExpiredFlight,
+            ChangedFlight,
+            CapacityExceeded {
     }
 
     private record StartFlight(Flight flight) implements FlightResolution {
@@ -166,6 +225,10 @@ public final class InMemoryAuctionDeduplicator implements AuctionDeduplicator {
     }
 
     private enum ChangedFlight implements FlightResolution {
+        INSTANCE
+    }
+
+    private enum CapacityExceeded implements FlightResolution {
         INSTANCE
     }
 }
