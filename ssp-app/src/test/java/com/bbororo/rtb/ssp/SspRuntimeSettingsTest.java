@@ -29,6 +29,9 @@ class SspRuntimeSettingsTest {
                 URI.create("https://region-a.ssp.test/publisher/render"),
                 settings.renderCompletionUrl()
         );
+        assertEquals(128, settings.providerMaxInFlight());
+        assertEquals(65_536, settings.providerMaxAuctionRequestBytes());
+        assertEquals(8_192, settings.providerMaxRenderRequestBytes());
         assertEquals(URI.create("http://project.test/bid"), settings.dspEndpoints().get("project"));
         assertEquals(java.time.Duration.ofMillis(35), settings.dspBidTimeout());
         assertEquals(64, settings.dspMaxInFlight());
@@ -104,6 +107,19 @@ class SspRuntimeSettingsTest {
                 "RENDER_COMPLETION_URL", "https://region-a.ssp.test/publisher/render",
                 "DSP_ENDPOINTS", "project=http://project.test/bid",
                 "AUCTION_DEDUP_MAX_ENTRIES", "1000001",
+                "RENDER_PROOF_KEY_BASE64", key
+        )));
+    }
+
+    @Test
+    void rejectsAnUnboundedProviderRequestConcurrency() {
+        String key = Base64.getEncoder().encodeToString(new byte[32]);
+
+        assertThrows(IllegalArgumentException.class, () -> SspRuntimeSettings.fromEnvironment(Map.of(
+                "SSP_REGION_ID", "region-a",
+                "RENDER_COMPLETION_URL", "https://region-a.ssp.test/publisher/render",
+                "DSP_ENDPOINTS", "project=http://project.test/bid",
+                "PROVIDER_MAX_IN_FLIGHT", "100001",
                 "RENDER_PROOF_KEY_BASE64", key
         )));
     }
