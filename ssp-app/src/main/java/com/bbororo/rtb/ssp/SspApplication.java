@@ -1,130 +1,18 @@
 package com.bbororo.rtb.ssp;
 
-import com.bbororo.rtb.ssp.admission.AuctionAdmissionService;
-import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer;
-import com.bbororo.rtb.ssp.api.DefaultAuctionRenderApi;
-import com.bbororo.rtb.ssp.api.ProviderApiJsonCodec;
-import com.bbororo.rtb.ssp.api.ProviderHttpServer;
-import com.bbororo.rtb.ssp.auction.CoordinatingAuctionStarter;
-import com.bbororo.rtb.ssp.auction.DeadlineBoundAuctionCoordinator;
-import com.bbororo.rtb.ssp.claim.PostgreSqlClaimDeliveryStore;
-import com.bbororo.rtb.ssp.claim.StoreBackedRenderClaimService;
-import com.bbororo.rtb.ssp.deduplication.InMemoryAuctionDeduplicator;
-import com.bbororo.rtb.ssp.dspbid.DspBidChannel;
-import com.bbororo.rtb.ssp.dspbid.HttpOpenRtbDspBidExecutor;
-import com.bbororo.rtb.ssp.notification.AsyncAuctionNoticeDelivery;
-import com.bbororo.rtb.ssp.notification.BillingDeliveryWorker;
-import com.bbororo.rtb.ssp.notification.HttpDspNoticeClient;
-import com.bbororo.rtb.ssp.notification.StoreBackedDspNotificationDelivery;
-import com.bbororo.rtb.ssp.openrtb.OpenRtb26Codec;
-import com.bbororo.rtb.ssp.renderproof.AeadRenderProofService;
-import com.bbororo.rtb.ssp.renderproof.AuctionResultAssembler;
-import com.bbororo.rtb.ssp.trust.ProviderTrustControlPlane;
-import com.bbororo.rtb.ssp.trust.RegionalDataSourceFactory;
-import com.bbororo.rtb.ssp.winner.FirstPriceWinnerSelector;
-import com.zaxxer.hikari.HikariDataSource;
-import java.net.InetSocketAddress;
-import java.net.http.HttpClient;
-import java.time.Clock;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import javax.crypto.spec.SecretKeySpec;
-
-/** 실제 SSP 어댑터와 0~4단계 컴포넌트를 조립하는 프로세스 진입점이다. */
+/** SSP 런타임을 만들고 프로세스 종료까지 유지하는 실행 진입점이다. */
 public final class SspApplication {
 
     private SspApplication() {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        SspRuntimeSettings settings = SspRuntimeSettings.fromEnvironment(System.getenv());
-        Clock clock = Clock.systemUTC();
-        HikariDataSource dataSource = RegionalDataSourceFactory.createFromEnvironment();
-        ProviderTrustControlPlane trustControl = ProviderTrustControlPlane.start(dataSource);
-        ExecutorService auctionExecutor = Executors.newVirtualThreadPerTaskExecutor();
-
-        var store = new PostgreSqlClaimDeliveryStore(dataSource, Duration.ofSeconds(1));
-        store.verifyReady();
-        HttpClient noticeHttpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(500))
-                .build();
-        var noticeDelegate = new StoreBackedDspNotificationDelivery(
-                store,
-                new HttpDspNoticeClient(noticeHttpClient, settings.noticeTimeout())
-        );
-        var notificationDelivery = new AsyncAuctionNoticeDelivery(noticeDelegate);
-        var proofService = new AeadRenderProofService(
-                settings.regionId(),
-                settings.renderProofKeyId(),
-                settings.renderProofKeys().entrySet().stream()
-                        .collect(Collectors.toUnmodifiableMap(
-                                Map.Entry::getKey,
-                                entry -> new SecretKeySpec(entry.getValue(), "AES")
-                        ))
-        );
-        Map<String, DspBidChannel> bidChannels = settings.dspEndpoints().entrySet().stream()
-                .collect(Collectors.toUnmodifiableMap(
-                        Map.Entry::getKey,
-                        entry -> new DspBidChannel(
-                                entry.getValue(),
-                                HttpClient.newBuilder()
-                                        .connectTimeout(settings.dspBidTimeout())
-                                        .build(),
-                                settings.dspMaxInFlight()
-                        )
-                ));
-        var bidExecutor = new HttpOpenRtbDspBidExecutor(
-                new OpenRtb26Codec(),
-                bidChannels,
-                settings.dspBidTimeout(),
-                settings.dspMaxResponseBytes()
-        );
-        var coordinator = new DeadlineBoundAuctionCoordinator(
-                bidExecutor,
-                new FirstPriceWinnerSelector(),
-                new ArrayList<>(settings.dspEndpoints().keySet())
-        );
-        var admission = new AuctionAdmissionService(
-                new ProviderRequestAuthorizer(trustControl.trustSnapshot()),
-                new InMemoryAuctionDeduplicator(),
-                new CoordinatingAuctionStarter(coordinator, auctionExecutor)
-        );
-        var api = new DefaultAuctionRenderApi(
-                admission,
-                new AuctionResultAssembler(proofService, clock, settings.renderCompletionUrl()),
-                proofService,
-                new StoreBackedRenderClaimService(store, trustControl.trustSnapshot()),
-                notificationDelivery,
-                System::nanoTime
-        );
-        var worker = new BillingDeliveryWorker(
-                notificationDelivery,
-                clock,
-                settings.billingWorkerInterval()
-        );
-        var server = new ProviderHttpServer(
-                new InetSocketAddress("0.0.0.0", settings.serverPort()),
-                api,
-                new ProviderApiJsonCodec(),
-                clock
-        );
-        CountDownLatch shutdown = new CountDownLatch(1);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            server.close();
-            worker.close();
-            notificationDelivery.close();
-            auctionExecutor.close();
-            trustControl.close();
-            shutdown.countDown();
-        }, "ssp-shutdown"));
-
-        worker.start();
-        server.start();
-        shutdown.await();
+        try (SspRuntime runtime = SspRuntimeFactory.createFromEnvironment()) {
+            Runtime.getRuntime().addShutdownHook(
+                    new Thread(runtime::close, "ssp-shutdown")
+            );
+            runtime.start();
+            runtime.awaitShutdown();
+        }
     }
 }
