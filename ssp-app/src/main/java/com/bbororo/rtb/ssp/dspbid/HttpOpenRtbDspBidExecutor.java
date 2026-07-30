@@ -103,7 +103,7 @@ public final class HttpOpenRtbDspBidExecutor implements DspBidExecutor {
         CompletableFuture<?>[] results = calls.values().stream()
                 .map(PendingCall::result)
                 .toArray(CompletableFuture[]::new);
-        Duration remaining = batch.deadline().remaining();
+        Duration remaining = remainingBeforeAssembly(batch);
         if (remaining.isZero()) {
             calls.values().forEach(PendingCall::cancel);
             return;
@@ -134,12 +134,15 @@ public final class HttpOpenRtbDspBidExecutor implements DspBidExecutor {
     }
 
     private Duration callBudget(BidRequestBatch batch) {
+        Duration remaining = remainingBeforeAssembly(batch);
+        return remaining.compareTo(bidTimeout) < 0 ? remaining : bidTimeout;
+    }
+
+    private static Duration remainingBeforeAssembly(BidRequestBatch batch) {
         Duration remaining = batch.deadline().remaining();
-        if (remaining.compareTo(RESULT_ASSEMBLY_BUDGET) <= 0) {
-            return Duration.ZERO;
-        }
-        Duration beforeAssembly = remaining.minus(RESULT_ASSEMBLY_BUDGET);
-        return beforeAssembly.compareTo(bidTimeout) < 0 ? beforeAssembly : bidTimeout;
+        return remaining.compareTo(RESULT_ASSEMBLY_BUDGET) <= 0
+                ? Duration.ZERO
+                : remaining.minus(RESULT_ASSEMBLY_BUDGET);
     }
 
     private DspCallOutcome toOutcome(
