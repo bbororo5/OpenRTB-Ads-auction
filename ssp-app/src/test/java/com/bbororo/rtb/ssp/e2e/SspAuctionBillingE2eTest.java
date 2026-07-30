@@ -25,14 +25,18 @@ class SspAuctionBillingE2eTest {
         SspE2eFixture fixture = SspE2eFixture.start();
         AuctionRenderApi ssp = fixture.api();
 
-        AuctionResult result = ssp.auction(new AuctionRequest(
+        AuctionRequest request = new AuctionRequest(
                 "provider-a",
                 "key-2026-01",
                 "request-1",
                 50,
                 List.of(new AuctionSlot("imp-1", 0))
-        ));
+        );
+        AuctionResult result = ssp.auction(request);
+        AuctionResult duplicate = ssp.auction(request);
 
+        assertEquals(result, duplicate);
+        assertEquals(1, fixture.deliveredAuctionNoticeCount());
         assertEquals(1, result.slots().size());
         assertEquals("project-dsp", result.slots().getFirst().winningBid().dspId());
         assertEquals(2_000L, result.slots().getFirst().winningBid().cpmMilliKrw());

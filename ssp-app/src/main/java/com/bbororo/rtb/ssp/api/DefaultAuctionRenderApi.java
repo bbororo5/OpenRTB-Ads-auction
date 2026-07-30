@@ -9,8 +9,6 @@ import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderAcceptance;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderCompleted;
-import com.bbororo.rtb.ssp.notification.DspNotificationDelivery;
-import com.bbororo.rtb.ssp.renderproof.AuctionResultAssembler;
 import com.bbororo.rtb.ssp.renderproof.RenderProofService;
 import java.util.Objects;
 import java.util.function.LongSupplier;
@@ -19,25 +17,19 @@ import java.util.function.LongSupplier;
 public final class DefaultAuctionRenderApi implements AuctionRenderApi {
 
     private final AuctionAdmissionService admissionService;
-    private final AuctionResultAssembler resultAssembler;
     private final RenderProofService renderProofService;
     private final RenderClaimService renderClaimService;
-    private final DspNotificationDelivery notificationDelivery;
     private final LongSupplier nanoTime;
 
     public DefaultAuctionRenderApi(
             AuctionAdmissionService admissionService,
-            AuctionResultAssembler resultAssembler,
             RenderProofService renderProofService,
             RenderClaimService renderClaimService,
-            DspNotificationDelivery notificationDelivery,
             LongSupplier nanoTime
     ) {
         this.admissionService = Objects.requireNonNull(admissionService);
-        this.resultAssembler = Objects.requireNonNull(resultAssembler);
         this.renderProofService = Objects.requireNonNull(renderProofService);
         this.renderClaimService = Objects.requireNonNull(renderClaimService);
-        this.notificationDelivery = Objects.requireNonNull(notificationDelivery);
         this.nanoTime = Objects.requireNonNull(nanoTime);
     }
 
@@ -46,11 +38,7 @@ public final class DefaultAuctionRenderApi implements AuctionRenderApi {
         Objects.requireNonNull(request);
         AuctionDeadline deadline = AuctionDeadline.start(request.tmaxMillis(), nanoTime);
         return switch (admissionService.admit(request, deadline)) {
-            case AcceptedAuction accepted -> {
-                var outcome = accepted.result().toCompletableFuture().join();
-                notificationDelivery.sendAuctionNotices(outcome.notices());
-                yield resultAssembler.assemble(request, outcome);
-            }
+            case AcceptedAuction accepted -> accepted.result().toCompletableFuture().join();
             case RejectedAuction rejected -> throw new AuctionRejectedException(rejected.reason().name());
         };
     }

@@ -14,12 +14,17 @@ import com.bbororo.rtb.ssp.contract.SspMessages.DspBid;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcomeKind;
 import com.bbororo.rtb.ssp.deduplication.InMemoryAuctionDeduplicator;
+import com.bbororo.rtb.ssp.notification.DspNotificationDelivery;
+import com.bbororo.rtb.ssp.renderproof.AeadRenderProofService;
+import com.bbororo.rtb.ssp.renderproof.AuctionResultAssembler;
 import com.bbororo.rtb.ssp.trust.ImmutableProviderTrustSnapshot;
 import com.bbororo.rtb.ssp.winner.FirstPriceWinnerSelector;
 import java.net.URI;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 
 class AuctionAdmissionToCoordinatorTest {
@@ -40,7 +45,17 @@ class AuctionAdmissionToCoordinatorTest {
                                 new FirstPriceWinnerSelector(),
                                 List.of("project-dsp", "external-dsp-1", "external-dsp-2")
                         ),
-                        Runnable::run
+                        Runnable::run,
+                        new AuctionResultAssembler(
+                                new AeadRenderProofService(
+                                        "region-a",
+                                        (byte) 1,
+                                        Map.of((byte) 1, new SecretKeySpec(new byte[32], "AES"))
+                                ),
+                                Clock.systemUTC(),
+                                URI.create("https://ssp.test/render")
+                        ),
+                        noOpNotificationDelivery()
                 )
         );
         AuctionRequest request = new AuctionRequest(
@@ -52,7 +67,25 @@ class AuctionAdmissionToCoordinatorTest {
                 admission.admit(request, AuctionDeadline.start(request.tmaxMillis(), System::nanoTime))
         );
 
-        assertEquals("project-dsp", accepted.result().toCompletableFuture().join().winners().winners().getFirst().dspId());
+        assertEquals(
+                "project-dsp",
+                accepted.result().toCompletableFuture().join()
+                        .slots().getFirst().winningBid().dspId()
+        );
+    }
+
+    private static DspNotificationDelivery noOpNotificationDelivery() {
+        return new DspNotificationDelivery() {
+            @Override
+            public void sendAuctionNotices(
+                    List<com.bbororo.rtb.ssp.contract.SspMessages.AuctionNotice> notices
+            ) {
+            }
+
+            @Override
+            public void deliverDueBilling(java.time.Instant now) {
+            }
+        };
     }
 
     private static DspBid bid() {

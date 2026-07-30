@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
@@ -40,17 +41,20 @@ final class SspE2eFixture {
     private final InMemoryClaimDeliveryStore store;
     private final DspNotificationDelivery notificationDelivery;
     private final List<URI> deliveredBillingUrls;
+    private final AtomicInteger deliveredAuctionNoticeCount;
 
     private SspE2eFixture(
             AuctionRenderApi api,
             InMemoryClaimDeliveryStore store,
             DspNotificationDelivery notificationDelivery,
-            List<URI> deliveredBillingUrls
+            List<URI> deliveredBillingUrls,
+            AtomicInteger deliveredAuctionNoticeCount
     ) {
         this.api = api;
         this.store = store;
         this.notificationDelivery = notificationDelivery;
         this.deliveredBillingUrls = deliveredBillingUrls;
+        this.deliveredAuctionNoticeCount = deliveredAuctionNoticeCount;
     }
 
     static SspE2eFixture start() {
@@ -75,37 +79,50 @@ final class SspE2eFixture {
                 new FirstPriceWinnerSelector(),
                 List.of("project-dsp", "external-dsp-1", "external-dsp-2")
         );
-        var admission = new AuctionAdmissionService(
-                new ProviderRequestAuthorizer(trust),
-                new InMemoryAuctionDeduplicator(),
-                new CoordinatingAuctionStarter(coordinator, Runnable::run)
-        );
         Clock clock = Clock.fixed(STARTED_AT, ZoneOffset.UTC);
         List<URI> delivered = new ArrayList<>();
+        AtomicInteger auctionNotices = new AtomicInteger();
         DspNotificationDelivery notificationDelivery = new StoreBackedDspNotificationDelivery(
                 store,
                 (url, timeout) -> {
                     if (url.getPath().contains("/burl/")) {
                         delivered.add(url);
+                    } else {
+                        auctionNotices.incrementAndGet();
                     }
                     return com.bbororo.rtb.ssp.contract.SspMessages.DeliveryOutcome.DELIVERED;
                 },
                 clock,
                 java.time.Duration.ofMillis(500)
         );
+        var resultAssembler = new AuctionResultAssembler(
+                proofService,
+                clock,
+                URI.create("https://region-a.ssp.test/publisher/render")
+        );
+        var admission = new AuctionAdmissionService(
+                new ProviderRequestAuthorizer(trust),
+                new InMemoryAuctionDeduplicator(),
+                new CoordinatingAuctionStarter(
+                        coordinator,
+                        Runnable::run,
+                        resultAssembler,
+                        notificationDelivery
+                )
+        );
         AuctionRenderApi api = new DefaultAuctionRenderApi(
                 admission,
-                new AuctionResultAssembler(
-                        proofService,
-                        clock,
-                        URI.create("https://region-a.ssp.test/publisher/render")
-                ),
                 proofService,
                 new StoreBackedRenderClaimService(store, trust),
-                notificationDelivery,
                 System::nanoTime
         );
-        return new SspE2eFixture(api, store, notificationDelivery, delivered);
+        return new SspE2eFixture(
+                api,
+                store,
+                notificationDelivery,
+                delivered,
+                auctionNotices
+        );
     }
 
     AuctionRenderApi api() {
@@ -126,6 +143,10 @@ final class SspE2eFixture {
 
     List<URI> deliveredBillingUrls() {
         return List.copyOf(deliveredBillingUrls);
+    }
+
+    int deliveredAuctionNoticeCount() {
+        return deliveredAuctionNoticeCount.get();
     }
 
     private static DspBid projectDspBid() {

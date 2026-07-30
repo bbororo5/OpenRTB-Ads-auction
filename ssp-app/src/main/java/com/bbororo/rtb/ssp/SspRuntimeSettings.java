@@ -15,6 +15,7 @@ public record SspRuntimeSettings(
         Duration dspBidTimeout,
         int dspMaxInFlight,
         int dspMaxResponseBytes,
+        int auctionDedupMaximumEntries,
         byte renderProofKeyId,
         Map<Byte, byte[]> renderProofKeys,
         Duration billingWorkerInterval,
@@ -47,6 +48,11 @@ public record SspRuntimeSettings(
         if (dspMaxResponseBytes < 1_024 || dspMaxResponseBytes > 1_048_576) {
             throw new IllegalArgumentException(
                     "dspMaxResponseBytes must be between 1024 and 1048576"
+            );
+        }
+        if (auctionDedupMaximumEntries <= 0 || auctionDedupMaximumEntries > 1_000_000) {
+            throw new IllegalArgumentException(
+                    "auctionDedupMaximumEntries must be between 1 and 1000000"
             );
         }
         renderProofKeys = copyKeys(renderProofKeys);
@@ -87,6 +93,9 @@ public record SspRuntimeSettings(
         int maxResponseBytes = Integer.parseInt(
                 environment.getOrDefault("DSP_MAX_RESPONSE_BYTES", "65536")
         );
+        int dedupMaximumEntries = Integer.parseInt(
+                environment.getOrDefault("AUCTION_DEDUP_MAX_ENTRIES", "10000")
+        );
         byte keyId = Byte.parseByte(environment.getOrDefault("RENDER_PROOF_KEY_ID", "1"));
         Map<Byte, byte[]> keys = parseRenderProofKeys(environment, keyId);
         Duration workerInterval = Duration.ofMillis(
@@ -106,6 +115,7 @@ public record SspRuntimeSettings(
                 bidTimeout,
                 maxInFlight,
                 maxResponseBytes,
+                dedupMaximumEntries,
                 keyId,
                 keys,
                 workerInterval,

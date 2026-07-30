@@ -15,6 +15,7 @@ import com.bbororo.rtb.ssp.dspbid.DspBidExecutor;
 import com.bbororo.rtb.ssp.dspbid.HttpOpenRtbDspBidExecutor;
 import com.bbororo.rtb.ssp.notification.AsyncAuctionNoticeDelivery;
 import com.bbororo.rtb.ssp.notification.BillingDeliveryWorker;
+import com.bbororo.rtb.ssp.notification.DspNotificationDelivery;
 import com.bbororo.rtb.ssp.notification.HttpDspNoticeClient;
 import com.bbororo.rtb.ssp.notification.StoreBackedDspNotificationDelivery;
 import com.bbororo.rtb.ssp.openrtb.OpenRtb26Codec;
@@ -79,6 +80,11 @@ public final class SspRuntimeFactory {
                     clock
             );
             RenderProofService proofService = createProofService(settings);
+            var resultAssembler = new AuctionResultAssembler(
+                    proofService,
+                    clock,
+                    settings.renderCompletionUrl()
+            );
             DspBidExecutor bidExecutor = createBidExecutor(
                     settings,
                     bidClients
@@ -88,19 +94,15 @@ public final class SspRuntimeFactory {
                             settings,
                             trustControl,
                             auctionExecutor,
-                            bidExecutor
-                    ),
-                    new AuctionResultAssembler(
-                            proofService,
-                            clock,
-                            settings.renderCompletionUrl()
+                            bidExecutor,
+                            resultAssembler,
+                            notificationDelivery
                     ),
                     proofService,
                     new StoreBackedRenderClaimService(
                             store,
                             trustControl.trustSnapshot()
                     ),
-                    notificationDelivery,
                     System::nanoTime
             );
             billingWorker = new BillingDeliveryWorker(
@@ -205,7 +207,9 @@ public final class SspRuntimeFactory {
             SspRuntimeSettings settings,
             ProviderTrustControlPlane trustControl,
             ExecutorService auctionExecutor,
-            DspBidExecutor bidExecutor
+            DspBidExecutor bidExecutor,
+            AuctionResultAssembler resultAssembler,
+            DspNotificationDelivery notificationDelivery
     ) {
         var coordinator = new DeadlineBoundAuctionCoordinator(
                 bidExecutor,
@@ -214,8 +218,13 @@ public final class SspRuntimeFactory {
         );
         return new AuctionAdmissionService(
                 new ProviderRequestAuthorizer(trustControl.trustSnapshot()),
-                new InMemoryAuctionDeduplicator(),
-                new CoordinatingAuctionStarter(coordinator, auctionExecutor)
+                new InMemoryAuctionDeduplicator(settings.auctionDedupMaximumEntries()),
+                new CoordinatingAuctionStarter(
+                        coordinator,
+                        auctionExecutor,
+                        resultAssembler,
+                        notificationDelivery
+                )
         );
     }
 

@@ -2,20 +2,18 @@ package com.bbororo.rtb.ssp.admission;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertSame;
 
 import com.bbororo.rtb.ssp.admission.AuctionAdmissionService.AcceptedAuction;
 import com.bbororo.rtb.ssp.admission.AuctionAdmissionService.RejectedAuction;
 import com.bbororo.rtb.ssp.admission.ProviderRequestAuthorizer.RejectedAuthorization;
 import com.bbororo.rtb.ssp.contract.AuctionDeadline;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest;
-import com.bbororo.rtb.ssp.contract.SspMessages.AuctionOutcome;
-import com.bbororo.rtb.ssp.contract.SspMessages.AuctionWinners;
+import com.bbororo.rtb.ssp.contract.SspMessages.AuctionResult;
 import com.bbororo.rtb.ssp.contract.SspMessages.AuctionSlot;
 import com.bbororo.rtb.ssp.deduplication.AuctionStarter;
 import com.bbororo.rtb.ssp.deduplication.InMemoryAuctionDeduplicator;
 import com.bbororo.rtb.ssp.trust.ImmutableProviderTrustSnapshot;
-import java.time.Instant;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -25,8 +23,8 @@ import org.junit.jupiter.api.Test;
 
 class AuctionAdmissionServiceTest {
 
-    private static final AuctionOutcome RESULT = new AuctionOutcome(
-            "auction-1", new AuctionWinners(List.of()), List.of()
+    private static final AuctionResult RESULT = new AuctionResult(
+            "auction-1", List.of(), URI.create("https://ssp.test/render")
     );
 
     @Test
@@ -48,7 +46,7 @@ class AuctionAdmissionServiceTest {
 
     @Test
     void sendsTrustedDuplicatesToTheSameSingleFlightAuction() {
-        CompletableFuture<AuctionOutcome> firstAuction = new CompletableFuture<>();
+        CompletableFuture<AuctionResult> firstAuction = new CompletableFuture<>();
         AtomicInteger starts = new AtomicInteger();
         AuctionAdmissionService service = serviceFor("key-active", auction -> {
             starts.incrementAndGet();
@@ -65,8 +63,6 @@ class AuctionAdmissionServiceTest {
         ));
 
         assertEquals(1, starts.get());
-        assertSame(first.result(), duplicate.result());
-
         firstAuction.complete(RESULT);
         assertEquals(RESULT, duplicate.result().toCompletableFuture().join());
     }
