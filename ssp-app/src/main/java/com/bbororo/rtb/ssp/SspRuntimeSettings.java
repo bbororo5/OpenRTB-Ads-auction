@@ -18,6 +18,7 @@ public record SspRuntimeSettings(
         byte renderProofKeyId,
         Map<Byte, byte[]> renderProofKeys,
         Duration billingWorkerInterval,
+        int billingWorkerConcurrency,
         Duration noticeTimeout
 ) {
 
@@ -52,6 +53,13 @@ public record SspRuntimeSettings(
         if (!renderProofKeys.containsKey(renderProofKeyId)) {
             throw new IllegalArgumentException("renderProofKeys must contain the active key id");
         }
+        requirePositive(billingWorkerInterval, "billingWorkerInterval");
+        if (billingWorkerConcurrency <= 0 || billingWorkerConcurrency > 256) {
+            throw new IllegalArgumentException(
+                    "billingWorkerConcurrency must be between 1 and 256"
+            );
+        }
+        requirePositive(noticeTimeout, "noticeTimeout");
     }
 
     @Override
@@ -84,6 +92,9 @@ public record SspRuntimeSettings(
         Duration workerInterval = Duration.ofMillis(
                 Long.parseLong(environment.getOrDefault("BILLING_WORKER_INTERVAL_MS", "10"))
         );
+        int workerConcurrency = Integer.parseInt(
+                environment.getOrDefault("BILLING_WORKER_CONCURRENCY", "16")
+        );
         Duration noticeTimeout = Duration.ofMillis(
                 Long.parseLong(environment.getOrDefault("DSP_NOTICE_TIMEOUT_MS", "500"))
         );
@@ -98,6 +109,7 @@ public record SspRuntimeSettings(
                 keyId,
                 keys,
                 workerInterval,
+                workerConcurrency,
                 noticeTimeout
         );
     }

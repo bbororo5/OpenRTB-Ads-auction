@@ -63,7 +63,10 @@ public final class SspRuntimeFactory {
 
         try {
             auctionExecutor = Executors.newVirtualThreadPerTaskExecutor();
-            var store = new PostgreSqlClaimDeliveryStore(dataSource, Duration.ofSeconds(1));
+            var store = new PostgreSqlClaimDeliveryStore(
+                    dataSource,
+                    billingLeaseDuration(settings)
+            );
             store.verifyReady();
 
             noticeClient = HttpClient.newBuilder()
@@ -103,7 +106,8 @@ public final class SspRuntimeFactory {
             billingWorker = new BillingDeliveryWorker(
                     notificationDelivery,
                     clock,
-                    settings.billingWorkerInterval()
+                    settings.billingWorkerInterval(),
+                    settings.billingWorkerConcurrency()
             );
             server = new ProviderHttpServer(
                     new InetSocketAddress("0.0.0.0", settings.serverPort()),
@@ -133,6 +137,13 @@ public final class SspRuntimeFactory {
             );
             throw failure;
         }
+    }
+
+    private static Duration billingLeaseDuration(SspRuntimeSettings settings) {
+        Duration attemptWithMargin = settings.noticeTimeout().plusMillis(250);
+        return attemptWithMargin.compareTo(Duration.ofSeconds(1)) < 0
+                ? Duration.ofSeconds(1)
+                : attemptWithMargin;
     }
 
     private static AsyncAuctionNoticeDelivery createNotificationDelivery(

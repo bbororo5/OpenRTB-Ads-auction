@@ -33,6 +33,7 @@ class SspRuntimeSettingsTest {
         assertEquals(java.time.Duration.ofMillis(35), settings.dspBidTimeout());
         assertEquals(64, settings.dspMaxInFlight());
         assertEquals(65_536, settings.dspMaxResponseBytes());
+        assertEquals(16, settings.billingWorkerConcurrency());
         assertEquals((byte) 8, settings.renderProofKeyId());
         assertEquals(16, settings.renderProofKeys().get((byte) 7).length);
         assertEquals(32, settings.renderProofKeys().get((byte) 8).length);
@@ -78,5 +79,18 @@ class SspRuntimeSettingsTest {
                 IllegalArgumentException.class,
                 () -> SspRuntimeSettings.fromEnvironment(environment)
         );
+    }
+
+    @Test
+    void rejectsAnUnboundedBillingWorkerCount() {
+        String key = Base64.getEncoder().encodeToString(new byte[32]);
+
+        assertThrows(IllegalArgumentException.class, () -> SspRuntimeSettings.fromEnvironment(Map.of(
+                "SSP_REGION_ID", "region-a",
+                "RENDER_COMPLETION_URL", "https://region-a.ssp.test/publisher/render",
+                "DSP_ENDPOINTS", "project=http://project.test/bid",
+                "BILLING_WORKER_CONCURRENCY", "257",
+                "RENDER_PROOF_KEY_BASE64", key
+        )));
     }
 }
