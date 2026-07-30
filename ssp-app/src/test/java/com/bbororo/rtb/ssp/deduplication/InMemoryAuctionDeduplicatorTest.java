@@ -132,6 +132,37 @@ class InMemoryAuctionDeduplicatorTest {
     }
 
     @Test
+    void reusesTheFirstTechnicalFailureInsteadOfStartingAnotherAuction() {
+        InMemoryAuctionDeduplicator deduplicator = new InMemoryAuctionDeduplicator();
+        AtomicInteger starts = new AtomicInteger();
+        AuctionStarter failingStarter = ignored -> {
+            starts.incrementAndGet();
+            throw new IllegalStateException("auction failed");
+        };
+
+        CompletionException first = assertThrows(
+                CompletionException.class,
+                () -> execute(
+                        deduplicator,
+                        request("request-1", "imp-1"),
+                        failingStarter
+                ).toCompletableFuture().join()
+        );
+        CompletionException duplicate = assertThrows(
+                CompletionException.class,
+                () -> execute(
+                        deduplicator,
+                        request("request-1", "imp-1"),
+                        failingStarter
+                ).toCompletableFuture().join()
+        );
+
+        assertEquals(1, starts.get());
+        assertEquals("auction failed", first.getCause().getMessage());
+        assertEquals("auction failed", duplicate.getCause().getMessage());
+    }
+
+    @Test
     void rejectsOnlyNewKeysWhenCapacityIsExhausted() {
         InMemoryAuctionDeduplicator deduplicator = new InMemoryAuctionDeduplicator(
                 Clock.systemUTC(),
