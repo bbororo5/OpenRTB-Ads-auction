@@ -70,7 +70,7 @@ flowchart LR
 |---|---|---|---|
 | 경매·렌더링 API | 프로젝트 공급자 HTTP 표현 검증, 지역 렌더링 URL로의 응답 | `AuctionRequest`, `RenderCompleted` | 경매·청구 규칙 |
 | 경매 중복 방지 | 요청 키·지문, 최초 실행과 5초 최종 응답 재사용, 메모리 상한 | 최초 `StartAuction` 또는 동일 `AuctionResult` | DSP 호출·낙찰 규칙 |
-| 경매 조정 | 요청별 `tmax` 절대 기한, DSP 실행·낙찰·`nurl`·`lurl` 연결 | `StartAuction` → `AuctionOutcome` | DSP별 통신 세부·가격 규칙 |
+| 경매 조정 | 요청별 `tmax` 절대 기한, DSP 부분 실패 격리 결과의 낙찰·`nurl`·`lurl` 연결 | `StartAuction` → `AuctionOutcome` | DSP별 통신 세부·가격 규칙 |
 | DSP 입찰 실행 | DSP별 요청 변환·하위 기한·연결·동시 호출 격리와 응답 상한 | `BidRequestBatch` → `BidResponses` | 낙찰과 예산 판단 |
 | 낙찰 결정 | 입찰 유효성, 1가격, 경매별 분산 동점 처리 | `auctionId` + `AuctionRequest` + `BidResponses` → `AuctionWinners` | 네트워크·시계·저장소 |
 | 렌더링 증표 | 공급자·요청·슬롯·발급 리전 귀속을 가진 AEAD 증표 발급·검증, 2초 기한 | `ProofIssuance` → `RenderProof`, `RenderCompleted` → `VerifiedRender` | 청구 기록·`burl` 전달 |
@@ -97,7 +97,7 @@ flowchart LR
 | 제공 컴포넌트 | 인터페이스 | 입력 → 출력 | 규칙 |
 |---|---|---|---|
 | 경매 중복 방지 | `execute` | `AuctionRequest` → 최초 `StartAuction` 또는 동일 `AuctionResult` | `providerId + providerRequestId`와 요청 지문을 함께 판정한다. 최초 실행은 DSP 호출부터 통지·증표 발급까지 끝낸 최종 응답을 저장한다. 기본 10,000개 상한에서는 기존 키를 보존하고 새 키만 빠르게 실패한다. |
-| 경매 조정 | `runAuction` | `StartAuction` → `AuctionOutcome` | 절대 마감 시각을 하위 호출에 전달하며 마감 뒤 결과를 만들지 않는다. |
+| 경매 조정 | `runAuction` | `StartAuction` → `AuctionOutcome` | 절대 마감 시각을 하위 호출에 전달한다. DSP별 실패는 남은 입찰과 함께 조립하되 DSP 호출·낙찰 선택 중 마감을 넘기면 실패한다. 이 실행을 감싼 최초 경매 경계가 증표 발급·통지 작업 제출까지 같은 기한으로 종결한다. |
 | DSP 입찰 실행 | `requestBids` | `BidRequestBatch` → `BidResponses` | DSP마다 별도 HTTP 클라이언트와 동시 호출 허가를 사용한다. 허가가 없으면 대기하지 않고 해당 DSP만 탈락시킨다. |
 | 낙찰 결정 | `selectWinners` | `auctionId` + `AuctionRequest` + `BidResponses` → `AuctionWinners` | 최저가 이상 최고 CPM을 제출가로 낙찰한다. 동가는 경매·슬롯·입찰 식별자의 결정적 해시로 분산하며 응답 순서에 영향받지 않는다. |
 | 렌더링 증표 | `issue` / `verify` | `ProofIssuance` → `RenderProof`, `RenderCompleted` → `Optional<VerifiedRender>` | 공급자·요청·슬롯·낙찰 사실·발급 리전·1ms~2초 기한을 봉인한다. 같은 증표의 재검증은 같은 신원을 내며 금액 중복 판정은 렌더링 청구가 소유한다. |
