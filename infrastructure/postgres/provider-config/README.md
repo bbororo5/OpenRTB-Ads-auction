@@ -15,6 +15,24 @@ postgres-seoul (publisher)
 docker compose -f docker-compose.provider-config.yml up -d
 ```
 
+## SSP 단독 운영 확인
+
+`ssp` 프로필은 두 지역 SSP를 실제 PostgreSQL에 연결해 기동한다. DSP 주소는 형식만 갖춘 미구성 주소이며, 이 확인은 경매를 호출하지 않는다. 따라서 DSP 모의 서버가 필요 없다.
+
+```bash
+docker compose -f docker-compose.provider-config.yml --profile ssp up --build -d
+docker compose -f docker-compose.provider-config.yml --profile ssp --profile verify-ssp \
+  run --rm ssp-runtime-verifier
+```
+
+검증기는 서울(`18080`)과 도쿄(`28080`) SSP 각각의 다음 경계를 확인한다.
+
+- `/health/live`: 프로세스 생존
+- `/health/ready`: 신규 경매·렌더링 요청 수락 가능
+- `/metrics`: Prometheus 형식의 SSP HTTP 운영 지표
+
+이 단계는 실제 경매 성공을 검증하지 않는다. 경매 성공과 `nurl`·`lurl`·`burl`의 시스템 간 전달은 프로젝트 DSP 구현 뒤 통합한다.
+
 복제 준비가 끝난 뒤 검증 컨테이너만 실행한다.
 
 ```bash

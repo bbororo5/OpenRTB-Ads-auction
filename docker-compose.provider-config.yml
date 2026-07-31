@@ -67,11 +67,25 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:-local-dev-postgres-password}
       CONFIG_REPLICATOR_PASSWORD: ${CONFIG_REPLICATOR_PASSWORD:-local-dev-replication-password}
     depends_on:
+      provider-config-seed:
+        condition: service_completed_successfully
       postgres-seoul:
         condition: service_healthy
     volumes:
       - ./infrastructure/postgres/provider-config/init-publisher.sh:/init-publisher.sh:ro
     entrypoint: ["/bin/sh", "/init-publisher.sh"]
+    restart: "no"
+
+  provider-config-seed:
+    image: postgres:17.5-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-local-dev-postgres-password}
+    depends_on:
+      postgres-seoul:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/postgres/provider-config/seed-local.sh:/seed-local.sh:ro
+    entrypoint: ["/bin/sh", "/seed-local.sh"]
     restart: "no"
 
   provider-config-replication-verifier:
@@ -85,6 +99,61 @@ services:
     volumes:
       - ./infrastructure/postgres/provider-config/verify-replication.sh:/verify-replication.sh:ro
     entrypoint: ["/bin/sh", "/verify-replication.sh"]
+    restart: "no"
+
+  ssp-seoul:
+    profiles: ["ssp"]
+    build:
+      context: .
+      args:
+        APP_MODULE: ssp-app
+    environment:
+      SERVER_PORT: "8080"
+      SSP_REGION_ID: "ap-northeast-2"
+      RENDER_COMPLETION_URL: "http://localhost:18080/publisher/render"
+      DATABASE_URL: "jdbc:postgresql://postgres-seoul:5432/rtb"
+      DATABASE_USERNAME: "postgres"
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-postgres-password}
+      RENDER_PROOF_KEY_BASE64: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+      DSP_ENDPOINTS: "external-dsp=http://external-dsp-not-configured:8081/openrtb/bid"
+    depends_on:
+      provider-config-replication-bootstrap:
+        condition: service_completed_successfully
+    ports:
+      - "18080:8080"
+
+  ssp-tokyo:
+    profiles: ["ssp"]
+    build:
+      context: .
+      args:
+        APP_MODULE: ssp-app
+    environment:
+      SERVER_PORT: "8080"
+      SSP_REGION_ID: "ap-northeast-1"
+      RENDER_COMPLETION_URL: "http://localhost:28080/publisher/render"
+      DATABASE_URL: "jdbc:postgresql://postgres-tokyo:5432/rtb"
+      DATABASE_USERNAME: "postgres"
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-postgres-password}
+      RENDER_PROOF_KEY_BASE64: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+      DSP_ENDPOINTS: "external-dsp=http://external-dsp-not-configured:8081/openrtb/bid"
+    depends_on:
+      provider-config-replication-bootstrap:
+        condition: service_completed_successfully
+    ports:
+      - "28080:8080"
+
+  ssp-runtime-verifier:
+    image: curlimages/curl:8.14.1
+    profiles: ["verify-ssp"]
+    depends_on:
+      ssp-seoul:
+        condition: service_started
+      ssp-tokyo:
+        condition: service_started
+    volumes:
+      - ./infrastructure/postgres/provider-config/verify-ssp-runtime.sh:/verify-ssp-runtime.sh:ro
+    entrypoint: ["/bin/sh", "/verify-ssp-runtime.sh"]
     restart: "no"
 
 volumes:
