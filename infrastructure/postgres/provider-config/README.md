@@ -56,6 +56,8 @@ gradle :ssp-app:providerConfigReplicationIntegrationTest
 gradle :ssp-app:sspClaimStoreIntegrationTest
 ```
 
+청구 저장소 시험은 시험 행을 임대·종결하므로, 같은 지역 DB를 사용하는 `ssp` 프로필을 기동하기 전에 실행한다. 실제 SSP 작업자가 시험 행을 먼저 처리하는 경쟁을 막기 위한 운영 순서다.
+
 `ssp_billing_delivery`는 논리 복제 대상이 아니다. 서울과 도쿄 SSP는 각자 자기 지역의 청구 근거와 `burl` 전달 책임만 기록한다.
 
 초기화부터 다시 하려면 볼륨도 제거한다.
