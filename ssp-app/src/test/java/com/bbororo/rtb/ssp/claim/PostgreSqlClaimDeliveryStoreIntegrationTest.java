@@ -41,11 +41,12 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
                     URI.create("https://project-dsp.test/burl/1"), now.plusSeconds(5)
             );
             assertEquals(RenderAcceptance.REJECTED, store.recordClaimAndScheduleDelivery(conflictingClaim));
-            var leased = store.leaseDueDelivery(now).orElseThrow();
+            var leased = store.leaseDueDelivery(Instant.now()).orElseThrow();
             assertEquals(2_000L, leased.task().claim().cpmMilliKrw());
 
-            store.completeOrReleaseDelivery(leased.lease(), DeliveryOutcome.DELIVERED, now.plusMillis(10));
-            assertTrue(store.leaseDueDelivery(now.plusMillis(20)).isEmpty());
+            Instant completedAt = Instant.now();
+            store.completeOrReleaseDelivery(leased.lease(), DeliveryOutcome.DELIVERED, completedAt);
+            assertTrue(store.leaseDueDelivery(Instant.now()).isEmpty());
         }
     }
 
@@ -135,17 +136,18 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
                     store.recordClaimAndScheduleDelivery(claim("a".repeat(64), now))
             );
 
-            var first = store.leaseDueDelivery(now.plusMillis(10)).orElseThrow();
-            store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.RETRY, now.plusMillis(20));
-            assertTrue(store.leaseDueDelivery(now.plusMillis(69)).isEmpty());
+            Instant recordedAt = Instant.now();
+            var first = store.leaseDueDelivery(recordedAt.plusMillis(10)).orElseThrow();
+            store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.RETRY, recordedAt.plusMillis(20));
+            assertTrue(store.leaseDueDelivery(recordedAt.plusMillis(69)).isEmpty());
 
-            var second = store.leaseDueDelivery(now.plusMillis(70)).orElseThrow();
-            store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.DELIVERED, now.plusMillis(80));
+            var second = store.leaseDueDelivery(recordedAt.plusMillis(70)).orElseThrow();
+            store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.DELIVERED, recordedAt.plusMillis(80));
             assertEquals("LEASED", deliveryState(dataSource));
 
-            store.completeOrReleaseDelivery(second.lease(), DeliveryOutcome.DELIVERED, now.plusMillis(90));
+            store.completeOrReleaseDelivery(second.lease(), DeliveryOutcome.DELIVERED, recordedAt.plusMillis(90));
             assertEquals("DELIVERED", deliveryState(dataSource));
-            assertTrue(store.leaseDueDelivery(now.plusMillis(100)).isEmpty());
+            assertTrue(store.leaseDueDelivery(recordedAt.plusMillis(100)).isEmpty());
         }
     }
 
