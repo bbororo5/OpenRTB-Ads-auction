@@ -287,6 +287,115 @@ class ProviderHttpServerTest {
         }
     }
 
+    @Test
+    void exposesLivenessAndReadinessOnlyWhileAcceptingNewRequests() throws Exception {
+        try (ProviderHttpServer server = new ProviderHttpServer(
+                new InetSocketAddress("127.0.0.1", 0),
+                acceptingApi(),
+                new ProviderApiJsonCodec(),
+                Clock.systemUTC()
+        )) {
+            server.start();
+            HttpClient client = HttpClient.newHttpClient();
+            URI base = URI.create("http://127.0.0.1:" + server.port());
+
+            assertEquals(204, client.send(
+                    HttpRequest.newBuilder(base.resolve("/health/live")).GET().build(),
+                    HttpResponse.BodyHandlers.discarding()
+            ).statusCode());
+            assertEquals(204, client.send(
+                    HttpRequest.newBuilder(base.resolve("/health/ready")).GET().build(),
+                    HttpResponse.BodyHandlers.discarding()
+            ).statusCode());
+        }
+    }
+
+    @Test
+    void drainsAcceptedRequestsBeforeClosingAndRejectsNewBusinessRequests() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AuctionRenderApi api = new AuctionRenderApi() {
+            @Override
+            public AuctionResult auction(AuctionRequest request) {
+                entered.countDown();
+                await(release);
+                return new AuctionResult(
+                        "auction-1",
+                        List.of(),
+                        URI.create("https://ssp.test/render")
+                );
+            }
+
+            @Override
+            public RenderAcceptance completeRender(RenderCompleted render) {
+                return RenderAcceptance.ACCEPTED;
+            }
+        };
+        ProviderHttpServer server = new ProviderHttpServer(
+                new InetSocketAddress("127.0.0.1", 0),
+                api,
+                new ProviderApiJsonCodec(),
+                Clock.systemUTC()
+        );
+        try {
+            server.start();
+            URI base = URI.create("http://127.0.0.1:" + server.port());
+            HttpClient client = HttpClient.newHttpClient();
+            CompletableFuture<HttpResponse<String>> accepted = client.sendAsync(
+                    post(base.resolve("/publisher/auction"), AUCTION_JSON),
+                    HttpResponse.BodyHandlers.ofString()
+            );
+            assertTrue(entered.await(1, TimeUnit.SECONDS));
+
+            CompletableFuture<Void> closing = CompletableFuture.runAsync(server::close);
+            waitUntilDraining(client, base);
+            assertStatusAndCode(
+                    sendAuction(client, base.resolve("/publisher/auction")),
+                    503,
+                    "SERVER_DRAINING"
+            );
+
+            release.countDown();
+            assertEquals(200, accepted.get(1, TimeUnit.SECONDS).statusCode());
+            closing.get(1, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            server.close();
+        }
+    }
+
+    private static AuctionRenderApi acceptingApi() {
+        return new AuctionRenderApi() {
+            @Override
+            public AuctionResult auction(AuctionRequest request) {
+                return new AuctionResult(
+                        "auction-1",
+                        List.of(),
+                        URI.create("https://ssp.test/render")
+                );
+            }
+
+            @Override
+            public RenderAcceptance completeRender(RenderCompleted render) {
+                return RenderAcceptance.ACCEPTED;
+            }
+        };
+    }
+
+    private static void waitUntilDraining(HttpClient client, URI base) throws Exception {
+        for (int attempt = 0; attempt < 20; attempt++) {
+            HttpResponse<Void> readiness = client.send(
+                    HttpRequest.newBuilder(base.resolve("/health/ready")).GET().build(),
+                    HttpResponse.BodyHandlers.discarding()
+            );
+            if (readiness.statusCode() == 503) {
+                return;
+            }
+            Thread.sleep(10);
+        }
+        throw new AssertionError("server did not enter draining state");
+    }
+
     private static HttpResponse<String> sendRender(HttpClient client, URI url) throws Exception {
         return client.send(
                 post(url, "{\"renderProof\":\"proof-1\"}"),

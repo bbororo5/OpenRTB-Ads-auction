@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
@@ -22,6 +23,7 @@ import java.util.concurrent.Semaphore;
 public final class ProviderHttpServer implements AutoCloseable {
 
     private static final String JSON = "application/json";
+    private static final Duration DEFAULT_DRAIN_TIMEOUT = Duration.ofSeconds(1);
 
     private final AuctionRenderApi api;
     private final ProviderApiJsonCodec codec;
@@ -30,6 +32,10 @@ public final class ProviderHttpServer implements AutoCloseable {
     private final Semaphore capacity;
     private final HttpServer server;
     private final ExecutorService executor;
+    private final Object lifecycleMonitor = new Object();
+
+    private ServerState state = ServerState.CREATED;
+    private int activeRequests;
 
     public ProviderHttpServer(
             InetSocketAddress address,
@@ -61,9 +67,17 @@ public final class ProviderHttpServer implements AutoCloseable {
         server.setExecutor(executor);
         server.createContext("/publisher/auction", this::handleAuction);
         server.createContext("/publisher/render", this::handleRender);
+        server.createContext("/health/live", this::handleLiveness);
+        server.createContext("/health/ready", this::handleReadiness);
     }
 
     public void start() {
+        synchronized (lifecycleMonitor) {
+            if (state != ServerState.CREATED) {
+                throw new IllegalStateException("Provider HTTP server is already started or closed");
+            }
+            state = ServerState.ACCEPTING;
+        }
         server.start();
     }
 
@@ -72,14 +86,16 @@ public final class ProviderHttpServer implements AutoCloseable {
     }
 
     private void handleAuction(HttpExchange exchange) throws IOException {
-        if (!acceptRequest(exchange, limits.maxAuctionRequestBytes())) {
+        if (!beginRequest(exchange, limits.maxAuctionRequestBytes())) {
             return;
         }
-        if (!capacity.tryAcquire()) {
-            sendError(exchange, 503, "SERVER_OVERLOADED");
-            return;
-        }
+        boolean capacityAcquired = false;
         try {
+            if (!capacity.tryAcquire()) {
+                sendError(exchange, 503, "SERVER_OVERLOADED");
+                return;
+            }
+            capacityAcquired = true;
             var request = codec.decodeAuctionRequest(
                     readBody(exchange, limits.maxAuctionRequestBytes())
             );
@@ -93,19 +109,24 @@ public final class ProviderHttpServer implements AutoCloseable {
         } catch (RuntimeException exception) {
             sendAuctionFailure(exchange, exception);
         } finally {
-            capacity.release();
+            if (capacityAcquired) {
+                capacity.release();
+            }
+            endRequest();
         }
     }
 
     private void handleRender(HttpExchange exchange) throws IOException {
-        if (!acceptRequest(exchange, limits.maxRenderRequestBytes())) {
+        if (!beginRequest(exchange, limits.maxRenderRequestBytes())) {
             return;
         }
-        if (!capacity.tryAcquire()) {
-            sendError(exchange, 503, "SERVER_OVERLOADED");
-            return;
-        }
+        boolean capacityAcquired = false;
         try {
+            if (!capacity.tryAcquire()) {
+                sendError(exchange, 503, "SERVER_OVERLOADED");
+                return;
+            }
+            capacityAcquired = true;
             RenderAcceptance acceptance = api.completeRender(new RenderCompleted(
                     codec.decodeRenderProof(readBody(exchange, limits.maxRenderRequestBytes())),
                     clock.instant()
@@ -122,7 +143,62 @@ public final class ProviderHttpServer implements AutoCloseable {
         } catch (RuntimeException exception) {
             sendError(exchange, 500, "INTERNAL_ERROR");
         } finally {
-            capacity.release();
+            if (capacityAcquired) {
+                capacity.release();
+            }
+            endRequest();
+        }
+    }
+
+    private void handleLiveness(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            exchange.getResponseHeaders().set("Allow", "GET");
+            send(exchange, 405, new byte[0]);
+            return;
+        }
+        send(exchange, 204, new byte[0]);
+    }
+
+    private void handleReadiness(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            exchange.getResponseHeaders().set("Allow", "GET");
+            send(exchange, 405, new byte[0]);
+            return;
+        }
+        send(exchange, isAcceptingRequests() ? 204 : 503, new byte[0]);
+    }
+
+    private boolean beginRequest(HttpExchange exchange, int maximumBodyBytes) throws IOException {
+        boolean accepting;
+        synchronized (lifecycleMonitor) {
+            accepting = state == ServerState.ACCEPTING;
+            if (accepting) {
+                activeRequests++;
+            }
+        }
+        if (!accepting) {
+            sendError(exchange, 503, "SERVER_DRAINING");
+            return false;
+        }
+        if (!acceptRequest(exchange, maximumBodyBytes)) {
+            endRequest();
+            return false;
+        }
+        return true;
+    }
+
+    private void endRequest() {
+        synchronized (lifecycleMonitor) {
+            activeRequests--;
+            if (activeRequests == 0) {
+                lifecycleMonitor.notifyAll();
+            }
+        }
+    }
+
+    private boolean isAcceptingRequests() {
+        synchronized (lifecycleMonitor) {
+            return state == ServerState.ACCEPTING;
         }
     }
 
@@ -225,8 +301,53 @@ public final class ProviderHttpServer implements AutoCloseable {
 
     @Override
     public void close() {
+        boolean wasStarted;
+        synchronized (lifecycleMonitor) {
+            if (state == ServerState.CLOSED) {
+                return;
+            }
+            wasStarted = state != ServerState.CREATED;
+            if (!wasStarted) {
+                state = ServerState.CLOSED;
+            }
+            if (!wasStarted) {
+                executor.close();
+                return;
+            }
+            state = ServerState.DRAINING;
+        }
+        awaitActiveRequests(DEFAULT_DRAIN_TIMEOUT);
         server.stop(0);
         executor.close();
+        synchronized (lifecycleMonitor) {
+            state = ServerState.CLOSED;
+            lifecycleMonitor.notifyAll();
+        }
+    }
+
+    private void awaitActiveRequests(Duration timeout) {
+        long timeoutNanos = timeout.toNanos();
+        long deadline = System.nanoTime() + timeoutNanos;
+        synchronized (lifecycleMonitor) {
+            while (activeRequests > 0 && timeoutNanos > 0) {
+                try {
+                    long millis = timeoutNanos / 1_000_000;
+                    int nanos = (int) (timeoutNanos % 1_000_000);
+                    lifecycleMonitor.wait(millis, nanos);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                timeoutNanos = deadline - System.nanoTime();
+            }
+        }
+    }
+
+    private enum ServerState {
+        CREATED,
+        ACCEPTING,
+        DRAINING,
+        CLOSED
     }
 
     private static final class RequestBodyTooLargeException extends RuntimeException {
