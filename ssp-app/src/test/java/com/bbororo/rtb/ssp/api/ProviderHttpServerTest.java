@@ -311,6 +311,46 @@ class ProviderHttpServerTest {
     }
 
     @Test
+    void exposesProviderRequestOutcomesAndRejectionsAsPrometheusMetrics() throws Exception {
+        try (ProviderHttpServer server = new ProviderHttpServer(
+                new InetSocketAddress("127.0.0.1", 0),
+                acceptingApi(),
+                new ProviderApiJsonCodec(),
+                Clock.systemUTC()
+        )) {
+            server.start();
+            HttpClient client = HttpClient.newHttpClient();
+            URI base = URI.create("http://127.0.0.1:" + server.port());
+
+            assertEquals(200, sendAuction(client, base.resolve("/publisher/auction")).statusCode());
+            assertEquals(415, client.send(
+                    HttpRequest.newBuilder(base.resolve("/publisher/auction"))
+                            .POST(HttpRequest.BodyPublishers.ofString(AUCTION_JSON))
+                            .build(),
+                    HttpResponse.BodyHandlers.discarding()
+            ).statusCode());
+
+            HttpResponse<String> metrics = client.send(
+                    HttpRequest.newBuilder(base.resolve("/metrics")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            assertEquals(200, metrics.statusCode());
+            assertTrue(metrics.headers().firstValue("Content-Type")
+                    .orElseThrow().startsWith("text/plain"));
+            assertTrue(metrics.body().contains(
+                    "ssp_provider_http_responses_total{route=\"auction\",status=\"200\"} 1"
+            ));
+            assertTrue(metrics.body().contains(
+                    "ssp_provider_http_responses_total{route=\"auction\",status=\"415\"} 1"
+            ));
+            assertTrue(metrics.body().contains(
+                    "ssp_provider_http_rejections_total{route=\"auction\",reason=\"unsupported_media_type\"} 1"
+            ));
+        }
+    }
+
+    @Test
     void drainsAcceptedRequestsBeforeClosingAndRejectsNewBusinessRequests() throws Exception {
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);

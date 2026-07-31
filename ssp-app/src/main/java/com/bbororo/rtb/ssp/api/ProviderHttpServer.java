@@ -24,6 +24,8 @@ public final class ProviderHttpServer implements AutoCloseable {
 
     private static final String JSON = "application/json";
     private static final Duration DEFAULT_DRAIN_TIMEOUT = Duration.ofSeconds(1);
+    private static final String AUCTION_ROUTE = "auction";
+    private static final String RENDER_ROUTE = "render";
 
     private final AuctionRenderApi api;
     private final ProviderApiJsonCodec codec;
@@ -33,6 +35,7 @@ public final class ProviderHttpServer implements AutoCloseable {
     private final HttpServer server;
     private final ExecutorService executor;
     private final Object lifecycleMonitor = new Object();
+    private final ProviderHttpMetrics metrics = new ProviderHttpMetrics();
 
     private ServerState state = ServerState.CREATED;
     private int activeRequests;
@@ -69,6 +72,7 @@ public final class ProviderHttpServer implements AutoCloseable {
         server.createContext("/publisher/render", this::handleRender);
         server.createContext("/health/live", this::handleLiveness);
         server.createContext("/health/ready", this::handleReadiness);
+        server.createContext("/metrics", this::handleMetrics);
     }
 
     public void start() {
@@ -86,12 +90,19 @@ public final class ProviderHttpServer implements AutoCloseable {
     }
 
     private void handleAuction(HttpExchange exchange) throws IOException {
-        if (!beginRequest(exchange, limits.maxAuctionRequestBytes())) {
+        RequestAdmission admission = beginRequest(
+                exchange,
+                AUCTION_ROUTE,
+                limits.maxAuctionRequestBytes()
+        );
+        if (!admission.accepted()) {
             return;
         }
         boolean capacityAcquired = false;
+        int status = 500;
         try {
             if (!capacity.tryAcquire()) {
+                status = 503;
                 sendError(exchange, 503, "SERVER_OVERLOADED");
                 return;
             }
@@ -99,30 +110,42 @@ public final class ProviderHttpServer implements AutoCloseable {
             var request = codec.decodeAuctionRequest(
                     readBody(exchange, limits.maxAuctionRequestBytes())
             );
+            status = 200;
             send(exchange, 200, codec.encodeAuctionResult(api.auction(request)));
         } catch (AuctionRejectedException exception) {
+            status = 403;
             send(exchange, 403, codec.encodeError(exception.getMessage()));
         } catch (RequestBodyTooLargeException exception) {
+            status = 413;
             sendError(exchange, 413, "REQUEST_TOO_LARGE");
         } catch (IllegalArgumentException exception) {
+            status = 400;
             sendError(exchange, 400, "INVALID_REQUEST");
         } catch (RuntimeException exception) {
-            sendAuctionFailure(exchange, exception);
+            status = sendAuctionFailure(exchange, exception);
         } finally {
             if (capacityAcquired) {
                 capacity.release();
             }
             endRequest();
+            metrics.requestFinished(AUCTION_ROUTE, status);
         }
     }
 
     private void handleRender(HttpExchange exchange) throws IOException {
-        if (!beginRequest(exchange, limits.maxRenderRequestBytes())) {
+        RequestAdmission admission = beginRequest(
+                exchange,
+                RENDER_ROUTE,
+                limits.maxRenderRequestBytes()
+        );
+        if (!admission.accepted()) {
             return;
         }
         boolean capacityAcquired = false;
+        int status = 500;
         try {
             if (!capacity.tryAcquire()) {
+                status = 503;
                 sendError(exchange, 503, "SERVER_OVERLOADED");
                 return;
             }
@@ -132,21 +155,34 @@ public final class ProviderHttpServer implements AutoCloseable {
                     clock.instant()
             ));
             switch (acceptance) {
-                case ACCEPTED, DUPLICATE -> send(exchange, 204, new byte[0]);
-                case REJECTED -> sendError(exchange, 400, "INVALID_RENDER_PROOF");
-                case RETRY_LATER -> sendError(exchange, 503, "RETRY_LATER");
+                case ACCEPTED, DUPLICATE -> {
+                    status = 204;
+                    send(exchange, 204, new byte[0]);
+                }
+                case REJECTED -> {
+                    status = 400;
+                    sendError(exchange, 400, "INVALID_RENDER_PROOF");
+                }
+                case RETRY_LATER -> {
+                    status = 503;
+                    sendError(exchange, 503, "RETRY_LATER");
+                }
             }
         } catch (RequestBodyTooLargeException exception) {
+            status = 413;
             sendError(exchange, 413, "REQUEST_TOO_LARGE");
         } catch (IllegalArgumentException exception) {
+            status = 400;
             sendError(exchange, 400, "INVALID_REQUEST");
         } catch (RuntimeException exception) {
+            status = 500;
             sendError(exchange, 500, "INTERNAL_ERROR");
         } finally {
             if (capacityAcquired) {
                 capacity.release();
             }
             endRequest();
+            metrics.requestFinished(RENDER_ROUTE, status);
         }
     }
 
@@ -168,7 +204,22 @@ public final class ProviderHttpServer implements AutoCloseable {
         send(exchange, isAcceptingRequests() ? 204 : 503, new byte[0]);
     }
 
-    private boolean beginRequest(HttpExchange exchange, int maximumBodyBytes) throws IOException {
+    private void handleMetrics(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            exchange.getResponseHeaders().set("Allow", "GET");
+            send(exchange, 405, new byte[0]);
+            return;
+        }
+        byte[] output = metrics.prometheus();
+        exchange.getResponseHeaders().set("Content-Type", "text/plain; version=0.0.4");
+        sendWithContentType(exchange, 200, output);
+    }
+
+    private RequestAdmission beginRequest(
+            HttpExchange exchange,
+            String route,
+            int maximumBodyBytes
+    ) throws IOException {
         boolean accepting;
         synchronized (lifecycleMonitor) {
             accepting = state == ServerState.ACCEPTING;
@@ -178,13 +229,17 @@ public final class ProviderHttpServer implements AutoCloseable {
         }
         if (!accepting) {
             sendError(exchange, 503, "SERVER_DRAINING");
-            return false;
+            metrics.requestRejected(route, 503, "server_draining");
+            return RequestAdmission.rejected();
         }
-        if (!acceptRequest(exchange, maximumBodyBytes)) {
+        RequestAdmission validation = acceptRequest(exchange, maximumBodyBytes);
+        if (!validation.accepted()) {
             endRequest();
-            return false;
+            metrics.requestRejected(route, validation.status(), validation.reason());
+            return validation;
         }
-        return true;
+        metrics.requestStarted();
+        return RequestAdmission.admitted();
     }
 
     private void endRequest() {
@@ -202,28 +257,28 @@ public final class ProviderHttpServer implements AutoCloseable {
         }
     }
 
-    private boolean acceptRequest(HttpExchange exchange, int maximumBodyBytes) throws IOException {
+    private RequestAdmission acceptRequest(HttpExchange exchange, int maximumBodyBytes) throws IOException {
         if (!"POST".equals(exchange.getRequestMethod())) {
             exchange.getResponseHeaders().set("Allow", "POST");
             send(exchange, 405, new byte[0]);
-            return false;
+            return RequestAdmission.rejected(405, "method_not_allowed");
         }
         if (!isJson(exchange)) {
             sendError(exchange, 415, "UNSUPPORTED_MEDIA_TYPE");
-            return false;
+            return RequestAdmission.rejected(415, "unsupported_media_type");
         }
         long declaredLength;
         try {
             declaredLength = declaredContentLength(exchange);
         } catch (IllegalArgumentException exception) {
             sendError(exchange, 400, "INVALID_REQUEST");
-            return false;
+            return RequestAdmission.rejected(400, "invalid_content_length");
         }
         if (declaredLength > maximumBodyBytes) {
             sendError(exchange, 413, "REQUEST_TOO_LARGE");
-            return false;
+            return RequestAdmission.rejected(413, "request_too_large");
         }
-        return true;
+        return RequestAdmission.admitted();
     }
 
     private static boolean isJson(HttpExchange exchange) {
@@ -259,21 +314,22 @@ public final class ProviderHttpServer implements AutoCloseable {
         }
     }
 
-    private void sendAuctionFailure(HttpExchange exchange, RuntimeException failure) throws IOException {
+    private int sendAuctionFailure(HttpExchange exchange, RuntimeException failure) throws IOException {
         Throwable cause = unwrap(failure);
         if (cause instanceof ChangedAuctionRequestException) {
             sendError(exchange, 409, "AUCTION_REQUEST_CONFLICT");
-            return;
+            return 409;
         }
         if (cause instanceof AuctionDeduplicationCapacityException) {
             sendError(exchange, 503, "SERVER_OVERLOADED");
-            return;
+            return 503;
         }
         if (cause instanceof AuctionDeadlineExceededException) {
             sendError(exchange, 504, "AUCTION_DEADLINE_EXCEEDED");
-            return;
+            return 504;
         }
         sendError(exchange, 500, "INTERNAL_ERROR");
+        return 500;
     }
 
     private static Throwable unwrap(Throwable failure) {
@@ -291,6 +347,12 @@ public final class ProviderHttpServer implements AutoCloseable {
     private static void send(HttpExchange exchange, int status, byte[] body) throws IOException {
         if (body.length > 0) {
             exchange.getResponseHeaders().set("Content-Type", JSON);
+        }
+        sendWithContentType(exchange, status, body);
+    }
+
+    private static void sendWithContentType(HttpExchange exchange, int status, byte[] body) throws IOException {
+        if (body.length > 0) {
             exchange.sendResponseHeaders(status, body.length);
             exchange.getResponseBody().write(body);
         } else {
@@ -348,6 +410,21 @@ public final class ProviderHttpServer implements AutoCloseable {
         ACCEPTING,
         DRAINING,
         CLOSED
+    }
+
+    private record RequestAdmission(boolean accepted, int status, String reason) {
+
+        private static RequestAdmission admitted() {
+            return new RequestAdmission(true, 0, "");
+        }
+
+        private static RequestAdmission rejected() {
+            return new RequestAdmission(false, 503, "server_draining");
+        }
+
+        private static RequestAdmission rejected(int status, String reason) {
+            return new RequestAdmission(false, status, reason);
+        }
     }
 
     private static final class RequestBodyTooLargeException extends RuntimeException {
