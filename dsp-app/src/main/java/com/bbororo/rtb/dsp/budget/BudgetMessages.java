@@ -1,0 +1,151 @@
+package com.bbororo.rtb.dsp.budget;
+
+import static com.bbororo.rtb.dsp.contract.ContractChecks.requireAfter;
+import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
+import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonNegative;
+import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
+
+import java.time.Instant;
+import java.util.Objects;
+
+/** 로컬 예산 권한과 예약 상태를 바꾸는 메시지다. */
+public final class BudgetMessages {
+
+    private BudgetMessages() {
+    }
+
+    public record TryReserve(
+            String auctionId,
+            String impressionId,
+            String bidId,
+            String campaignId,
+            long impressionAmountMicros,
+            Instant reservedAt,
+            Instant expiresAt
+    ) {
+        public TryReserve {
+            auctionId = requireNonBlank(auctionId, "auctionId");
+            impressionId = requireNonBlank(impressionId, "impressionId");
+            bidId = requireNonBlank(bidId, "bidId");
+            campaignId = requireNonBlank(campaignId, "campaignId");
+            requirePositive(impressionAmountMicros, "impressionAmountMicros");
+            requireAfter(reservedAt, expiresAt, "expiresAt");
+        }
+    }
+
+    public sealed interface ReservationResult permits ReservationGranted, ReservationRejected {
+    }
+
+    public record ReservationGranted(
+            String reservationId,
+            String leaseId,
+            String campaignId,
+            String bidId,
+            long impressionAmountMicros,
+            Instant reservedAt,
+            Instant expiresAt
+    ) implements ReservationResult {
+        public ReservationGranted {
+            reservationId = requireNonBlank(reservationId, "reservationId");
+            leaseId = requireNonBlank(leaseId, "leaseId");
+            campaignId = requireNonBlank(campaignId, "campaignId");
+            bidId = requireNonBlank(bidId, "bidId");
+            requirePositive(impressionAmountMicros, "impressionAmountMicros");
+            requireAfter(reservedAt, expiresAt, "expiresAt");
+        }
+    }
+
+    public record ReservationRejected(ReservationRejection reason) implements ReservationResult {
+        public ReservationRejected {
+            Objects.requireNonNull(reason, "reason");
+        }
+    }
+
+    public record ReleaseReservation(String reservationId, String eventId, Instant occurredAt) {
+        public ReleaseReservation {
+            reservationId = requireNonBlank(reservationId, "reservationId");
+            eventId = requireNonBlank(eventId, "eventId");
+            Objects.requireNonNull(occurredAt, "occurredAt");
+        }
+    }
+
+    public record CommitReservation(String reservationId, String eventId, Instant occurredAt) {
+        public CommitReservation {
+            reservationId = requireNonBlank(reservationId, "reservationId");
+            eventId = requireNonBlank(eventId, "eventId");
+            Objects.requireNonNull(occurredAt, "occurredAt");
+        }
+    }
+
+    public record ExpireReservation(String reservationId, Instant expiredAt) {
+        public ExpireReservation {
+            reservationId = requireNonBlank(reservationId, "reservationId");
+            Objects.requireNonNull(expiredAt, "expiredAt");
+        }
+    }
+
+    public record InstallLease(
+            String leaseId,
+            String campaignId,
+            long faceValueMicros,
+            long generation,
+            Instant startsAt,
+            Instant expiresAt
+    ) {
+        public InstallLease {
+            leaseId = requireNonBlank(leaseId, "leaseId");
+            campaignId = requireNonBlank(campaignId, "campaignId");
+            requirePositive(faceValueMicros, "faceValueMicros");
+            requirePositive(generation, "generation");
+            requireAfter(startsAt, expiresAt, "expiresAt");
+        }
+    }
+
+    public record PacingPosition(boolean hasUsableBudget, long lagPpm) {
+    }
+
+    public enum ReservationRejection {
+        NO_ACTIVE_LEASE,
+        INSUFFICIENT_LOCAL_BUDGET,
+        LEASE_EXPIRED,
+        DUPLICATE_CONFLICT
+    }
+
+    public enum ReservationFinalization {
+        APPLIED,
+        ALREADY_APPLIED,
+        ALREADY_FINALIZED_DIFFERENTLY,
+        UNKNOWN_RESERVATION,
+        TOO_LATE
+    }
+
+    public enum LeaseInstallResult {
+        INSTALLED,
+        ALREADY_INSTALLED,
+        STALE_GENERATION,
+        CONFLICT
+    }
+
+    public record LeaseBalance(
+            long faceValueMicros,
+            long availableMicros,
+            long reservedMicros,
+            long committedMicros,
+            long quarantinedMicros
+    ) {
+        public LeaseBalance {
+            requireNonNegative(faceValueMicros, "faceValueMicros");
+            requireNonNegative(availableMicros, "availableMicros");
+            requireNonNegative(reservedMicros, "reservedMicros");
+            requireNonNegative(committedMicros, "committedMicros");
+            requireNonNegative(quarantinedMicros, "quarantinedMicros");
+            long classified = Math.addExact(
+                    Math.addExact(availableMicros, reservedMicros),
+                    Math.addExact(committedMicros, quarantinedMicros)
+            );
+            if (classified != faceValueMicros) {
+                throw new IllegalArgumentException("lease balance must preserve face value");
+            }
+        }
+    }
+}
