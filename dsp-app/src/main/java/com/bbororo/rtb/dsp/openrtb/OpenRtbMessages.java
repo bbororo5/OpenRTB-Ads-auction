@@ -14,6 +14,8 @@ import java.util.Objects;
 /** 프로젝트 DSP가 소유하는 OpenRTB 2.6 하위 규격의 내부 표현이다. */
 public final class OpenRtbMessages {
 
+    public static final int RENDER_EXPIRY_SECONDS = 2;
+
     private OpenRtbMessages() {
     }
 
@@ -57,8 +59,8 @@ public final class OpenRtbMessages {
                 throw new IllegalArgumentException("width and height must be positive");
             }
             requireNonNegative(bidFloorCpmMilliKrw, "bidFloorCpmMilliKrw");
-            if (expirySeconds <= 0) {
-                throw new IllegalArgumentException("expirySeconds must be positive");
+            if (expirySeconds != RENDER_EXPIRY_SECONDS) {
+                throw new IllegalArgumentException("expirySeconds must be 2");
             }
         }
     }
@@ -109,8 +111,8 @@ public final class OpenRtbMessages {
             noticeUrl = requireHttpUrl(noticeUrl, "noticeUrl");
             lossUrl = requireHttpUrl(lossUrl, "lossUrl");
             billingUrl = requireHttpUrl(billingUrl, "billingUrl");
-            if (expirySeconds <= 0) {
-                throw new IllegalArgumentException("expirySeconds must be positive");
+            if (expirySeconds != RENDER_EXPIRY_SECONDS) {
+                throw new IllegalArgumentException("expirySeconds must be 2");
             }
         }
     }

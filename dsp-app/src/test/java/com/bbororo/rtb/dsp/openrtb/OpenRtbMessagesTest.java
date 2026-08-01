@@ -28,4 +28,12 @@ class OpenRtbMessagesTest {
                 () -> new BidRequest("auction-1", 181, List.of(impression))
         );
     }
+
+    @Test
+    void impressionRequiresTheAgreedTwoSecondRenderWindow() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new Impression("imp-1", 300, 250, 1_000_000, 3)
+        );
+    }
 }

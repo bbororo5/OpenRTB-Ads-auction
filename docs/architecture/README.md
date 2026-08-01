@@ -1,8 +1,8 @@
 # 공식 아키텍처
 
-상태: C4 System Landscape·Level 1·Level 2 데이터 경계 확정, SSP Level 3 경계 검토 완료
+상태: C4 System Landscape·Level 1·Level 2와 SSP·DSP Level 3 책임 경계 확정
 
-근거: [아키텍처 중요 요구사항](../requirements/quality.md), [아키텍처 동인](drivers.md), [ADR-001~008](decisions/)
+근거: [아키텍처 중요 요구사항](../requirements/quality.md), [아키텍처 동인](drivers.md), [ADR-001~009](decisions/)
 
 ## 1. 문서 범위
 
@@ -69,6 +69,7 @@ Container Diagram에는 애플리케이션과 데이터 저장소만 두고, 리
 | ADR-006 다중 리전 배치 | 두 회사의 독립 전역 진입, 두 능동 리전, 리전별 다중 AZ 인스턴스 |
 | ADR-007 지역 금액 사건 장부 | 회사·리전별 독립 PostgreSQL과 RDS Multi-AZ 배치 |
 | ADR-008 전역 책임 원장 | 홈 리전 RDS PostgreSQL 단일 쓰기 권위, 비동기 복구 사본과 자동 승격 금지 |
+| ADR-009 SSP 경매 멱등성 | 경매 키의 안정된 소유자 라우팅과 인스턴스 로컬 중복 방지 |
 
 현재 컨테이너안은 다음 기준으로 구성했다.
 

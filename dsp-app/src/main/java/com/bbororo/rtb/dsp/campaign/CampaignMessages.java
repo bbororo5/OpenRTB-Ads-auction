@@ -36,6 +36,11 @@ public final class CampaignMessages {
             creativeId = requireNonBlank(creativeId, "creativeId");
             requirePositive(cpmMilliKrw, "cpmMilliKrw");
         }
+
+        /** 0.001 KRW CPM 한 단위는 노출 1건당 0.000001 KRW 한 단위와 수치가 같다. */
+        public long impressionAmountMicros() {
+            return cpmMilliKrw;
+        }
     }
 
     public record CampaignSnapshot(String version, String checksum, List<Campaign> campaigns) {

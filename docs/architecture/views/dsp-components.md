@@ -1,6 +1,6 @@
 # DSP 애플리케이션 컴포넌트
 
-상태: C3 책임·협력·인터페이스 경계 확정
+상태: C3 책임·협력 경계 확정 · Java 메시지·인터페이스 기준선 적용
 
 범위는 [DSP 컨테이너](dsp-containers.md)의 `DSP 애플리케이션` 하나다. 컴포넌트는 처리 순서가 아니라 같은 불변식을 보호하는 상태 소유권과 서로 다른 변경 이유로 나눴다. 도출 근거는 [DSP 협력과 메시지](dsp-collaboration.md)에 있다.
 
@@ -93,7 +93,7 @@ flowchart LR
 | 캠페인 선택 | `CampaignSelector` | `RankCampaigns` → 순서가 있는 `CampaignCandidate` |
 | 로컬 예산 권한 | `LocalBudgetAuthority` | `TryReserve`, `ReleaseReservation`, `CommitReservation`, `ExpireReservation`, `InstallLease` → 상태 변경 결과 |
 | 예약 통지 증표 | `ReservationNoticeCodec` | `ReservationGrant` → `NotificationUrls`, 불투명 토큰 → `VerifiedReservationNotice` |
-| 경매 결과 처리 | `AuctionNoticeProcessor` | 검증된 `nurl`·`lurl`·`burl` → `NoticeProcessingResult` |
+| 경매 결과 처리 | `AuctionNoticeProcessor` | `AuctionNotice` → 검증·기록·종결한 `NoticeProcessingResult` |
 | 리스 생명주기 | `LeaseLifecycle` | `RefillLease`, `SettleLease` → 리스 처리 결과 |
 | 리전 책임 제어 | `RegionalResponsibilityController` | `RequestRegionalResponsibility` → 이전 처리 결과 |
 
@@ -101,7 +101,7 @@ flowchart LR
 
 ### 입찰
 
-1. OpenRTB 계약은 인증된 SSP ID와 요청 ID로 중복 키를 만들고 수신 시각과 `tmax`로 절대 기한을 만든다.
+1. OpenRTB 계약은 인증된 SSP ID와 요청 ID로 중복 키를 만들고 `tmax`를 단조 시계 기반 절대 기한으로 바꾼다.
 2. 입찰 중복 방지는 같은 키·지문의 동시 최초 실행을 하나로 합치고 완성된 결과를 재사용한다.
 3. 입찰 조정은 슬롯마다 캠페인 선택에 순서 있는 후보를 요구한다.
 4. 페이싱 지연이 큰 후보부터 로컬 예산 권한에 예약을 시도한다.
@@ -134,3 +134,17 @@ flowchart LR
 - PostgreSQL 접근, 리전 예산 원장과 전역 책임 원장 접근은 각 책임 뒤의 저장소 포트다. 저장소 포트를 별도 업무 컴포넌트로 세지 않는다.
 - 입찰 조정·캠페인 선택·로컬 예약은 동기 로컬 호출이다. 외부 저장소 I/O가 필요한 통지 기록·리스·책임 이전만 비동기 완료를 표현한다.
 - 인터페이스는 책임과 메시지 의미만 고정한다. HTTP 서버, JSON 라이브러리, 암호 구현, 원장 제품과 실행 자원 수는 후속 구현에서 정한다.
+
+## 코드 위치
+
+| 책임 | 메시지·인터페이스 패키지 |
+|---|---|
+| OpenRTB 계약 | `com.bbororo.rtb.dsp.openrtb` |
+| 입찰 중복 방지·입찰 조정 | `com.bbororo.rtb.dsp.auction` |
+| 캠페인 적재·선택 | `com.bbororo.rtb.dsp.campaign` |
+| 로컬 예산·페이싱 투영 | `com.bbororo.rtb.dsp.budget` |
+| 예약 통지 증표·경매 결과 처리 | `com.bbororo.rtb.dsp.notification` |
+| 리스 보충·정산 | `com.bbororo.rtb.dsp.lease` |
+| 전역·리전 책임 이전 | `com.bbororo.rtb.dsp.allocation` |
+
+각 패키지의 `*Messages`는 불변 값, 컴포넌트 이름의 인터페이스는 제공 경계, `*Source`·`*Ledger`·`*Journal`은 외부 저장소 포트다. SSP 코드를 공유하거나 참조하지 않고 양쪽이 각자 OpenRTB 표현을 소유한다.

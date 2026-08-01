@@ -1,13 +1,12 @@
 package com.bbororo.rtb.dsp.auction;
 
 import static com.bbororo.rtb.dsp.contract.ContractChecks.immutableList;
-import static com.bbororo.rtb.dsp.contract.ContractChecks.requireAfter;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
+import com.bbororo.rtb.dsp.contract.AuctionDeadline;
 import com.bbororo.rtb.dsp.notification.NotificationMessages.NotificationUrls;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
-import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -47,10 +46,10 @@ public final class AuctionMessages {
         }
     }
 
-    public record CoordinateBid(AuthenticatedBidRequest request, Instant deadline) {
+    public record CoordinateBid(AuthenticatedBidRequest request, AuctionDeadline deadline) {
         public CoordinateBid {
             Objects.requireNonNull(request, "request");
-            requireAfter(request.receivedAt(), deadline, "deadline");
+            Objects.requireNonNull(deadline, "deadline");
         }
     }
 

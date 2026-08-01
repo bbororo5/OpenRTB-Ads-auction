@@ -1,10 +1,12 @@
 package com.bbororo.rtb.dsp.auction;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.bbororo.rtb.dsp.auction.AuctionMessages.BidDecision;
 import com.bbororo.rtb.dsp.auction.AuctionMessages.CoordinateBid;
 import com.bbororo.rtb.dsp.auction.AuctionMessages.PreparedBid;
+import com.bbororo.rtb.dsp.contract.AuctionDeadline;
 import com.bbororo.rtb.dsp.notification.NotificationMessages.NotificationUrls;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.BidRequest;
@@ -30,7 +32,7 @@ class AuctionMessagesTest {
     }
 
     @Test
-    void coordinateBidRequiresFutureAbsoluteDeadline() {
+    void coordinateBidRequiresAnExplicitMonotonicDeadline() {
         Instant receivedAt = Instant.parse("2026-01-01T00:00:00Z");
         var request = new AuthenticatedBidRequest(
                 "ssp-1",
@@ -38,6 +40,7 @@ class AuctionMessagesTest {
                 receivedAt
         );
 
-        assertThrows(IllegalArgumentException.class, () -> new CoordinateBid(request, receivedAt));
+        assertDoesNotThrow(() -> new CoordinateBid(request, AuctionDeadline.start(50, System::nanoTime)));
+        assertThrows(NullPointerException.class, () -> new CoordinateBid(request, null));
     }
 }
