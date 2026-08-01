@@ -18,6 +18,7 @@ flowchart LR
         subgraph APP["DSP 애플리케이션 [Container: Java 21]"]
             direction TB
             API["OpenRTB 계약<br/>요청·응답·통지 표현"]
+            DEDUPE["입찰 중복 방지<br/>최초 실행·결과 재사용"]
             AUCTION["입찰 조정<br/>기한·슬롯별 부분 성공"]
             CAMPAIGN["캠페인 선택<br/>적격성·페이싱 순위"]
             BUDGET["로컬 예산 권한<br/>예약·해제·확정·만료"]
@@ -26,7 +27,8 @@ flowchart LR
             LEASE["리스 생명주기<br/>보충·종결·정산"]
             TRANSFER["리전 책임 제어<br/>부족 감지·책임 이전"]
 
-            API -->|"입찰 명령"| AUCTION
+            API -->|"인증된 입찰 요청"| DEDUPE
+            DEDUPE -->|"최초 입찰 명령"| AUCTION
             AUCTION -->|"후보 요청"| CAMPAIGN
             CAMPAIGN -->|"페이싱 조회"| BUDGET
             AUCTION -->|"예약 시도"| BUDGET
@@ -56,7 +58,7 @@ flowchart LR
     classDef component fill:#2563eb,color:#fff,stroke:#1d4ed8,stroke-width:1.5px;
     classDef external fill:#fff,color:#172033,stroke:#94a3b8,stroke-width:1.5px;
     classDef store fill:#d1fae5,color:#064e3b,stroke:#10b981,stroke-width:1.5px;
-    class API,AUCTION,CAMPAIGN,BUDGET,TOKEN,NOTICE,LEASE,TRANSFER component;
+    class API,DEDUPE,AUCTION,CAMPAIGN,BUDGET,TOKEN,NOTICE,LEASE,TRANSFER component;
     class SSP,GATEWAY external;
     class CAMPAIGN_STORE,REGIONAL,MONEY,GLOBAL store;
     style DSP fill:#eff6ff,stroke:#2563eb,stroke-width:2px
@@ -70,6 +72,7 @@ flowchart LR
 | 컴포넌트 | 함께 묶은 이유 | 소유하는 불변식·정책 | 소유하지 않는 것 |
 |---|---|---|---|
 | OpenRTB 계약 | 외부 규격이 바뀔 때 함께 변한다. | OpenRTB 하위 규격 검증과 내부 메시지 변환 | 캠페인·금액 판단 |
+| 입찰 중복 방지 | 최초 실행과 결과 재사용이 같은 요청 상태를 공유한다. | SSP·요청 키와 지문, 동시 최초 실행 하나, 완성 결과 재사용 | 캠페인·예산 정책 |
 | 입찰 조정 | 요청 기한과 슬롯별 협력 순서가 함께 변한다. | 절대 기한, 슬롯별 최대 한 입찰, 슬롯별 부분 성공 | 후보 순위·금액 상태 |
 | 캠페인 선택 | 캠페인 규칙과 조회 구조가 함께 변한다. | 활성·기간·규격 적격성, 페이싱 지연·`campaignId` 순위 | 예산 예약 성공 여부 |
 | 로컬 예산 권한 | 같은 금액 상태를 바꾸는 메시지는 한 소유자가 처리해야 한다. | 리스 액면 보존, 예약의 한 번뿐인 종결 | 통지 진위·내구 기록 |
@@ -85,6 +88,7 @@ flowchart LR
 | 제공 컴포넌트 | 인터페이스 | 입력 → 출력 |
 |---|---|---|
 | OpenRTB 계약 | `DspOpenRtbApi` | `BidRequest` → `BidResponse` 또는 `NoBid`, `AuctionNotice` → 일반 HTTP 판정 |
+| 입찰 중복 방지 | `BidDeduplicator` | `ExecuteBidOnce` → 최초 실행 또는 동일 `BidDecision` |
 | 입찰 조정 | `BidCoordinator` | `CoordinateBid` → 슬롯별 `BidDecision` |
 | 캠페인 선택 | `CampaignSelector` | `RankCampaigns` → 순서가 있는 `CampaignCandidate` |
 | 로컬 예산 권한 | `LocalBudgetAuthority` | `TryReserve`, `ReleaseReservation`, `CommitReservation`, `ExpireReservation`, `InstallLease` → 상태 변경 결과 |
@@ -97,12 +101,13 @@ flowchart LR
 
 ### 입찰
 
-1. OpenRTB 계약은 수신 시각과 `tmax`로 절대 기한을 만든다.
-2. 입찰 조정은 슬롯마다 캠페인 선택에 순서 있는 후보를 요구한다.
-3. 페이싱 지연이 큰 후보부터 로컬 예산 권한에 예약을 시도한다.
-4. 경합으로 예약이 실패하면 같은 절대 기한 안에서 다음 후보를 시도한다.
-5. 예약에 성공한 슬롯만 예약 통지 증표를 발급해 응답한다.
-6. 한 슬롯의 실패는 다른 슬롯의 예약을 되돌리지 않는다.
+1. OpenRTB 계약은 인증된 SSP ID와 요청 ID로 중복 키를 만들고 수신 시각과 `tmax`로 절대 기한을 만든다.
+2. 입찰 중복 방지는 같은 키·지문의 동시 최초 실행을 하나로 합치고 완성된 결과를 재사용한다.
+3. 입찰 조정은 슬롯마다 캠페인 선택에 순서 있는 후보를 요구한다.
+4. 페이싱 지연이 큰 후보부터 로컬 예산 권한에 예약을 시도한다.
+5. 경합으로 예약이 실패하면 같은 절대 기한 안에서 다음 후보를 시도한다.
+6. 예약에 성공한 슬롯만 예약 통지 증표를 발급해 응답한다.
+7. 한 슬롯의 실패는 다른 슬롯의 예약을 되돌리지 않는다.
 
 ### 결과 통지
 
@@ -123,7 +128,8 @@ flowchart LR
 
 ## 구현 경계
 
-- 여덟 컴포넌트는 우선 하나의 DSP 애플리케이션 프로세스에 둔다.
+- 아홉 컴포넌트는 우선 하나의 DSP 애플리케이션 프로세스에 둔다.
+- DSP 게이트웨이는 `sspId + BidRequest.id`의 안정된 소유 인스턴스로 요청을 보내 로컬 중복 상태를 유효하게 만든다. 소유권이 불확실한 장애 전환에서는 같은 요청을 새로 실행하지 않는다.
 - 캠페인 적재기는 캠페인 선택 뒤의 제어 경로 어댑터다. 검증된 완결 스냅숏만 한 번에 공개하며 시험 중 변경하지 않는다.
 - PostgreSQL 접근, 리전 예산 원장과 전역 책임 원장 접근은 각 책임 뒤의 저장소 포트다. 저장소 포트를 별도 업무 컴포넌트로 세지 않는다.
 - 입찰 조정·캠페인 선택·로컬 예약은 동기 로컬 호출이다. 외부 저장소 I/O가 필요한 통지 기록·리스·책임 이전만 비동기 완료를 표현한다.
