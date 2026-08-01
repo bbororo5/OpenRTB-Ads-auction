@@ -20,6 +20,7 @@
 | C4 Deployment | [SSP 다중 리전 배포](views/ssp-deployment.md) | SSP 컨테이너 인스턴스와 장애 영역 |
 | C4 Deployment | [프로젝트 DSP 다중 리전 배포](views/dsp-deployment.md) | DSP 컨테이너 인스턴스·원장과 장애 영역 |
 | Technology | [SSP 기술 기준선](technology/ssp.md) | SSP의 확정 기술과 컴포넌트 뒤에 정할 기술 |
+| Technology | [DSP 기술 결정 경계](technology/dsp.md) | 리전 원장 DBMS·로컬 자료구조·인스턴스 DBMS 후보와 검증 순서 |
 | Implementation | [SSP 얇은 수직 흐름 구현 계획](implementation/ssp-thin-vertical-slice.md) | E2E를 녹색으로 만드는 컴포넌트·인터페이스 순서 |
 
 C4 Level 3은 내부 책임을 설명할 가치가 있는 실행 컨테이너에만 작성한다. SSP와 DSP 애플리케이션은 협력 메시지, 상태 소유권과 변경 이유를 기준으로 책임 경계를 나눴다. Level 4는 구현 구조가 생긴 뒤 필요할 때 코드에서 생성한다.
@@ -81,7 +82,7 @@ Container Diagram에는 애플리케이션과 데이터 저장소만 두고, 리
 
 ## 5. 기술 선택 경계
 
-지역 금액 사건 장부와 전역 책임 원장은 PostgreSQL 계열로 확정했지만 서로 다른 배포 경계다. SSP의 현재 기준과 선택 순서는 [SSP 기술 기준선](technology/ssp.md)을 따른다. DSP 기술은 DSP 컴포넌트 경계를 검토할 때 별도로 정한다.
+지역 금액 사건 장부와 전역 책임 원장은 PostgreSQL 계열로 확정했지만 서로 다른 배포 경계다. SSP의 현재 기준과 선택 순서는 [SSP 기술 기준선](technology/ssp.md)을 따른다. DSP의 미선택 기술과 검증 순서는 [DSP 기술 결정 경계](technology/dsp.md)를 따른다.
 
 - 리전 내부 고가용과 높은 동시 권한 발급
 - 낮은 할당·GC 부담의 로컬 예약과 캠페인 조회
