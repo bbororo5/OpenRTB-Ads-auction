@@ -14,13 +14,14 @@
 | C4 Level 2 | [SSP 컨테이너](views/ssp-containers.md) | SSP의 실행·저장 단위와 외부 의존성 |
 | C4 Level 2 | [프로젝트 DSP 컨테이너](views/dsp-containers.md) | DSP의 입찰·예산·금액 사건 단위 |
 | C4 Level 3 | [SSP 애플리케이션 컴포넌트](views/ssp-components.md) | SSP 애플리케이션 내부 책임과 협력 |
+| Collaboration | [DSP 협력과 메시지](views/dsp-collaboration.md) | DSP 컴포넌트 도출 전 협력 장면과 메시지 |
 | Data | [데이터 접근·보존 기준](views/data.md) | 데이터별 Hot Path, 수명, 일관성과 복구 수준 |
 | C4 Deployment | [SSP 다중 리전 배포](views/ssp-deployment.md) | SSP 컨테이너 인스턴스와 장애 영역 |
 | C4 Deployment | [프로젝트 DSP 다중 리전 배포](views/dsp-deployment.md) | DSP 컨테이너 인스턴스·원장과 장애 영역 |
 | Technology | [SSP 기술 기준선](technology/ssp.md) | SSP의 확정 기술과 컴포넌트 뒤에 정할 기술 |
 | Implementation | [SSP 얇은 수직 흐름 구현 계획](implementation/ssp-thin-vertical-slice.md) | E2E를 녹색으로 만드는 컴포넌트·인터페이스 순서 |
 
-C4 Level 3은 내부 책임을 설명할 가치가 있는 실행 컨테이너에만 작성한다. 현재는 SSP 애플리케이션 경계를 검토했으며 DSP는 별도로 다룬다. Level 4는 구현 구조가 생긴 뒤 필요할 때 코드에서 생성한다.
+C4 Level 3은 내부 책임을 설명할 가치가 있는 실행 컨테이너에만 작성한다. SSP 애플리케이션 경계는 확정했고 DSP는 협력과 메시지에서 책임 경계를 도출하는 중이다. Level 4는 구현 구조가 생긴 뒤 필요할 때 코드에서 생성한다.
 
 Container Diagram에는 애플리케이션과 데이터 저장소만 두고, 리전·AZ·부하 분산·복제는 Deployment Diagram으로 분리한다.
 

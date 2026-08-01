@@ -7,6 +7,7 @@
 | 무엇을 만드는가 | [제품·도메인 요구사항](requirements/product.md) |
 | 어느 부하와 품질을 만족해야 하는가 | [아키텍처 중요 요구사항](requirements/quality.md), [부하·데이터·검증 기준](requirements/workload.md) |
 | 현재 시스템은 어떻게 구성되는가 | [공식 아키텍처](architecture/README.md) |
+| DSP 내부 책임을 어떤 협력에서 도출하는가 | [DSP 협력과 메시지](architecture/views/dsp-collaboration.md) |
 | SSP에서 어떤 기술을 확정했고 무엇이 남았는가 | [SSP 기술 기준선](architecture/technology/ssp.md) |
 | SSP를 어떤 순서로 구현하는가 | [SSP 얇은 수직 흐름 구현 계획](architecture/implementation/ssp-thin-vertical-slice.md) |
 | 무엇이 구조를 압박했고 왜 선택했는가 | [아키텍처 동인](architecture/drivers.md), [ADR 목록](architecture/README.md#4-adr-대조-결과) |
@@ -32,6 +33,7 @@ docs/
     │   ├── dsp-context.md
     │   ├── ssp-containers.md
     │   ├── ssp-components.md
+    │   ├── dsp-collaboration.md
     │   ├── dsp-containers.md
     │   ├── data.md
     │   ├── ssp-deployment.md
