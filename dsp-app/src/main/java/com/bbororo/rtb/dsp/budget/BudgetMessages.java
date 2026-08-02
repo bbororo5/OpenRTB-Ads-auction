@@ -111,6 +111,18 @@ public final class BudgetMessages {
         }
     }
 
+    public record ReservationExpiration(
+            ReservationReference reservation,
+            long impressionAmountMicros,
+            Instant expiresAt
+    ) {
+        public ReservationExpiration {
+            Objects.requireNonNull(reservation, "reservation");
+            requirePositive(impressionAmountMicros, "impressionAmountMicros");
+            Objects.requireNonNull(expiresAt, "expiresAt");
+        }
+    }
+
     public record InstallLease(
             String leaseId,
             String campaignId,
@@ -146,6 +158,7 @@ public final class BudgetMessages {
         ALREADY_APPLIED,
         ALREADY_FINALIZED_DIFFERENTLY,
         UNKNOWN_RESERVATION,
+        NOT_DUE,
         TOO_LATE
     }
 
@@ -154,6 +167,7 @@ public final class BudgetMessages {
         ALREADY_INSTALLED,
         STALE_GENERATION,
         CAPACITY_EXCEEDED,
+        EXPIRED,
         CONFLICT
     }
 
