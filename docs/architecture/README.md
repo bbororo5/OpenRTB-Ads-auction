@@ -22,6 +22,7 @@
 | Technology | [SSP 기술 기준선](technology/ssp.md) | SSP의 확정 기술과 컴포넌트 뒤에 정할 기술 |
 | Technology | [DSP 기술 결정 경계](technology/dsp.md) | 리전 원장 DBMS·로컬 자료구조·인스턴스 DBMS 후보와 검증 순서 |
 | Implementation | [SSP 얇은 수직 흐름 구현 계획](implementation/ssp-thin-vertical-slice.md) | E2E를 녹색으로 만드는 컴포넌트·인터페이스 순서 |
+| Implementation | [DSP 상세 설계 로드맵](implementation/dsp-design-roadmap.md) | 컴포넌트별 남은 결정·검증과 권장 순서 |
 
 C4 Level 3은 내부 책임을 설명할 가치가 있는 실행 컨테이너에만 작성한다. SSP와 DSP 애플리케이션은 협력 메시지, 상태 소유권과 변경 이유를 기준으로 책임 경계를 나눴다. Level 4는 구현 구조가 생긴 뒤 필요할 때 코드에서 생성한다.
 

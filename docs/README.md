@@ -10,6 +10,7 @@
 | DSP 내부 책임을 어떤 협력에서 도출하는가 | [DSP 협력과 메시지](architecture/views/dsp-collaboration.md) |
 | DSP 컴포넌트 경계와 인터페이스는 무엇인가 | [DSP 애플리케이션 컴포넌트](architecture/views/dsp-components.md) |
 | DSP에서 다음으로 선택할 기술은 무엇인가 | [DSP 기술 결정 경계](architecture/technology/dsp.md) |
+| DSP 컴포넌트를 어떤 순서로 상세 설계하는가 | [DSP 상세 설계 로드맵](architecture/implementation/dsp-design-roadmap.md) |
 | SSP에서 어떤 기술을 확정했고 무엇이 남았는가 | [SSP 기술 기준선](architecture/technology/ssp.md) |
 | SSP를 어떤 순서로 구현하는가 | [SSP 얇은 수직 흐름 구현 계획](architecture/implementation/ssp-thin-vertical-slice.md) |
 | 무엇이 구조를 압박했고 왜 선택했는가 | [아키텍처 동인](architecture/drivers.md), [ADR 목록](architecture/README.md#4-adr-대조-결과) |
@@ -29,7 +30,8 @@ docs/
     │   ├── ssp.md
     │   └── dsp.md
     ├── implementation/
-    │   └── ssp-thin-vertical-slice.md
+    │   ├── ssp-thin-vertical-slice.md
+    │   └── dsp-design-roadmap.md
     ├── views/
     │   ├── landscape.md
     │   ├── ssp-context.md
