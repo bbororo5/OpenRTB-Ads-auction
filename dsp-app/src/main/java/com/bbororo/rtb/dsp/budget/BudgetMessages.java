@@ -61,25 +61,52 @@ public final class BudgetMessages {
         }
     }
 
-    public record ReleaseReservation(String reservationId, String eventId, Instant occurredAt) {
+    public record ReservationReference(String campaignId, String leaseId, String reservationId) {
+        public ReservationReference {
+            campaignId = requireNonBlank(campaignId, "campaignId");
+            leaseId = requireNonBlank(leaseId, "leaseId");
+            reservationId = requireNonBlank(reservationId, "reservationId");
+        }
+    }
+
+    public record ReleaseReservation(
+            ReservationReference reservation,
+            long impressionAmountMicros,
+            String eventId,
+            Instant occurredAt
+    ) {
         public ReleaseReservation {
-            reservationId = requireNonBlank(reservationId, "reservationId");
+            Objects.requireNonNull(reservation, "reservation");
+            requirePositive(impressionAmountMicros, "impressionAmountMicros");
             eventId = requireNonBlank(eventId, "eventId");
             Objects.requireNonNull(occurredAt, "occurredAt");
         }
     }
 
-    public record CommitReservation(String reservationId, String eventId, Instant occurredAt) {
+    public record CommitReservation(
+            ReservationReference reservation,
+            long impressionAmountMicros,
+            String eventId,
+            Instant occurredAt
+    ) {
         public CommitReservation {
-            reservationId = requireNonBlank(reservationId, "reservationId");
+            Objects.requireNonNull(reservation, "reservation");
+            requirePositive(impressionAmountMicros, "impressionAmountMicros");
             eventId = requireNonBlank(eventId, "eventId");
             Objects.requireNonNull(occurredAt, "occurredAt");
         }
     }
 
-    public record ExpireReservation(String reservationId, Instant expiredAt) {
+    public record ExpireReservation(
+            ReservationReference reservation,
+            long impressionAmountMicros,
+            String eventId,
+            Instant expiredAt
+    ) {
         public ExpireReservation {
-            reservationId = requireNonBlank(reservationId, "reservationId");
+            Objects.requireNonNull(reservation, "reservation");
+            requirePositive(impressionAmountMicros, "impressionAmountMicros");
+            eventId = requireNonBlank(eventId, "eventId");
             Objects.requireNonNull(expiredAt, "expiredAt");
         }
     }
@@ -105,8 +132,11 @@ public final class BudgetMessages {
     }
 
     public enum ReservationRejection {
+        CONTENDED,
         NO_ACTIVE_LEASE,
         INSUFFICIENT_LOCAL_BUDGET,
+        INSTANCE_CAPACITY_EXCEEDED,
+        CAMPAIGN_CAPACITY_EXCEEDED,
         LEASE_EXPIRED,
         DUPLICATE_CONFLICT
     }
@@ -123,6 +153,7 @@ public final class BudgetMessages {
         INSTALLED,
         ALREADY_INSTALLED,
         STALE_GENERATION,
+        CAPACITY_EXCEEDED,
         CONFLICT
     }
 
