@@ -21,8 +21,8 @@ C4Deployment
                 Container(app_1b, "DSP 애플리케이션 인스턴스", "기술 미정", "로컬 입찰과 예산 배경 처리를 실행한다.")
             }
             ContainerDb(campaign_1, "캠페인 데이터 복제본", "저장 기술 미정", "시험 전에 확정한 같은 버전을 제공한다.")
-            ContainerDb(regional_1, "서울 예산 원장", "저장 기술 미정", "서울 책임액의 유일한 작성자다.")
-            ContainerDb(regional_2_dr, "도쿄 예산 원장 복구 사본", "저장 기술 미정", "도쿄 세부 기록의 읽기 전용 비동기 사본이다.")
+            ContainerDb(regional_1, "서울 예산 원장", "RDS PostgreSQL Multi-AZ", "서울 책임액의 유일한 작성자다.")
+            ContainerDb(regional_2_dr, "도쿄 예산 원장 복구 사본", "PostgreSQL 읽기 복구 사본", "도쿄 세부 기록의 읽기 전용 비동기 사본이다.")
             ContainerDb(money_1, "서울 금액 사건 기록", "RDS PostgreSQL Multi-AZ", "서울에서 접수한 통지의 내부 판정과 리스 정산 근거를 보존한다.")
             ContainerDb(global_1, "전역 책임 원장", "RDS PostgreSQL Multi-AZ", "전역 예비액과 책임 이전의 단일 쓰기 권위다.")
         }
@@ -37,8 +37,8 @@ C4Deployment
                 Container(app_2b, "DSP 애플리케이션 인스턴스", "기술 미정", "로컬 입찰과 예산 배경 처리를 실행한다.")
             }
             ContainerDb(campaign_2, "캠페인 데이터 복제본", "저장 기술 미정", "시험 전에 확정한 같은 버전을 제공한다.")
-            ContainerDb(regional_2, "도쿄 예산 원장", "저장 기술 미정", "도쿄 책임액의 유일한 작성자다.")
-            ContainerDb(regional_1_dr, "서울 예산 원장 복구 사본", "저장 기술 미정", "서울 세부 기록의 읽기 전용 비동기 사본이다.")
+            ContainerDb(regional_2, "도쿄 예산 원장", "RDS PostgreSQL Multi-AZ", "도쿄 책임액의 유일한 작성자다.")
+            ContainerDb(regional_1_dr, "서울 예산 원장 복구 사본", "PostgreSQL 읽기 복구 사본", "서울 세부 기록의 읽기 전용 비동기 사본이다.")
             ContainerDb(money_2, "도쿄 금액 사건 기록", "RDS PostgreSQL Multi-AZ", "도쿄에서 접수한 통지의 내부 판정과 리스 정산 근거를 보존한다.")
             ContainerDb(global_2, "전역 책임 원장 복구 사본", "RDS PostgreSQL 읽기 복제본", "자동 승격하지 않는 비동기 복구 사본이다.")
         }

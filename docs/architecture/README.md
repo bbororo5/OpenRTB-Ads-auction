@@ -2,7 +2,7 @@
 
 상태: C4 System Landscape·Level 1·Level 2와 SSP·DSP Level 3 책임 경계 확정
 
-근거: [아키텍처 중요 요구사항](../requirements/quality.md), [아키텍처 동인](drivers.md), [ADR-001~009](decisions/)
+근거: [아키텍처 중요 요구사항](../requirements/quality.md), [아키텍처 동인](drivers.md), [ADR-001~010](decisions/)
 
 ## 1. 문서 범위
 
@@ -20,7 +20,7 @@
 | C4 Deployment | [SSP 다중 리전 배포](views/ssp-deployment.md) | SSP 컨테이너 인스턴스와 장애 영역 |
 | C4 Deployment | [프로젝트 DSP 다중 리전 배포](views/dsp-deployment.md) | DSP 컨테이너 인스턴스·원장과 장애 영역 |
 | Technology | [SSP 기술 기준선](technology/ssp.md) | SSP의 확정 기술과 컴포넌트 뒤에 정할 기술 |
-| Technology | [DSP 기술 결정 경계](technology/dsp.md) | 리전 원장 DBMS·로컬 자료구조·인스턴스 DBMS 후보와 검증 순서 |
+| Technology | [DSP 기술 결정 경계](technology/dsp.md) | 확정한 리전 원장·로컬 자료구조와 검증 순서 |
 | Implementation | [SSP 얇은 수직 흐름 구현 계획](implementation/ssp-thin-vertical-slice.md) | E2E를 녹색으로 만드는 컴포넌트·인터페이스 순서 |
 | Implementation | [DSP 상세 설계 로드맵](implementation/dsp-design-roadmap.md) | 컴포넌트별 남은 결정·검증과 권장 순서 |
 
@@ -72,6 +72,7 @@ Container Diagram에는 애플리케이션과 데이터 저장소만 두고, 리
 | ADR-007 지역 금액 사건 장부 | 회사·리전별 독립 PostgreSQL과 RDS Multi-AZ 배치 |
 | ADR-008 전역 책임 원장 | 홈 리전 RDS PostgreSQL 단일 쓰기 권위, 비동기 복구 사본과 자동 승격 금지 |
 | ADR-009 SSP 경매 멱등성 | 경매 키의 안정된 소유자 라우팅과 인스턴스 로컬 중복 방지 |
+| ADR-010 리전 예산 원장 | 리전별 RDS PostgreSQL 쓰기 권위와 원장 시각 기반 리스 발급·정산 |
 
 현재 컨테이너안은 다음 기준으로 구성했다.
 

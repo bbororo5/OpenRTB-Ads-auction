@@ -17,7 +17,7 @@ C4Container
         Container(dsp_application, "DSP 애플리케이션", "기술 미정", "로컬 캠페인 조회·페이싱·예산 예약과 금액 사건의 배경 처리를 실행한다.")
         ContainerDb(campaign_store, "버전형 캠페인 데이터", "저장 기술 미정", "시험 전에 확정한 캠페인·소재와 체크섬을 보존한다.")
         ContainerDb(global_ledger, "전역 책임 원장", "PostgreSQL", "총예산·전역 예비액·리전 책임 봉투 이전을 단일 쓰기 권위로 보존한다.")
-        ContainerDb(regional_ledger, "리전 예산 원장", "저장 기술 미정", "리전 책임액과 DSP 리스의 발급·페이싱·격리·반환 상태를 보존한다.")
+        ContainerDb(regional_ledger, "리전 예산 원장", "RDS PostgreSQL Multi-AZ", "리전 책임액과 DSP 리스의 발급·페이싱·격리·반환 상태를 보존한다.")
         ContainerDb(money_store, "지역 금액 사건 기록", "PostgreSQL", "접수한 lurl·burl의 내부 판정과 리스 정산 근거를 추가 전용으로 보존한다.")
     }
 

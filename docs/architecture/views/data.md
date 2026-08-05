@@ -2,7 +2,7 @@
 
 상태: 데이터 저장 경계와 지역 금액 장부·전역 책임 원장 기술 확정
 
-근거: [제품·도메인 요구사항](../../requirements/product.md), [부하·데이터·검증 기준](../../requirements/workload.md), [아키텍처 중요 요구사항](../../requirements/quality.md), [ADR-001~009](../decisions/)
+근거: [제품·도메인 요구사항](../../requirements/product.md), [부하·데이터·검증 기준](../../requirements/workload.md), [아키텍처 중요 요구사항](../../requirements/quality.md), [ADR-001~010](../decisions/)
 
 이 문서는 데이터별 접근 경로와 보존 수준을 정하고 확정한 저장 기술과 아직 검토할 경계를 함께 관리한다.
 
