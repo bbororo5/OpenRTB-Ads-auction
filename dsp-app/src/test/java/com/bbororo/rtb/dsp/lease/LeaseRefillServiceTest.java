@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class LeaseRefillServiceTest {
@@ -31,24 +32,46 @@ class LeaseRefillServiceTest {
     void installsARecoverablyIssuedLeaseBeforeReportingSuccess() {
         var lease = lease();
         var local = new StubLocalBudget(INSTALLED);
-        var service = new LeaseRefillService(new StubLedger(new LeaseRefilled(lease)), local);
+        var service = new LeaseRefillService(
+                new StubLedger(new LeaseRefilled(lease)), local, () -> 123L
+        );
 
         var result = service.refill(refill()).toCompletableFuture().join();
 
         assertEquals(new LeaseRefilled(lease), result);
         assertEquals(lease, local.installed);
+        assertEquals(123L, local.requestStartedNanos);
     }
 
     @Test
     void doesNotReportSuccessWhenLocalAuthorityCannotInstallTheLease() {
         var service = new LeaseRefillService(
                 new StubLedger(new LeaseRefilled(lease())),
-                new StubLocalBudget(CAPACITY_EXCEEDED)
+                new StubLocalBudget(CAPACITY_EXCEEDED),
+                () -> 123L
         );
 
         var result = service.refill(refill()).toCompletableFuture().join();
 
         assertEquals(new LeaseRefillRejected(LOCAL_INSTALL_REJECTED), result);
+    }
+
+    @Test
+    void capturesRequestStartBeforeWaitingForTheLedger() {
+        AtomicLong monotonicNanos = new AtomicLong(100L);
+        var local = new StubLocalBudget(INSTALLED);
+        var ledger = new StubLedger(new LeaseRefilled(lease())) {
+            @Override
+            public java.util.concurrent.CompletionStage<LeaseMessages.LeaseRefillResult> issue(RefillLease command) {
+                monotonicNanos.set(900L);
+                return super.issue(command);
+            }
+        };
+        var service = new LeaseRefillService(ledger, local, monotonicNanos::get);
+
+        service.refill(refill()).toCompletableFuture().join();
+
+        assertEquals(100L, local.requestStartedNanos);
     }
 
     private static RefillLease refill() {
@@ -64,7 +87,7 @@ class LeaseRefillServiceTest {
         return new InstallLease("lease-1", "campaign-1", 1_000, 1, issued, issued.plusSeconds(5));
     }
 
-    private static final class StubLedger implements RegionalBudgetLedger {
+    private static class StubLedger implements RegionalBudgetLedger {
         private final LeaseMessages.LeaseRefillResult result;
 
         private StubLedger(LeaseMessages.LeaseRefillResult result) {
@@ -90,6 +113,7 @@ class LeaseRefillServiceTest {
     private static final class StubLocalBudget implements LocalBudgetAuthority {
         private final LeaseInstallResult result;
         private InstallLease installed;
+        private long requestStartedNanos;
 
         private StubLocalBudget(LeaseInstallResult result) {
             this.result = result;
@@ -103,8 +127,9 @@ class LeaseRefillServiceTest {
         @Override public List<LeaseSupplySnapshot> supplySnapshots() { return List.of(); }
 
         @Override
-        public LeaseInstallResult install(InstallLease command) {
+        public LeaseInstallResult install(InstallLease command, long requestStartedNanos) {
             installed = command;
+            this.requestStartedNanos = requestStartedNanos;
             return result;
         }
     }

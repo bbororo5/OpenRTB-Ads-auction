@@ -11,28 +11,45 @@ import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
+import java.util.function.LongSupplier;
 
 /** 원장에 멱등 발급된 리스를 같은 DSP 인스턴스의 로컬 권한에 설치한다. */
 public final class LeaseRefillService {
 
     private final RegionalBudgetLedger ledger;
     private final LocalBudgetAuthority localBudget;
+    private final LongSupplier monotonicNanos;
 
     public LeaseRefillService(RegionalBudgetLedger ledger, LocalBudgetAuthority localBudget) {
+        this(ledger, localBudget, System::nanoTime);
+    }
+
+    LeaseRefillService(
+            RegionalBudgetLedger ledger,
+            LocalBudgetAuthority localBudget,
+            LongSupplier monotonicNanos
+    ) {
         this.ledger = Objects.requireNonNull(ledger, "ledger");
         this.localBudget = Objects.requireNonNull(localBudget, "localBudget");
+        this.monotonicNanos = Objects.requireNonNull(monotonicNanos, "monotonicNanos");
     }
 
     public CompletionStage<LeaseRefillResult> refill(RefillLease command) {
         Objects.requireNonNull(command, "command");
-        return ledger.issue(command).thenApply(result -> installIfGranted(result));
+        long requestStartedNanos = monotonicNanos.getAsLong();
+        return ledger.issue(command).thenApply(
+                result -> installIfGranted(result, requestStartedNanos)
+        );
     }
 
-    private LeaseRefillResult installIfGranted(LeaseRefillResult result) {
+    private LeaseRefillResult installIfGranted(
+            LeaseRefillResult result,
+            long requestStartedNanos
+    ) {
         if (!(result instanceof LeaseRefilled refilled)) {
             return result;
         }
-        var installed = localBudget.install(refilled.lease());
+        var installed = localBudget.install(refilled.lease(), requestStartedNanos);
         if (installed == INSTALLED || installed == ALREADY_INSTALLED) {
             return refilled;
         }

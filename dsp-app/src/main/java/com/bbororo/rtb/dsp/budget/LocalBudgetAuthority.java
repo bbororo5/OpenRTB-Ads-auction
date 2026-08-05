@@ -20,5 +20,5 @@ public interface LocalBudgetAuthority extends CampaignPacingView, LocalLeaseSupp
 
     ReservationFinalization expire(ExpireReservation command);
 
-    LeaseInstallResult install(InstallLease command);
+    LeaseInstallResult install(InstallLease command, long requestStartedNanos);
 }

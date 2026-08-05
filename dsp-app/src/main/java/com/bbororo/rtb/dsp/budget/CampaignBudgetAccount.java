@@ -83,7 +83,7 @@ final class CampaignBudgetAccount {
         this.supplySnapshot = emptySupplySnapshot(campaignId, Instant.EPOCH);
     }
 
-    LeaseInstallResult install(InstallLease command, Instant now) {
+    LeaseInstallResult install(InstallLease command, long requestStartedNanos) {
         lock.lock();
         try {
             LeaseAccount existing = leases.get(command.leaseId());
@@ -96,16 +96,21 @@ final class CampaignBudgetAccount {
             if (leases.size() >= maxLeases) {
                 return CAPACITY_EXCEEDED;
             }
-            if (!now.isBefore(command.expiresAt())) {
+            long validityNanos = leaseValidityNanos(command);
+            long localDeadlineNanos = saturatingAdd(
+                    requestStartedNanos,
+                    Math.max(0L, validityNanos - leaseSafetyMargin.toNanos())
+            );
+            if (monotonicNanos.getAsLong() - localDeadlineNanos >= 0L) {
                 return EXPIRED;
             }
 
             leases.put(
                     command.leaseId(),
-                    LeaseAccount.install(command, now, monotonicNanos, leaseSafetyMargin)
+                    LeaseAccount.install(command, monotonicNanos, localDeadlineNanos)
             );
             lastInstalledGeneration = command.generation();
-            refreshAndPublish(now);
+            refreshAndPublish(command.issuedAt());
             return INSTALLED;
         } finally {
             lock.unlock();
@@ -321,6 +326,22 @@ final class CampaignBudgetAccount {
         );
     }
 
+    private static long leaseValidityNanos(InstallLease command) {
+        try {
+            return Duration.between(command.issuedAt(), command.expiresAt()).toNanos();
+        } catch (ArithmeticException overflow) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private static long saturatingAdd(long left, long right) {
+        try {
+            return Math.addExact(left, right);
+        } catch (ArithmeticException overflow) {
+            return Long.MAX_VALUE;
+        }
+    }
+
     record FinalizationOutcome(ReservationFinalization result, boolean releasedGlobalCapacity) {
 
         static FinalizationOutcome applied() {
@@ -370,19 +391,14 @@ final class CampaignBudgetAccount {
 
         static LeaseAccount install(
                 InstallLease command,
-                Instant now,
                 LongSupplier monotonicNanos,
-                Duration safetyMargin
+                long localDeadlineNanos
         ) {
-            Duration remaining = Duration.between(now, command.expiresAt()).minus(safetyMargin);
-            long remainingNanos = remaining.isNegative() || remaining.isZero()
-                    ? 0L
-                    : remaining.toNanos();
             return new LeaseAccount(
                     command,
-                    remainingNanos == 0L ? LeaseState.DRAINING : LeaseState.OPEN,
+                    LeaseState.OPEN,
                     monotonicNanos,
-                    saturatingAdd(monotonicNanos.getAsLong(), remainingNanos)
+                    localDeadlineNanos
             );
         }
 
@@ -412,17 +428,8 @@ final class CampaignBudgetAccount {
         }
 
         void refreshState(Instant now) {
-            if (!now.isBefore(installedLease.expiresAt())
-                    || monotonicNanos.getAsLong() - localDeadlineNanos >= 0L) {
+            if (monotonicNanos.getAsLong() - localDeadlineNanos >= 0L) {
                 state = LeaseState.DRAINING;
-            }
-        }
-
-        private static long saturatingAdd(long left, long right) {
-            try {
-                return Math.addExact(left, right);
-            } catch (ArithmeticException overflow) {
-                return Long.MAX_VALUE;
             }
         }
 

@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.CommitReservation;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ExpireReservation;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.InstallLease;
+import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseInstallResult;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReleaseReservation;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationFinalization;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationGranted;
@@ -42,8 +43,8 @@ class InMemoryLocalBudgetAuthorityTest {
     @Test
     void reusesReleasedMoneyFromTheOldestOpenLease() {
         TestFixture fixture = fixture(100, 100);
-        assertEquals(INSTALLED, fixture.authority.install(lease("lease-1", 1, 100, 10)));
-        assertEquals(INSTALLED, fixture.authority.install(lease("lease-2", 2, 100, 20)));
+        assertEquals(INSTALLED, fixture.install(lease("lease-1", 1, 100, 10)));
+        assertEquals(INSTALLED, fixture.install(lease("lease-2", 2, 100, 20)));
 
         ReservationGranted first = granted(fixture.authority.tryReserve(reserve("bid-1", 100)));
         assertEquals("lease-1", first.leaseId());
@@ -62,7 +63,7 @@ class InMemoryLocalBudgetAuthorityTest {
     @Test
     void concurrentReservationsNeverExceedTheLeaseFaceValue() throws Exception {
         TestFixture fixture = fixture(100, 100);
-        fixture.authority.install(lease("lease-1", 1, 100, 10));
+        fixture.install(lease("lease-1", 1, 100, 10));
         int contenders = 32;
         CountDownLatch ready = new CountDownLatch(contenders);
         CountDownLatch start = new CountDownLatch(1);
@@ -93,7 +94,7 @@ class InMemoryLocalBudgetAuthorityTest {
     @Test
     void commitAndExpiryRaceProducesOneMonetaryEffect() throws Exception {
         TestFixture fixture = fixture(100, 100);
-        fixture.authority.install(lease("lease-1", 1, 100, 10));
+        fixture.install(lease("lease-1", 1, 100, 10));
         ReservationGranted grant = granted(fixture.authority.tryReserve(reserve("bid-1", 100)));
         var reference = new ReservationReference("campaign-1", grant.leaseId(), grant.reservationId());
         CountDownLatch start = new CountDownLatch(1);
@@ -128,7 +129,7 @@ class InMemoryLocalBudgetAuthorityTest {
     @Test
     void finalizationIsIdempotentAndReleasesInstanceCapacityOnce() {
         TestFixture fixture = fixture(1, 10);
-        fixture.authority.install(lease("lease-1", 1, 200, 10));
+        fixture.install(lease("lease-1", 1, 200, 10));
         ReservationGranted grant = granted(fixture.authority.tryReserve(reserve("bid-1", 100)));
         assertRejected(fixture.authority.tryReserve(reserve("bid-2", 100)), INSTANCE_CAPACITY_EXCEEDED);
         var release = new ReleaseReservation(
@@ -147,7 +148,7 @@ class InMemoryLocalBudgetAuthorityTest {
     @Test
     void schedulesEveryGrantedReservationWithItsFullIdentity() {
         TestFixture fixture = fixture(10, 10);
-        fixture.authority.install(lease("lease-1", 1, 100, 10));
+        fixture.install(lease("lease-1", 1, 100, 10));
 
         ReservationGranted grant = granted(fixture.authority.tryReserve(reserve("bid-1", 100)));
 
@@ -159,19 +160,19 @@ class InMemoryLocalBudgetAuthorityTest {
     }
 
     @Test
-    void monotonicDeadlineStopsALeaseEvenWhenWallClockDoesNotAdvance() {
+    void ledgerDurationStopsALeaseEvenWhenTheDspWallClockIsFarBehind() {
         AtomicLong monotonicNanos = new AtomicLong(1_000);
         var authority = new InMemoryLocalBudgetAuthority(
                 10,
                 10,
                 16,
-                Clock.fixed(NOW, ZoneOffset.UTC),
+                Clock.fixed(NOW.minusSeconds(3_600), ZoneOffset.UTC),
                 monotonicNanos::get,
                 Duration.ZERO,
                 () -> "reservation-1",
                 expiration -> { }
         );
-        assertEquals(INSTALLED, authority.install(lease("lease-1", 1, 100, 10)));
+        assertEquals(INSTALLED, authority.install(lease("lease-1", 1, 100, 10), monotonicNanos.get()));
 
         monotonicNanos.addAndGet(Duration.ofSeconds(10).toNanos());
 
@@ -198,7 +199,7 @@ class InMemoryLocalBudgetAuthorityTest {
                 "campaign-1",
                 amount,
                 generation,
-                NOW.minusSeconds(1),
+                NOW,
                 NOW.plusSeconds(expiresInSeconds)
         );
     }
@@ -230,5 +231,8 @@ class InMemoryLocalBudgetAuthorityTest {
             InMemoryLocalBudgetAuthority authority,
             List<BudgetMessages.ReservationExpiration> expirations
     ) {
+        LeaseInstallResult install(InstallLease lease) {
+            return authority.install(lease, System.nanoTime());
+        }
     }
 }

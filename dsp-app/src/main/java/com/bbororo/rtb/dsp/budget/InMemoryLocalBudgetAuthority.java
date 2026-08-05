@@ -157,7 +157,7 @@ public final class InMemoryLocalBudgetAuthority implements LocalBudgetAuthority 
     }
 
     @Override
-    public LeaseInstallResult install(InstallLease command) {
+    public LeaseInstallResult install(InstallLease command, long requestStartedNanos) {
         Objects.requireNonNull(command, "command");
         CampaignBudgetAccount account = accounts.computeIfAbsent(
                 command.campaignId(),
@@ -169,7 +169,7 @@ public final class InMemoryLocalBudgetAuthority implements LocalBudgetAuthority 
                         leaseSafetyMargin
                 )
         );
-        return account.install(command, clock.instant());
+        return account.install(command, requestStartedNanos);
     }
 
     @Override
