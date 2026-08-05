@@ -13,6 +13,7 @@ import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationRejected;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationResult;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.TryReserve;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -20,6 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.function.Supplier;
+import java.util.function.LongSupplier;
 
 /** 캠페인별 잠금과 인스턴스 용량 상한을 사용하는 로컬 예산 권한 구현이다. */
 public final class InMemoryLocalBudgetAuthority implements LocalBudgetAuthority {
@@ -27,12 +29,15 @@ public final class InMemoryLocalBudgetAuthority implements LocalBudgetAuthority 
     public static final int DEFAULT_INSTANCE_CAPACITY = 20_000;
     public static final int DEFAULT_CAMPAIGN_CAPACITY = 2_500;
     public static final int DEFAULT_LEASE_CAPACITY = 64;
+    public static final Duration DEFAULT_LEASE_SAFETY_MARGIN = Duration.ofMillis(100);
 
     private final ConcurrentHashMap<String, CampaignBudgetAccount> accounts = new ConcurrentHashMap<>();
     private final Semaphore instanceCapacity;
     private final int campaignCapacity;
     private final int leaseCapacity;
     private final Clock clock;
+    private final LongSupplier monotonicNanos;
+    private final Duration leaseSafetyMargin;
     private final Supplier<String> reservationIds;
     private final ReservationExpirationSink expirationSink;
 
@@ -42,6 +47,8 @@ public final class InMemoryLocalBudgetAuthority implements LocalBudgetAuthority 
                 DEFAULT_CAMPAIGN_CAPACITY,
                 DEFAULT_LEASE_CAPACITY,
                 Clock.systemUTC(),
+                System::nanoTime,
+                DEFAULT_LEASE_SAFETY_MARGIN,
                 () -> UUID.randomUUID().toString(),
                 expirationSink
         );
@@ -55,6 +62,28 @@ public final class InMemoryLocalBudgetAuthority implements LocalBudgetAuthority 
             Supplier<String> reservationIds,
             ReservationExpirationSink expirationSink
     ) {
+        this(
+                instanceCapacity,
+                campaignCapacity,
+                leaseCapacity,
+                clock,
+                System::nanoTime,
+                Duration.ZERO,
+                reservationIds,
+                expirationSink
+        );
+    }
+
+    InMemoryLocalBudgetAuthority(
+            int instanceCapacity,
+            int campaignCapacity,
+            int leaseCapacity,
+            Clock clock,
+            LongSupplier monotonicNanos,
+            Duration leaseSafetyMargin,
+            Supplier<String> reservationIds,
+            ReservationExpirationSink expirationSink
+    ) {
         if (instanceCapacity <= 0 || campaignCapacity <= 0 || leaseCapacity <= 0) {
             throw new IllegalArgumentException("capacities must be positive");
         }
@@ -62,6 +91,11 @@ public final class InMemoryLocalBudgetAuthority implements LocalBudgetAuthority 
         this.campaignCapacity = campaignCapacity;
         this.leaseCapacity = leaseCapacity;
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.monotonicNanos = Objects.requireNonNull(monotonicNanos, "monotonicNanos");
+        this.leaseSafetyMargin = Objects.requireNonNull(leaseSafetyMargin, "leaseSafetyMargin");
+        if (leaseSafetyMargin.isNegative()) {
+            throw new IllegalArgumentException("leaseSafetyMargin must not be negative");
+        }
         this.reservationIds = Objects.requireNonNull(reservationIds, "reservationIds");
         this.expirationSink = Objects.requireNonNull(expirationSink, "expirationSink");
     }
@@ -127,7 +161,13 @@ public final class InMemoryLocalBudgetAuthority implements LocalBudgetAuthority 
         Objects.requireNonNull(command, "command");
         CampaignBudgetAccount account = accounts.computeIfAbsent(
                 command.campaignId(),
-                campaignId -> new CampaignBudgetAccount(campaignId, campaignCapacity, leaseCapacity)
+                campaignId -> new CampaignBudgetAccount(
+                        campaignId,
+                        campaignCapacity,
+                        leaseCapacity,
+                        monotonicNanos,
+                        leaseSafetyMargin
+                )
         );
         return account.install(command, clock.instant());
     }

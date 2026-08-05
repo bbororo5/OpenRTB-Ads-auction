@@ -5,6 +5,7 @@ import static com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationFinalization.
 import static com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationFinalization.ALREADY_FINALIZED_DIFFERENTLY;
 import static com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationFinalization.APPLIED;
 import static com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationRejection.INSTANCE_CAPACITY_EXCEEDED;
+import static com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationRejection.LEASE_EXPIRED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,6 +21,7 @@ import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationRejected;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationResult;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.TryReserve;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -30,6 +32,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class InMemoryLocalBudgetAuthorityTest {
@@ -153,6 +156,26 @@ class InMemoryLocalBudgetAuthorityTest {
         assertEquals("campaign-1", expiration.reservation().campaignId());
         assertEquals(grant.leaseId(), expiration.reservation().leaseId());
         assertEquals(grant.reservationId(), expiration.reservation().reservationId());
+    }
+
+    @Test
+    void monotonicDeadlineStopsALeaseEvenWhenWallClockDoesNotAdvance() {
+        AtomicLong monotonicNanos = new AtomicLong(1_000);
+        var authority = new InMemoryLocalBudgetAuthority(
+                10,
+                10,
+                16,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                monotonicNanos::get,
+                Duration.ZERO,
+                () -> "reservation-1",
+                expiration -> { }
+        );
+        assertEquals(INSTALLED, authority.install(lease("lease-1", 1, 100, 10)));
+
+        monotonicNanos.addAndGet(Duration.ofSeconds(10).toNanos());
+
+        assertRejected(authority.tryReserve(reserve("bid-1", 100)), LEASE_EXPIRED);
     }
 
     private static TestFixture fixture(int instanceCapacity, int campaignCapacity) {

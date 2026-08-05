@@ -35,6 +35,7 @@ import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationRejected;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationResult;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.TryReserve;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,6 +43,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
+import java.util.function.LongSupplier;
 
 /** 한 캠페인의 리스와 예약 금액을 하나의 원자 경계에서 변경한다. */
 final class CampaignBudgetAccount {
@@ -56,6 +58,8 @@ final class CampaignBudgetAccount {
     private final int maxLeases;
     private final ReentrantLock lock = new ReentrantLock();
     private final Map<String, LeaseAccount> leases = new HashMap<>();
+    private final LongSupplier monotonicNanos;
+    private final Duration leaseSafetyMargin;
 
     private long lastInstalledGeneration;
     private int outstandingReservations;
@@ -64,10 +68,18 @@ final class CampaignBudgetAccount {
     private volatile PacingPosition pacingPosition = new PacingPosition(false, 0L);
     private volatile LeaseSupplySnapshot supplySnapshot;
 
-    CampaignBudgetAccount(String campaignId, int maxOutstandingReservations, int maxLeases) {
+    CampaignBudgetAccount(
+            String campaignId,
+            int maxOutstandingReservations,
+            int maxLeases,
+            LongSupplier monotonicNanos,
+            Duration leaseSafetyMargin
+    ) {
         this.campaignId = Objects.requireNonNull(campaignId, "campaignId");
         this.maxOutstandingReservations = maxOutstandingReservations;
         this.maxLeases = maxLeases;
+        this.monotonicNanos = Objects.requireNonNull(monotonicNanos, "monotonicNanos");
+        this.leaseSafetyMargin = Objects.requireNonNull(leaseSafetyMargin, "leaseSafetyMargin");
         this.supplySnapshot = emptySupplySnapshot(campaignId, Instant.EPOCH);
     }
 
@@ -88,7 +100,10 @@ final class CampaignBudgetAccount {
                 return EXPIRED;
             }
 
-            leases.put(command.leaseId(), LeaseAccount.install(command, now));
+            leases.put(
+                    command.leaseId(),
+                    LeaseAccount.install(command, now, monotonicNanos, leaseSafetyMargin)
+            );
             lastInstalledGeneration = command.generation();
             refreshAndPublish(now);
             return INSTALLED;
@@ -268,7 +283,7 @@ final class CampaignBudgetAccount {
             return INSUFFICIENT_LOCAL_BUDGET;
         }
         boolean hasExpiredLease = leases.values().stream()
-                .anyMatch(lease -> !now.isBefore(lease.expiresAt()));
+                .anyMatch(lease -> !lease.isOpen(now));
         return hasExpiredLease ? LEASE_EXPIRED : NO_ACTIVE_LEASE;
     }
 
@@ -333,19 +348,42 @@ final class CampaignBudgetAccount {
 
         private final InstallLease installedLease;
         private final Map<String, Reservation> reservations = new HashMap<>();
+        private final LongSupplier monotonicNanos;
+        private final long localDeadlineNanos;
         private LeaseState state;
         private long unusedMicros;
         private long reservedMicros;
         private long committedMicros;
 
-        private LeaseAccount(InstallLease installedLease, LeaseState state) {
+        private LeaseAccount(
+                InstallLease installedLease,
+                LeaseState state,
+                LongSupplier monotonicNanos,
+                long localDeadlineNanos
+        ) {
             this.installedLease = installedLease;
             this.state = state;
+            this.monotonicNanos = monotonicNanos;
+            this.localDeadlineNanos = localDeadlineNanos;
             this.unusedMicros = installedLease.faceValueMicros();
         }
 
-        static LeaseAccount install(InstallLease command, Instant now) {
-            return new LeaseAccount(command, LeaseState.OPEN);
+        static LeaseAccount install(
+                InstallLease command,
+                Instant now,
+                LongSupplier monotonicNanos,
+                Duration safetyMargin
+        ) {
+            Duration remaining = Duration.between(now, command.expiresAt()).minus(safetyMargin);
+            long remainingNanos = remaining.isNegative() || remaining.isZero()
+                    ? 0L
+                    : remaining.toNanos();
+            return new LeaseAccount(
+                    command,
+                    remainingNanos == 0L ? LeaseState.DRAINING : LeaseState.OPEN,
+                    monotonicNanos,
+                    saturatingAdd(monotonicNanos.getAsLong(), remainingNanos)
+            );
         }
 
         String leaseId() {
@@ -374,8 +412,17 @@ final class CampaignBudgetAccount {
         }
 
         void refreshState(Instant now) {
-            if (!now.isBefore(installedLease.expiresAt())) {
+            if (!now.isBefore(installedLease.expiresAt())
+                    || monotonicNanos.getAsLong() - localDeadlineNanos >= 0L) {
                 state = LeaseState.DRAINING;
+            }
+        }
+
+        private static long saturatingAdd(long left, long right) {
+            try {
+                return Math.addExact(left, right);
+            } catch (ArithmeticException overflow) {
+                return Long.MAX_VALUE;
             }
         }
 
