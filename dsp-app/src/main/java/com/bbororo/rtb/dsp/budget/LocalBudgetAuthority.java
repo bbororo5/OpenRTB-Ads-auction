@@ -10,7 +10,7 @@ import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationResult;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.TryReserve;
 
 /** 한 DSP 인스턴스의 리스 액면과 모든 예약 상태 변경을 단독 소유한다. */
-public interface LocalBudgetAuthority extends CampaignPacingView {
+public interface LocalBudgetAuthority extends CampaignPacingView, LocalLeaseSupplyView {
 
     ReservationResult tryReserve(TryReserve command);
 

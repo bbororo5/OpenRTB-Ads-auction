@@ -94,7 +94,7 @@ flowchart LR
 | 로컬 예산 권한 | `LocalBudgetAuthority` | `TryReserve`, `ReleaseReservation`, `CommitReservation`, `ExpireReservation`, `InstallLease` → 상태 변경 결과 |
 | 예약 통지 증표 | `ReservationNoticeCodec` | `ReservationGrant` → `NotificationUrls`, 불투명 토큰 → `VerifiedReservationNotice` |
 | 경매 결과 처리 | `AuctionNoticeProcessor` | `AuctionNotice` → 검증·기록·종결한 `NoticeProcessingResult` |
-| 리스 생명주기 | `LeaseLifecycle` | `RefillLease`, `SettleLease` → 리스 처리 결과 |
+| 리스 생명주기 | `LeaseLifecycle` | `RefillLease`, 원장이 임대한 `SettlementWork` → 리스 처리 결과 |
 | 리전 책임 제어 | `RegionalResponsibilityController` | `RequestRegionalResponsibility` → 이전 처리 결과 |
 
 ## 협력 계약

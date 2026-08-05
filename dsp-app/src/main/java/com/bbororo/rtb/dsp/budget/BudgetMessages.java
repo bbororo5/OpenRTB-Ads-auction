@@ -6,6 +6,7 @@ import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonNegative;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Objects;
 
 /** 로컬 예산 권한과 예약 상태를 바꾸는 메시지다. */
@@ -128,7 +129,7 @@ public final class BudgetMessages {
             String campaignId,
             long faceValueMicros,
             long generation,
-            Instant startsAt,
+            Instant issuedAt,
             Instant expiresAt
     ) {
         public InstallLease {
@@ -136,7 +137,34 @@ public final class BudgetMessages {
             campaignId = requireNonBlank(campaignId, "campaignId");
             requirePositive(faceValueMicros, "faceValueMicros");
             requirePositive(generation, "generation");
-            requireAfter(startsAt, expiresAt, "expiresAt");
+            requireAfter(issuedAt, expiresAt, "expiresAt");
+        }
+    }
+
+    /** 리스 보충 정책이 읽는 캠페인별 결과적 일관성 투영이다. */
+    public record LeaseSupplySnapshot(
+            String campaignId,
+            long reusableMicros,
+            long reservedMicros,
+            long committedMicros,
+            long cumulativeReservedMicros,
+            long cumulativeReleasedMicros,
+            int openLeaseCount,
+            Optional<Instant> earliestExpiry,
+            Instant observedAt
+    ) {
+        public LeaseSupplySnapshot {
+            campaignId = requireNonBlank(campaignId, "campaignId");
+            requireNonNegative(reusableMicros, "reusableMicros");
+            requireNonNegative(reservedMicros, "reservedMicros");
+            requireNonNegative(committedMicros, "committedMicros");
+            requireNonNegative(cumulativeReservedMicros, "cumulativeReservedMicros");
+            requireNonNegative(cumulativeReleasedMicros, "cumulativeReleasedMicros");
+            if (openLeaseCount < 0) {
+                throw new IllegalArgumentException("openLeaseCount must not be negative");
+            }
+            earliestExpiry = Objects.requireNonNull(earliestExpiry, "earliestExpiry");
+            Objects.requireNonNull(observedAt, "observedAt");
         }
     }
 

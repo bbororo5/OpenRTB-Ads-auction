@@ -24,6 +24,7 @@ import com.bbororo.rtb.dsp.budget.BudgetMessages.ExpireReservation;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.InstallLease;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseBalance;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseInstallResult;
+import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.PacingPosition;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReleaseReservation;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationExpiration;
@@ -58,12 +59,16 @@ final class CampaignBudgetAccount {
 
     private long lastInstalledGeneration;
     private int outstandingReservations;
+    private long cumulativeReservedMicros;
+    private long cumulativeReleasedMicros;
     private volatile PacingPosition pacingPosition = new PacingPosition(false, 0L);
+    private volatile LeaseSupplySnapshot supplySnapshot;
 
     CampaignBudgetAccount(String campaignId, int maxOutstandingReservations, int maxLeases) {
         this.campaignId = Objects.requireNonNull(campaignId, "campaignId");
         this.maxOutstandingReservations = maxOutstandingReservations;
         this.maxLeases = maxLeases;
+        this.supplySnapshot = emptySupplySnapshot(campaignId, Instant.EPOCH);
     }
 
     LeaseInstallResult install(InstallLease command, Instant now) {
@@ -125,6 +130,10 @@ final class CampaignBudgetAccount {
             LeaseAccount lease = selected.orElseThrow();
             Reservation reservation = lease.reserve(reservationId, command);
             outstandingReservations++;
+            cumulativeReservedMicros = Math.addExact(
+                    cumulativeReservedMicros,
+                    command.impressionAmountMicros()
+            );
             var expiration = new ReservationExpiration(
                     new ReservationReference(campaignId, lease.leaseId(), reservationId),
                     reservation.amountMicros(),
@@ -187,6 +196,10 @@ final class CampaignBudgetAccount {
         return pacingPosition;
     }
 
+    LeaseSupplySnapshot supplySnapshot() {
+        return supplySnapshot;
+    }
+
     LeaseBalance balanceOf(String leaseId, Instant now) {
         lock.lock();
         try {
@@ -236,6 +249,12 @@ final class CampaignBudgetAccount {
 
             lease.finalizeReservation(reservation, targetState, eventId);
             outstandingReservations--;
+            if (targetState != ReservationState.COMMITTED) {
+                cumulativeReleasedMicros = Math.addExact(
+                        cumulativeReleasedMicros,
+                        reservation.amountMicros()
+                );
+            }
             refreshAndPublish(occurredAt);
             return FinalizationOutcome.applied();
         } finally {
@@ -263,6 +282,28 @@ final class CampaignBudgetAccount {
         boolean usable = leases.values().stream()
                 .anyMatch(lease -> lease.isOpen(now) && lease.unusedMicros > 0L);
         pacingPosition = new PacingPosition(usable, 0L);
+        long reusable = leases.values().stream().mapToLong(lease -> lease.unusedMicros).sum();
+        long reserved = leases.values().stream().mapToLong(lease -> lease.reservedMicros).sum();
+        long committed = leases.values().stream().mapToLong(lease -> lease.committedMicros).sum();
+        var openLeases = leases.values().stream().filter(lease -> lease.isOpen(now)).toList();
+        var earliestExpiry = openLeases.stream().map(LeaseAccount::expiresAt).min(Instant::compareTo);
+        supplySnapshot = new LeaseSupplySnapshot(
+                campaignId,
+                reusable,
+                reserved,
+                committed,
+                cumulativeReservedMicros,
+                cumulativeReleasedMicros,
+                openLeases.size(),
+                earliestExpiry,
+                now
+        );
+    }
+
+    private static LeaseSupplySnapshot emptySupplySnapshot(String campaignId, Instant observedAt) {
+        return new LeaseSupplySnapshot(
+                campaignId, 0L, 0L, 0L, 0L, 0L, 0, Optional.empty(), observedAt
+        );
     }
 
     record FinalizationOutcome(ReservationFinalization result, boolean releasedGlobalCapacity) {
@@ -277,7 +318,6 @@ final class CampaignBudgetAccount {
     }
 
     private enum LeaseState {
-        PENDING,
         OPEN,
         DRAINING
     }
@@ -305,8 +345,7 @@ final class CampaignBudgetAccount {
         }
 
         static LeaseAccount install(InstallLease command, Instant now) {
-            LeaseState state = now.isBefore(command.startsAt()) ? LeaseState.PENDING : LeaseState.OPEN;
-            return new LeaseAccount(command, state);
+            return new LeaseAccount(command, LeaseState.OPEN);
         }
 
         String leaseId() {
@@ -337,8 +376,6 @@ final class CampaignBudgetAccount {
         void refreshState(Instant now) {
             if (!now.isBefore(installedLease.expiresAt())) {
                 state = LeaseState.DRAINING;
-            } else if (state == LeaseState.PENDING && !now.isBefore(installedLease.startsAt())) {
-                state = LeaseState.OPEN;
             }
         }
 

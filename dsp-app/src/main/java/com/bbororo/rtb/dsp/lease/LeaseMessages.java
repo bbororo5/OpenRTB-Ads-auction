@@ -1,14 +1,17 @@
 package com.bbororo.rtb.dsp.lease;
 
+import static com.bbororo.rtb.dsp.contract.ContractChecks.requireAfter;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonNegative;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
 import com.bbororo.rtb.dsp.budget.BudgetMessages.InstallLease;
+import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
-/** DSP 로컬 리스의 보충·집계·정산 메시지다. */
+/** DSP 로컬 리스의 가변 보충과 자동 정산 메시지다. */
 public final class LeaseMessages {
 
     private LeaseMessages() {
@@ -17,16 +20,18 @@ public final class LeaseMessages {
     public record RefillLease(
             String requestId,
             String instanceId,
-            String campaignId,
-            long requestedMicros,
-            Instant requestedAt
+            LeaseSupplySnapshot localPosition,
+            long requestedMicros
     ) {
         public RefillLease {
             requestId = requireNonBlank(requestId, "requestId");
             instanceId = requireNonBlank(instanceId, "instanceId");
-            campaignId = requireNonBlank(campaignId, "campaignId");
+            Objects.requireNonNull(localPosition, "localPosition");
             requirePositive(requestedMicros, "requestedMicros");
-            Objects.requireNonNull(requestedAt, "requestedAt");
+        }
+
+        public String campaignId() {
+            return localPosition.campaignId();
         }
     }
 
@@ -45,11 +50,41 @@ public final class LeaseMessages {
         }
     }
 
-    public record SettleLease(String leaseId, long settlementGeneration, Instant requestedAt) {
-        public SettleLease {
+    public record ClaimDueSettlements(
+            String workerId,
+            int limit,
+            Duration claimDuration
+    ) {
+        public ClaimDueSettlements {
+            workerId = requireNonBlank(workerId, "workerId");
+            if (limit <= 0) {
+                throw new IllegalArgumentException("limit must be positive");
+            }
+            Objects.requireNonNull(claimDuration, "claimDuration");
+            if (claimDuration.isZero() || claimDuration.isNegative()) {
+                throw new IllegalArgumentException("claimDuration must be positive");
+            }
+        }
+    }
+
+    public record SettlementWork(
+            String leaseId,
+            String campaignId,
+            String ownerInstanceId,
+            long faceValueMicros,
+            long settlementGeneration,
+            long claimGeneration,
+            Instant safeRecoveryAt,
+            Instant claimUntil
+    ) {
+        public SettlementWork {
             leaseId = requireNonBlank(leaseId, "leaseId");
+            campaignId = requireNonBlank(campaignId, "campaignId");
+            ownerInstanceId = requireNonBlank(ownerInstanceId, "ownerInstanceId");
+            requirePositive(faceValueMicros, "faceValueMicros");
             requirePositive(settlementGeneration, "settlementGeneration");
-            Objects.requireNonNull(requestedAt, "requestedAt");
+            requirePositive(claimGeneration, "claimGeneration");
+            requireAfter(safeRecoveryAt, claimUntil, "claimUntil");
         }
     }
 
@@ -67,13 +102,7 @@ public final class LeaseMessages {
             requireNonNegative(committedMicros, "committedMicros");
             requireNonNegative(returnableMicros, "returnableMicros");
             requireNonNegative(quarantinedMicros, "quarantinedMicros");
-            long classified = Math.addExact(
-                    Math.addExact(committedMicros, returnableMicros),
-                    quarantinedMicros
-            );
-            if (classified != faceValueMicros) {
-                throw new IllegalArgumentException("lease usage must preserve face value");
-            }
+            requireFaceValue(faceValueMicros, committedMicros, returnableMicros, quarantinedMicros);
         }
     }
 
@@ -92,13 +121,7 @@ public final class LeaseMessages {
             requireNonNegative(committedMicros, "committedMicros");
             requireNonNegative(returnedMicros, "returnedMicros");
             requireNonNegative(quarantinedMicros, "quarantinedMicros");
-            long classified = Math.addExact(
-                    Math.addExact(committedMicros, returnedMicros),
-                    quarantinedMicros
-            );
-            if (classified != faceValueMicros) {
-                throw new IllegalArgumentException("lease settlement must preserve face value");
-            }
+            requireFaceValue(faceValueMicros, committedMicros, returnedMicros, quarantinedMicros);
         }
     }
 
@@ -113,7 +136,15 @@ public final class LeaseMessages {
         APPLIED,
         ALREADY_APPLIED,
         NOT_READY,
+        STALE_CLAIM,
         TEMPORARILY_UNAVAILABLE,
         CONFLICT
+    }
+
+    private static void requireFaceValue(long face, long committed, long returned, long quarantined) {
+        long classified = Math.addExact(Math.addExact(committed, returned), quarantined);
+        if (classified != face) {
+            throw new IllegalArgumentException("lease amounts must preserve face value");
+        }
     }
 }

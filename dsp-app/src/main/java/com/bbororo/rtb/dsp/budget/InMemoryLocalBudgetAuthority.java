@@ -5,6 +5,7 @@ import com.bbororo.rtb.dsp.budget.BudgetMessages.ExpireReservation;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.InstallLease;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseBalance;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseInstallResult;
+import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.PacingPosition;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReleaseReservation;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationFinalization;
@@ -12,6 +13,8 @@ import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationRejected;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationResult;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.TryReserve;
 import java.time.Clock;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -134,6 +137,14 @@ public final class InMemoryLocalBudgetAuthority implements LocalBudgetAuthority 
         Objects.requireNonNull(campaignId, "campaignId");
         CampaignBudgetAccount account = accounts.get(campaignId);
         return account == null ? new PacingPosition(false, 0L) : account.pacingPosition();
+    }
+
+    @Override
+    public List<LeaseSupplySnapshot> supplySnapshots() {
+        return accounts.values().stream()
+                .map(CampaignBudgetAccount::supplySnapshot)
+                .sorted(Comparator.comparing(LeaseSupplySnapshot::campaignId))
+                .toList();
     }
 
     LeaseBalance balanceOf(String campaignId, String leaseId) {
