@@ -129,6 +129,7 @@ public final class LeaseMessages {
         REGIONAL_BUDGET_UNAVAILABLE,
         PACING_LIMIT_REACHED,
         REGIONAL_LEDGER_UNAVAILABLE,
+        LOCAL_INSTALL_REJECTED,
         STALE_REQUEST
     }
 
