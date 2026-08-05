@@ -7,7 +7,28 @@ tasks.named('test') {
     useJUnitPlatform {
         excludeTags 'dsp-regional-ledger'
         excludeTags 'dsp-money-event-store'
+        excludeTags 'dsp-lease-recovery'
     }
+}
+
+tasks.register('leaseRecoveryIntegrationTest', Test) {
+    description = 'Runs DSP lease recovery across the regional ledger and monetary event store.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'dsp-lease-recovery'
+    }
+
+    systemProperty 'dsp.ledger.jdbc-url',
+            providers.gradleProperty('dspLedgerJdbcUrl').getOrElse('jdbc:postgresql://localhost:35432/rtb')
+    systemProperty 'dsp.money.jdbc-url',
+            providers.gradleProperty('dspMoneyJdbcUrl').getOrElse('jdbc:postgresql://localhost:35532/rtb')
+    systemProperty 'dsp.store.username',
+            providers.gradleProperty('dspStoreUsername').getOrElse('postgres')
+    systemProperty 'dsp.store.password',
+            providers.gradleProperty('dspStorePassword').getOrElse('local-dev-postgres-password')
 }
 
 tasks.register('moneyEventStoreIntegrationTest', Test) {

@@ -1,0 +1,120 @@
+package com.bbororo.rtb.dsp.lease;
+
+import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.REGIONAL_LEDGER_UNAVAILABLE;
+import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.APPLIED;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.bbororo.rtb.dsp.budget.BudgetMessages.InstallLease;
+import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlement;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Test;
+
+class LeaseMaintenanceWorkerTest {
+
+    @Test
+    void retriesTheSameLogicalRefillRequestAfterLedgerFailure() {
+        var lifecycle = new RecordingLifecycle();
+        lifecycle.refillResults.add(new LeaseRefillRejected(REGIONAL_LEDGER_UNAVAILABLE));
+        lifecycle.refillResults.add(new LeaseRefilled(lease()));
+        var worker = worker(lifecycle, new EmptyLedger());
+
+        worker.runOnce().toCompletableFuture().join();
+        worker.runOnce().toCompletableFuture().join();
+
+        assertEquals(2, lifecycle.refills.size());
+        assertEquals(lifecycle.refills.get(0).requestId(), lifecycle.refills.get(1).requestId());
+    }
+
+    @Test
+    void claimsAndSettlesDueWorkInTheSameMaintenanceCycle() {
+        var lifecycle = new RecordingLifecycle();
+        lifecycle.refillResults.add(new LeaseRefilled(lease()));
+        SettlementWork work = work();
+        var ledger = new EmptyLedger() {
+            @Override
+            public CompletionStage<List<SettlementWork>> claimDue(ClaimDueSettlements command) {
+                return CompletableFuture.completedFuture(List.of(work));
+            }
+        };
+
+        var report = worker(lifecycle, ledger).runOnce().toCompletableFuture().join();
+
+        assertEquals(1, report.settlementsClaimed());
+        assertEquals(1, report.settlementsApplied());
+        assertEquals(List.of(work), lifecycle.settlements);
+    }
+
+    private static LeaseMaintenanceWorker worker(
+            RecordingLifecycle lifecycle,
+            RegionalBudgetLedger ledger
+    ) {
+        var policy = new AdaptiveLeaseDemandPolicy(Duration.ofSeconds(1), 100, 1_000);
+        AtomicInteger ids = new AtomicInteger();
+        return new LeaseMaintenanceWorker(
+                "instance-1", "worker-1", () -> List.of(snapshot()), policy,
+                lifecycle, ledger, 10, Duration.ofSeconds(1),
+                () -> "request-" + ids.incrementAndGet()
+        );
+    }
+
+    private static LeaseSupplySnapshot snapshot() {
+        Instant now = Instant.parse("2026-01-01T00:00:00Z");
+        return new LeaseSupplySnapshot(
+                "campaign-1", 0, 0, 0, 0, 0, 0, Optional.empty(), now
+        );
+    }
+
+    private static InstallLease lease() {
+        Instant issued = Instant.parse("2026-01-01T00:00:00Z");
+        return new InstallLease(
+                "lease-1", "campaign-1", 100, 1, issued, issued.plusSeconds(5)
+        );
+    }
+
+    private static SettlementWork work() {
+        Instant safe = Instant.parse("2026-01-01T00:00:10Z");
+        return new SettlementWork(
+                "lease-1", "campaign-1", "instance-1", 100, 1, 1,
+                safe, safe.plusSeconds(1)
+        );
+    }
+
+    private static final class RecordingLifecycle implements LeaseLifecycle {
+        private final List<RefillLease> refills = new ArrayList<>();
+        private final List<SettlementWork> settlements = new ArrayList<>();
+        private final List<LeaseRefillResult> refillResults = new ArrayList<>();
+
+        @Override
+        public CompletionStage<LeaseRefillResult> refill(RefillLease command) {
+            refills.add(command);
+            return CompletableFuture.completedFuture(refillResults.removeFirst());
+        }
+
+        @Override
+        public CompletionStage<LeaseSettlementResult> settle(SettlementWork work) {
+            settlements.add(work);
+            return CompletableFuture.completedFuture(APPLIED);
+        }
+    }
+
+    private static class EmptyLedger implements RegionalBudgetLedger {
+        @Override public CompletionStage<LeaseRefillResult> issue(RefillLease command) { throw new UnsupportedOperationException(); }
+        @Override public CompletionStage<List<SettlementWork>> claimDue(ClaimDueSettlements command) { return CompletableFuture.completedFuture(List.of()); }
+        @Override public CompletionStage<LeaseSettlementResult> apply(SettlementWork work, LeaseSettlement settlement) { throw new UnsupportedOperationException(); }
+    }
+}
