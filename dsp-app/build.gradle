@@ -6,7 +6,26 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform {
         excludeTags 'dsp-regional-ledger'
+        excludeTags 'dsp-money-event-store'
     }
+}
+
+tasks.register('moneyEventStoreIntegrationTest', Test) {
+    description = 'Runs the DSP regional monetary event store against PostgreSQL.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'dsp-money-event-store'
+    }
+
+    systemProperty 'dsp.money.jdbc-url',
+            providers.gradleProperty('dspMoneyJdbcUrl').getOrElse('jdbc:postgresql://localhost:35532/rtb')
+    systemProperty 'dsp.money.username',
+            providers.gradleProperty('dspMoneyUsername').getOrElse('postgres')
+    systemProperty 'dsp.money.password',
+            providers.gradleProperty('dspMoneyPassword').getOrElse('local-dev-postgres-password')
 }
 
 tasks.register('regionalLedgerIntegrationTest', Test) {

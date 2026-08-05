@@ -3,7 +3,6 @@ package com.bbororo.rtb.dsp.notification;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
-import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeKind;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -15,11 +14,10 @@ public final class NoticeProcessingMessages {
 
     public record MonetaryNoticeEvent(
             String eventId,
-            NoticeKind kind,
+            MonetaryEventKind kind,
             String reservationId,
             String leaseId,
             String campaignId,
-            String bidId,
             long impressionAmountMicros,
             Instant reservationExpiresAt,
             Instant receivedAt
@@ -27,13 +25,9 @@ public final class NoticeProcessingMessages {
         public MonetaryNoticeEvent {
             eventId = requireNonBlank(eventId, "eventId");
             Objects.requireNonNull(kind, "kind");
-            if (kind == NoticeKind.WIN) {
-                throw new IllegalArgumentException("WIN is not a monetary notice event");
-            }
             reservationId = requireNonBlank(reservationId, "reservationId");
             leaseId = requireNonBlank(leaseId, "leaseId");
             campaignId = requireNonBlank(campaignId, "campaignId");
-            bidId = requireNonBlank(bidId, "bidId");
             requirePositive(impressionAmountMicros, "impressionAmountMicros");
             Objects.requireNonNull(reservationExpiresAt, "reservationExpiresAt");
             Objects.requireNonNull(receivedAt, "receivedAt");
@@ -59,7 +53,8 @@ public final class NoticeProcessingMessages {
         }
     }
 
-    public record EventConflict(String eventId, NoticeKind existingKind) implements EventAppendResult {
+    public record EventConflict(String eventId, MonetaryEventKind existingKind)
+            implements EventAppendResult {
         public EventConflict {
             eventId = requireNonBlank(eventId, "eventId");
             Objects.requireNonNull(existingKind, "existingKind");
@@ -88,6 +83,12 @@ public final class NoticeProcessingMessages {
         DUPLICATE,
         LATE_NO_EFFECT,
         CONFLICT
+    }
+
+    public enum MonetaryEventKind {
+        LOSS,
+        BILLING,
+        EXPIRY
     }
 
     public enum NoticeRejection {

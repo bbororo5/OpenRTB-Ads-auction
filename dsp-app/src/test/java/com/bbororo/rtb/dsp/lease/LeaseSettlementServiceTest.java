@@ -44,7 +44,8 @@ class LeaseSettlementServiceTest {
     }
 
     private static LeaseSettlementService service(CapturingLedger ledger, LeaseUsageSummary summary) {
-        LeaseEventReader reader = (leaseId, evaluatedAt) -> CompletableFuture.completedFuture(summary);
+        LeaseEventReader reader = (leaseId, faceValueMicros, evaluatedAt) ->
+                CompletableFuture.completedFuture(summary);
         return new LeaseSettlementService(ledger, reader);
     }
 

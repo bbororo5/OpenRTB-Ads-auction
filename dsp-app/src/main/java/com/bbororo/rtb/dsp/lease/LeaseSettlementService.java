@@ -24,7 +24,9 @@ public final class LeaseSettlementService {
 
     public CompletionStage<LeaseSettlementResult> settle(SettlementWork work) {
         Objects.requireNonNull(work, "work");
-        return eventReader.summarize(work.leaseId(), work.safeRecoveryAt())
+        return eventReader.summarize(
+                        work.leaseId(), work.faceValueMicros(), work.safeRecoveryAt()
+                )
                 .thenCompose(summary -> apply(work, summary));
     }
 

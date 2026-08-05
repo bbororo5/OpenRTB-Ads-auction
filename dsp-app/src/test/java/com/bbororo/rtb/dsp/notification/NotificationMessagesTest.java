@@ -16,14 +16,13 @@ class NotificationMessagesTest {
     private static final Instant EXPIRES_AT = RESERVED_AT.plusSeconds(5);
 
     @Test
-    void winNoticeCannotBecomeAMonetaryEvent() {
-        assertThrows(IllegalArgumentException.class, () -> new MonetaryNoticeEvent(
+    void monetaryEventRequiresAnInternalTerminalKind() {
+        assertThrows(NullPointerException.class, () -> new MonetaryNoticeEvent(
                 "event-1",
-                NoticeKind.WIN,
+                null,
                 "reservation-1",
                 "lease-1",
                 "campaign-1",
-                "bid-1",
                 1_000,
                 EXPIRES_AT,
                 RESERVED_AT.plusSeconds(1)
