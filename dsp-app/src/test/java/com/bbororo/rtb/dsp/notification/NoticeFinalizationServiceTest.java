@@ -29,8 +29,13 @@ import com.bbororo.rtb.dsp.notification.NotificationMessages.VerifiedReservation
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuctionNotice;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeKind;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class NoticeFinalizationServiceTest {
@@ -71,6 +76,33 @@ class NoticeFinalizationServiceTest {
         assertNotNull(local.expired);
     }
 
+    @Test
+    void expirationWorkerRetriesTheSameMarkerAfterStorageFailure() throws Exception {
+        var local = new CapturingLocalBudget();
+        AtomicInteger attempts = new AtomicInteger();
+        MoneyEventJournal journal = event -> attempts.incrementAndGet() == 1
+                ? CompletableFuture.failedFuture(new IllegalStateException("store unavailable"))
+                : CompletableFuture.completedFuture(
+                        new NoticeProcessingMessages.EventAppended(event.eventId())
+                );
+        var service = new ReservationExpirationService(journal, local);
+        var queue = new ArrayBlockingQueue<ReservationExpiration>(1);
+        queue.add(new ReservationExpiration(
+                new ReservationReference("campaign-1", leaseId(), "reservation-1"),
+                1_000,
+                EXPIRES_AT
+        ));
+
+        try (var worker = new ReservationExpirationWorker(
+                queue::take, service, Duration.ofMillis(1), failure -> { }
+        )) {
+            worker.start();
+            org.junit.jupiter.api.Assertions.assertTrue(local.expiredLatch.await(2, TimeUnit.SECONDS));
+        }
+
+        assertEquals(2, attempts.get());
+    }
+
     private static ReservationNoticeCodec codec() {
         return new ReservationNoticeCodec() {
             @Override
@@ -95,11 +127,16 @@ class NoticeFinalizationServiceTest {
     private static final class CapturingLocalBudget implements LocalBudgetAuthority {
         private CommitReservation committed;
         private ExpireReservation expired;
+        private final CountDownLatch expiredLatch = new CountDownLatch(1);
 
         @Override public ReservationResult tryReserve(TryReserve command) { throw new UnsupportedOperationException(); }
         @Override public ReservationFinalization release(ReleaseReservation command) { return APPLIED; }
         @Override public ReservationFinalization commit(CommitReservation command) { committed = command; return APPLIED; }
-        @Override public ReservationFinalization expire(ExpireReservation command) { expired = command; return APPLIED; }
+        @Override public ReservationFinalization expire(ExpireReservation command) {
+            expired = command;
+            expiredLatch.countDown();
+            return APPLIED;
+        }
         @Override public LeaseInstallResult install(InstallLease command, long requestStartedNanos) { throw new UnsupportedOperationException(); }
         @Override public PacingPosition positionOf(String campaignId) { return new PacingPosition(false, 0); }
         @Override public List<LeaseSupplySnapshot> supplySnapshots() { return List.of(); }
