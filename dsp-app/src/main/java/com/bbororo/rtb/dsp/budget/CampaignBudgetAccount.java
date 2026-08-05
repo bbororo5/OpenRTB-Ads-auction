@@ -136,10 +136,10 @@ final class CampaignBudgetAccount {
             }
 
             Optional<LeaseAccount> selected = leases.values().stream()
-                    .filter(lease -> lease.canReserve(command.impressionAmountMicros(), now))
+                    .filter(lease -> lease.canReserve(command.impressionAmountMicros()))
                     .min(LEASE_USE_ORDER);
             if (selected.isEmpty()) {
-                return new ReservationRejected(rejectionWithoutUsableLease(now));
+                return new ReservationRejected(rejectionWithoutUsableLease());
             }
 
             String reservationId = Objects.requireNonNull(reservationIds.get(), "reservationId");
@@ -282,13 +282,13 @@ final class CampaignBudgetAccount {
         }
     }
 
-    private BudgetMessages.ReservationRejection rejectionWithoutUsableLease(Instant now) {
-        boolean hasOpenLease = leases.values().stream().anyMatch(lease -> lease.isOpen(now));
+    private BudgetMessages.ReservationRejection rejectionWithoutUsableLease() {
+        boolean hasOpenLease = leases.values().stream().anyMatch(LeaseAccount::isOpen);
         if (hasOpenLease) {
             return INSUFFICIENT_LOCAL_BUDGET;
         }
         boolean hasExpiredLease = leases.values().stream()
-                .anyMatch(lease -> !lease.isOpen(now));
+                .anyMatch(lease -> !lease.isOpen());
         return hasExpiredLease ? LEASE_EXPIRED : NO_ACTIVE_LEASE;
     }
 
@@ -298,14 +298,14 @@ final class CampaignBudgetAccount {
     }
 
     private void refreshAndPublish(Instant now) {
-        leases.values().forEach(lease -> lease.refreshState(now));
+        leases.values().forEach(LeaseAccount::refreshState);
         boolean usable = leases.values().stream()
-                .anyMatch(lease -> lease.isOpen(now) && lease.unusedMicros > 0L);
+                .anyMatch(lease -> lease.isOpen() && lease.unusedMicros > 0L);
         pacingPosition = new PacingPosition(usable, 0L);
         long reusable = leases.values().stream().mapToLong(lease -> lease.unusedMicros).sum();
         long reserved = leases.values().stream().mapToLong(lease -> lease.reservedMicros).sum();
         long committed = leases.values().stream().mapToLong(lease -> lease.committedMicros).sum();
-        var openLeases = leases.values().stream().filter(lease -> lease.isOpen(now)).toList();
+        var openLeases = leases.values().stream().filter(LeaseAccount::isOpen).toList();
         var earliestExpiry = openLeases.stream().map(LeaseAccount::expiresAt).min(Instant::compareTo);
         supplySnapshot = new LeaseSupplySnapshot(
                 campaignId,
@@ -418,16 +418,16 @@ final class CampaignBudgetAccount {
             return installedLease.equals(other);
         }
 
-        boolean isOpen(Instant now) {
-            refreshState(now);
+        boolean isOpen() {
+            refreshState();
             return state == LeaseState.OPEN;
         }
 
-        boolean canReserve(long amountMicros, Instant now) {
-            return isOpen(now) && unusedMicros >= amountMicros;
+        boolean canReserve(long amountMicros) {
+            return isOpen() && unusedMicros >= amountMicros;
         }
 
-        void refreshState(Instant now) {
+        void refreshState() {
             if (monotonicNanos.getAsLong() - localDeadlineNanos >= 0L) {
                 state = LeaseState.DRAINING;
             }
