@@ -1,2 +1,28 @@
-// Java plugin and toolchain are inherited from the root build.
-// DSP implementation starts after the SSP implementation is complete.
+dependencies {
+    implementation 'org.postgresql:postgresql:42.7.12'
+    implementation 'com.zaxxer:HikariCP:7.1.0'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'dsp-regional-ledger'
+    }
+}
+
+tasks.register('regionalLedgerIntegrationTest', Test) {
+    description = 'Runs the DSP regional budget ledger against PostgreSQL.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'dsp-regional-ledger'
+    }
+
+    systemProperty 'dsp.ledger.jdbc-url',
+            providers.gradleProperty('dspLedgerJdbcUrl').getOrElse('jdbc:postgresql://localhost:35432/rtb')
+    systemProperty 'dsp.ledger.username',
+            providers.gradleProperty('dspLedgerUsername').getOrElse('postgres')
+    systemProperty 'dsp.ledger.password',
+            providers.gradleProperty('dspLedgerPassword').getOrElse('local-dev-postgres-password')
+}
