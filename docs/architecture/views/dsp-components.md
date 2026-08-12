@@ -76,7 +76,7 @@ flowchart LR
 | 입찰 조정 | 요청 기한과 슬롯별 협력 순서가 함께 변한다. | 절대 기한, 슬롯별 최대 한 입찰, 슬롯별 부분 성공 | 후보 순위·금액 상태 |
 | 캠페인 선택 | 캠페인 규칙과 조회 구조가 함께 변한다. | 활성·기간·규격 적격성, 페이싱 지연·`campaignId` 순위 | 예산 예약 성공 여부 |
 | 로컬 예산 권한 | 같은 캠페인의 금액·리스·예약 전이는 한 원자 경계에서 처리해야 한다. | 다중 로컬 리스의 액면 보존, 예약의 한 번뿐인 종결 | 통지 진위·내구 기록 |
-| 예약 통지 증표 | 외부에 공개하는 예약 신원과 무결성 규칙이 함께 변한다. | 예약·리스·금액·5초 기한의 인증된 URL 발급·검증 | 예약 상태 변경 |
+| 예약 통지 증표 | 외부에 공개하는 예약 신원과 무결성 규칙이 함께 변한다. | 예약·리스·금액·발급 리전·기한의 인증된 URL 발급·검증 | 예약 상태 변경 |
 | 경매 결과 처리 | 통지 멱등성과 내구 기록 순서가 함께 변한다. | `nurl` 관측, `lurl`·`burl` 최초·중복·충돌 판정, 기록 후 종결 | 리스 총량·정산 |
 | 리스 생명주기 | 로컬 권한의 공급과 반환이 같은 리스 상태를 공유한다. | 비동기 보충, 끝난 리스의 소비·반환·격리 합계, 멱등 정산 | 전역 책임 배분 |
 | 리전 책임 제어 | 전역과 리전 사이의 책임 이전 불변식이 별도다. | 이전 중 격리, 지역 활성화, 이전 ID 멱등성 | DSP 로컬 예약 |
@@ -92,7 +92,7 @@ flowchart LR
 | 입찰 조정 | `BidCoordinator` | `CoordinateBid` → 슬롯별 `BidDecision` |
 | 캠페인 선택 | `CampaignSelector` | `RankCampaigns` → 순서가 있는 `CampaignCandidate` |
 | 로컬 예산 권한 | `LocalBudgetAuthority` | `TryReserve`, `ReleaseReservation`, `CommitReservation`, `ExpireReservation`, `InstallLease` → 상태 변경 결과 |
-| 예약 통지 증표 | `ReservationNoticeCodec` | `ReservationGrant` → `NotificationUrls`, 불투명 토큰 → `VerifiedReservationNotice` |
+| 예약 통지 증표 | `ReservationNoticeIssuer`, `ReservationNoticeVerifier` | `IssueReservationNotices` → `ReservationNoticeUrls`, 불투명 토큰 → `VerifiedReservationNotice` |
 | 경매 결과 처리 | `AuctionNoticeProcessor` | `AuctionNotice` → 검증·기록·종결한 `NoticeProcessingResult` |
 | 리스 생명주기 | `LeaseLifecycle` | `RefillLease`, 원장이 임대한 `SettlementWork` → 리스 처리 결과 |
 | 리전 책임 제어 | `RegionalResponsibilityController` | `RequestRegionalResponsibility` → 이전 처리 결과 |

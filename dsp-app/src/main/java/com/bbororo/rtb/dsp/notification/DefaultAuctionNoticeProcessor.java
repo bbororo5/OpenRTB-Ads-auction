@@ -19,9 +19,9 @@ import com.bbororo.rtb.dsp.notification.NoticeProcessingMessages.MonetaryNoticeE
 import com.bbororo.rtb.dsp.notification.NoticeProcessingMessages.NoticeProcessed;
 import com.bbororo.rtb.dsp.notification.NoticeProcessingMessages.NoticeProcessingResult;
 import com.bbororo.rtb.dsp.notification.NoticeProcessingMessages.NoticeRejected;
-import com.bbororo.rtb.dsp.notification.NotificationMessages.InvalidReservationNotice;
-import com.bbororo.rtb.dsp.notification.NotificationMessages.NoticeToken;
-import com.bbororo.rtb.dsp.notification.NotificationMessages.VerifiedReservationNotice;
+import com.bbororo.rtb.dsp.notification.NoticeVerificationMessages.InvalidReservationNotice;
+import com.bbororo.rtb.dsp.notification.NoticeVerificationMessages.NoticeToken;
+import com.bbororo.rtb.dsp.notification.NoticeVerificationMessages.VerifiedReservationNotice;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuctionNotice;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeKind;
 import java.util.Objects;
@@ -31,16 +31,16 @@ import java.util.concurrent.CompletionStage;
 /** 검증된 외부 통지를 내구 종결 사건으로 만든 뒤 로컬 예약에 재생한다. */
 public final class DefaultAuctionNoticeProcessor implements AuctionNoticeProcessor {
 
-    private final ReservationNoticeCodec codec;
+    private final ReservationNoticeVerifier verifier;
     private final MoneyEventJournal journal;
     private final LocalBudgetAuthority localBudget;
 
     public DefaultAuctionNoticeProcessor(
-            ReservationNoticeCodec codec,
+            ReservationNoticeVerifier verifier,
             MoneyEventJournal journal,
             LocalBudgetAuthority localBudget
     ) {
-        this.codec = Objects.requireNonNull(codec, "codec");
+        this.verifier = Objects.requireNonNull(verifier, "verifier");
         this.journal = Objects.requireNonNull(journal, "journal");
         this.localBudget = Objects.requireNonNull(localBudget, "localBudget");
     }
@@ -48,7 +48,7 @@ public final class DefaultAuctionNoticeProcessor implements AuctionNoticeProcess
     @Override
     public CompletionStage<NoticeProcessingResult> process(AuctionNotice notice) {
         Objects.requireNonNull(notice, "notice");
-        var verification = codec.verify(new NoticeToken(
+        var verification = verifier.verify(new NoticeToken(
                 notice.kind(), notice.opaqueToken(), notice.receivedAt()
         ));
         if (verification instanceof InvalidReservationNotice) {

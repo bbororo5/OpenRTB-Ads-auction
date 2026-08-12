@@ -5,22 +5,13 @@ import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeKind;
-import java.net.URI;
 import java.time.Instant;
 import java.util.Objects;
 
-/** 예약 통지 URL 발급과 검증에 사용하는 메시지다. */
-public final class NotificationMessages {
+/** 외부에서 받은 예약 통지 증표를 검증할 때 주고받는 불변 메시지다. */
+public final class NoticeVerificationMessages {
 
-    private NotificationMessages() {
-    }
-
-    public record NotificationUrls(URI noticeUrl, URI lossUrl, URI billingUrl) {
-        public NotificationUrls {
-            noticeUrl = requireHttpUrl(noticeUrl, "noticeUrl");
-            lossUrl = requireHttpUrl(lossUrl, "lossUrl");
-            billingUrl = requireHttpUrl(billingUrl, "billingUrl");
-        }
+    private NoticeVerificationMessages() {
     }
 
     public record NoticeToken(NoticeKind kind, String encodedValue, Instant receivedAt) {
@@ -72,14 +63,5 @@ public final class NotificationMessages {
         AUTHENTICATION_FAILED,
         WRONG_NOTICE_KIND,
         UNKNOWN_KEY
-    }
-
-    private static URI requireHttpUrl(URI uri, String name) {
-        Objects.requireNonNull(uri, name);
-        if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
-                || uri.getHost() == null) {
-            throw new IllegalArgumentException(name + " must be an HTTP URL");
-        }
-        return uri;
     }
 }

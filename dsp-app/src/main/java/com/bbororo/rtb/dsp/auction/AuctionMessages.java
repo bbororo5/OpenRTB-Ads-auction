@@ -5,7 +5,7 @@ import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
 import com.bbororo.rtb.dsp.contract.AuctionDeadline;
-import com.bbororo.rtb.dsp.notification.NotificationMessages.NotificationUrls;
+import com.bbororo.rtb.dsp.notification.NoticeIssuanceMessages.ReservationNoticeUrls;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
 import java.util.HashSet;
 import java.util.List;
@@ -72,7 +72,7 @@ public final class AuctionMessages {
             String campaignId,
             String creativeId,
             long cpmMilliKrw,
-            NotificationUrls notificationUrls
+            ReservationNoticeUrls notificationUrls
     ) {
         public PreparedBid {
             bidId = requireNonBlank(bidId, "bidId");

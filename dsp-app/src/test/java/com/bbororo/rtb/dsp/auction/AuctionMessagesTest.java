@@ -7,7 +7,7 @@ import com.bbororo.rtb.dsp.auction.AuctionMessages.BidDecision;
 import com.bbororo.rtb.dsp.auction.AuctionMessages.CoordinateBid;
 import com.bbororo.rtb.dsp.auction.AuctionMessages.PreparedBid;
 import com.bbororo.rtb.dsp.contract.AuctionDeadline;
-import com.bbororo.rtb.dsp.notification.NotificationMessages.NotificationUrls;
+import com.bbororo.rtb.dsp.notification.NoticeIssuanceMessages.ReservationNoticeUrls;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.BidRequest;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.Impression;
@@ -20,7 +20,7 @@ class AuctionMessagesTest {
 
     @Test
     void decisionAllowsAtMostOneBidPerImpression() {
-        var urls = new NotificationUrls(
+        var urls = new ReservationNoticeUrls(
                 URI.create("https://dsp.example/n/token"),
                 URI.create("https://dsp.example/l/token"),
                 URI.create("https://dsp.example/b/token")

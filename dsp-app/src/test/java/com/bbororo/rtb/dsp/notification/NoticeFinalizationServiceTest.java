@@ -22,10 +22,9 @@ import com.bbororo.rtb.dsp.budget.LocalBudgetAuthority;
 import com.bbororo.rtb.dsp.notification.NoticeProcessingMessages.EventAlreadyPresent;
 import com.bbororo.rtb.dsp.notification.NoticeProcessingMessages.EventConflict;
 import com.bbororo.rtb.dsp.notification.NoticeProcessingMessages.NoticeProcessed;
-import com.bbororo.rtb.dsp.notification.NotificationMessages.NoticeToken;
-import com.bbororo.rtb.dsp.notification.NotificationMessages.NoticeVerification;
-import com.bbororo.rtb.dsp.notification.NotificationMessages.NotificationUrls;
-import com.bbororo.rtb.dsp.notification.NotificationMessages.VerifiedReservationNotice;
+import com.bbororo.rtb.dsp.notification.NoticeVerificationMessages.NoticeToken;
+import com.bbororo.rtb.dsp.notification.NoticeVerificationMessages.NoticeVerification;
+import com.bbororo.rtb.dsp.notification.NoticeVerificationMessages.VerifiedReservationNotice;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuctionNotice;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeKind;
 import java.time.Instant;
@@ -103,13 +102,8 @@ class NoticeFinalizationServiceTest {
         assertEquals(2, attempts.get());
     }
 
-    private static ReservationNoticeCodec codec() {
-        return new ReservationNoticeCodec() {
-            @Override
-            public NotificationUrls issue(com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationGranted reservation) {
-                throw new UnsupportedOperationException();
-            }
-
+    private static ReservationNoticeVerifier codec() {
+        return new ReservationNoticeVerifier() {
             @Override
             public NoticeVerification verify(NoticeToken token) {
                 return new VerifiedReservationNotice(
