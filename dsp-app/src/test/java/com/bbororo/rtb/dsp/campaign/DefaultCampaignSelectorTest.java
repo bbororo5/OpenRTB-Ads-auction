@@ -274,6 +274,116 @@ class DefaultCampaignSelectorTest {
     }
 
     // =========================================================================
+    // 3단계: 페이싱 지연 순위화 및 동점 처리 (Ranking & Pacing Lag Ordering)
+    // =========================================================================
+
+    @Test
+    @DisplayName("[순위 1] 지연율 내림차순 정렬: pacingLagPpm이 큰(목표 대비 소진이 뒤처진) 캠페인이 최우선 순위로 정렬된다")
+    void pacingLagDescendingOrdering() {
+        CampaignPacingSource pacingSource = (campId, now) -> switch (campId) {
+            case "camp-A" -> 500L;
+            case "camp-B" -> 1_000L;
+            case "camp-C" -> 100L;
+            default -> 0L;
+        };
+        var pacingSelector = new DefaultCampaignSelector(pacingSource);
+        pacingSelector.install(sampleSnapshot("v1", "chk-1", List.of(
+                activeCampaign("camp-A", 300, 250),
+                activeCampaign("camp-B", 300, 250),
+                activeCampaign("camp-C", 300, 250)
+        )));
+
+        List<CampaignCandidate> candidates = pacingSelector.rankCandidates(rankRequest(300, 250));
+
+        assertEquals(3, candidates.size());
+        assertEquals("camp-B", candidates.get(0).campaignId());
+        assertEquals(1_000L, candidates.get(0).pacingLagPpm());
+        assertEquals("camp-A", candidates.get(1).campaignId());
+        assertEquals(500L, candidates.get(1).pacingLagPpm());
+        assertEquals("camp-C", candidates.get(2).campaignId());
+        assertEquals(100L, candidates.get(2).pacingLagPpm());
+    }
+
+    @Test
+    @DisplayName("[순위 2] 양수 및 음수 지연율 정렬: 초과 소진된 음수 지연율(-200)보다 지연 소진된 양수 지연율(+300)이 앞선다")
+    void positiveAndNegativePacingLagOrdering() {
+        CampaignPacingSource pacingSource = (campId, now) -> switch (campId) {
+            case "camp-A" -> -200L; // 목표보다 빠름 (과소진)
+            case "camp-B" -> 300L;  // 목표보다 느림 (지연)
+            default -> 0L;
+        };
+        var pacingSelector = new DefaultCampaignSelector(pacingSource);
+        pacingSelector.install(sampleSnapshot("v1", "chk-1", List.of(
+                activeCampaign("camp-A", 300, 250),
+                activeCampaign("camp-B", 300, 250)
+        )));
+
+        List<CampaignCandidate> candidates = pacingSelector.rankCandidates(rankRequest(300, 250));
+
+        assertEquals(2, candidates.size());
+        assertEquals("camp-B", candidates.get(0).campaignId());
+        assertEquals("camp-A", candidates.get(1).campaignId());
+    }
+
+    @Test
+    @DisplayName("[순위 3] 동일 지연율 동점 처리: pacingLagPpm이 동일(500)하면 campaignId 오름차순(사전순)으로 정렬된다")
+    void pacingLagTieBreaksByCampaignIdAscending() {
+        CampaignPacingSource pacingSource = (campId, now) -> 500L; // 전원 500ppm 동점
+        var pacingSelector = new DefaultCampaignSelector(pacingSource);
+        pacingSelector.install(sampleSnapshot("v1", "chk-1", List.of(
+                activeCampaign("camp-Z", 300, 250),
+                activeCampaign("camp-A", 300, 250),
+                activeCampaign("camp-M", 300, 250)
+        )));
+
+        List<CampaignCandidate> candidates = pacingSelector.rankCandidates(rankRequest(300, 250));
+
+        assertEquals(3, candidates.size());
+        assertEquals("camp-A", candidates.get(0).campaignId());
+        assertEquals("camp-M", candidates.get(1).campaignId());
+        assertEquals("camp-Z", candidates.get(2).campaignId());
+    }
+
+    @Test
+    @DisplayName("[순위 4] 복합 정렬: 1차 지연율 내림차순 후 2차 동점 ID 오름차순 정렬이 정확히 복합 적용된다")
+    void compositePacingLagAndIdTieBreaking() {
+        CampaignPacingSource pacingSource = (campId, now) -> switch (campId) {
+            case "camp-Z" -> 1_000L;
+            case "camp-A" -> 1_000L;
+            case "camp-B" -> 500L;
+            default -> 0L;
+        };
+        var pacingSelector = new DefaultCampaignSelector(pacingSource);
+        pacingSelector.install(sampleSnapshot("v1", "chk-1", List.of(
+                activeCampaign("camp-Z", 300, 250),
+                activeCampaign("camp-A", 300, 250),
+                activeCampaign("camp-B", 300, 250)
+        )));
+
+        List<CampaignCandidate> candidates = pacingSelector.rankCandidates(rankRequest(300, 250));
+
+        assertEquals(3, candidates.size());
+        assertEquals("camp-A", candidates.get(0).campaignId()); // 1000ppm 동점 중 ID 빠른 순
+        assertEquals("camp-Z", candidates.get(1).campaignId()); // 1000ppm
+        assertEquals("camp-B", candidates.get(2).campaignId()); // 500ppm
+    }
+
+    @Test
+    @DisplayName("[순위 5] 기본 페이싱 소스: PacingSource를 주입하지 않은 기본 선택기는 campaignId 오름차순으로 정렬된다")
+    void defaultPacingSourceOrdersByCampaignIdAscending() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(
+                activeCampaign("camp-B", 300, 250),
+                activeCampaign("camp-A", 300, 250)
+        )));
+
+        List<CampaignCandidate> candidates = selector.rankCandidates(rankRequest(300, 250));
+
+        assertEquals(2, candidates.size());
+        assertEquals("camp-A", candidates.get(0).campaignId());
+        assertEquals("camp-B", candidates.get(1).campaignId());
+    }
+
+    // =========================================================================
     // 테스트 픽스처 헬퍼 메서드
     // =========================================================================
     private static CampaignSnapshot sampleSnapshot(String version, String checksum, List<Campaign> campaigns) {

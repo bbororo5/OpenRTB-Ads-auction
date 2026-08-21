@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,12 +18,26 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 불변 캠페인 스냅숏을 정렬된 64비트 원시 long[] 배열과 사전 생성된 불변 후보 리스트로 구축해
- * Hot-Path에서 힙 메모리 할당을 극소화(Zero/Sub-Allocation)하며 L1 캐시 친화적 이진 탐색 및 적격성 필터링을 수행한다.
+ * 불변 캠페인 스냅숏을 정렬된 64비트 원시 long[] 배열로 구축해 L1 캐시 친화적 이진 탐색으로 조회하고,
+ * 실시간 유효성 필터링 후 페이싱 지연율(pacingLagPpm DESC) 및 캠페인 ID(campaignId ASC) 순으로 순위화한다.
  */
 public final class DefaultCampaignSelector implements CampaignSelector {
 
+    private static final Comparator<CampaignCandidate> CANDIDATE_COMPARATOR =
+            Comparator.comparingLong(CampaignCandidate::pacingLagPpm)
+                    .reversed()
+                    .thenComparing(CampaignCandidate::campaignId);
+
+    private final CampaignPacingSource pacingSource;
     private final AtomicReference<SnapshotIndex> currentIndex = new AtomicReference<>();
+
+    public DefaultCampaignSelector() {
+        this((campaignId, evaluatedAt) -> 0L);
+    }
+
+    public DefaultCampaignSelector(CampaignPacingSource pacingSource) {
+        this.pacingSource = Objects.requireNonNull(pacingSource, "pacingSource");
+    }
 
     @Override
     public SnapshotInstallResult install(CampaignSnapshot snapshot) {
@@ -71,7 +86,7 @@ public final class DefaultCampaignSelector implements CampaignSelector {
         Instant evaluatedAt = request.evaluatedAt();
         long bidFloor = request.impression().bidFloorCpmMilliKrw();
 
-        // 1. 적격 후보 수 카운팅 (메모리 할당 없는 빠른 스캔)
+        // 1. 적격 후보 수 카운팅 및 단일 후보 최적화
         int eligibleCount = 0;
         int lastEligibleIdx = -1;
         for (int i = 0; i < bucket.length; i++) {
@@ -85,27 +100,27 @@ public final class DefaultCampaignSelector implements CampaignSelector {
             return List.of(); // 전원 탈락 시 불변 싱글톤 반환 (Zero-Allocation)
         }
 
-        // Fast-Path: 버킷 내 모든 후보가 적격인 경우 사전 빌드된 불변 리스트 그대로 반환 (Zero-Allocation!)
-        if (eligibleCount == bucket.length) {
-            return index.fullCandidateLists()[bucketIndex];
-        }
-
-        // 단 1건만 통과한 경우 싱글톤 불변 리스트 반환
+        // 단 1건만 통과한 경우 정렬 없이 즉시 반환
         if (eligibleCount == 1) {
-            return List.of(bucket[lastEligibleIdx].candidate());
+            IndexedCreative ic = bucket[lastEligibleIdx];
+            long lag = pacingSource.pacingLagPpm(ic.campaignId(), evaluatedAt);
+            return List.of(new CampaignCandidate(ic.campaignId(), ic.creativeId(), ic.bidCpmMilliKrw(), lag));
         }
 
-        // 부분 통과: 이미 사전 생성된 Candidate 인스턴스를 재사용해 리스트 구성
-        List<CampaignCandidate> result = new ArrayList<>(eligibleCount);
-        for (IndexedCreative creative : bucket) {
-            if (creative.isEligible(evaluatedAt, bidFloor)) {
-                result.add(creative.candidate());
+        // 2. 복수 후보: 페이싱 지연율 계산 및 순위 정렬
+        List<CampaignCandidate> candidates = new ArrayList<>(eligibleCount);
+        for (IndexedCreative ic : bucket) {
+            if (ic.isEligible(evaluatedAt, bidFloor)) {
+                long lag = pacingSource.pacingLagPpm(ic.campaignId(), evaluatedAt);
+                candidates.add(new CampaignCandidate(ic.campaignId(), ic.creativeId(), ic.bidCpmMilliKrw(), lag));
             }
         }
-        return Collections.unmodifiableList(result);
+
+        // 1순위: pacingLagPpm 내림차순, 2순위: campaignId 오름차순
+        candidates.sort(CANDIDATE_COMPARATOR);
+        return Collections.unmodifiableList(candidates);
     }
 
-    @SuppressWarnings("unchecked")
     private static SnapshotIndex buildSnapshotIndex(CampaignSnapshot snapshot) {
         Map<Long, List<IndexedCreative>> tempMap = new HashMap<>();
         for (Campaign campaign : snapshot.campaigns()) {
@@ -114,20 +129,13 @@ public final class DefaultCampaignSelector implements CampaignSelector {
             }
             for (Creative creative : campaign.creatives()) {
                 long packedKey = SlotDimensionPacker.pack(creative.width(), creative.height());
-                CampaignCandidate preallocatedCandidate = new CampaignCandidate(
-                        campaign.id(),
-                        creative.id(),
-                        campaign.bidCpmMilliKrw(),
-                        0L
-                );
                 tempMap.computeIfAbsent(packedKey, k -> new ArrayList<>())
                         .add(new IndexedCreative(
                                 campaign.id(),
                                 creative.id(),
                                 campaign.bidCpmMilliKrw(),
                                 campaign.startsAt(),
-                                campaign.endsAt(),
-                                preallocatedCandidate
+                                campaign.endsAt()
                         ));
             }
         }
@@ -140,20 +148,12 @@ public final class DefaultCampaignSelector implements CampaignSelector {
         Arrays.sort(sortedKeys);
 
         IndexedCreative[][] buckets = new IndexedCreative[sortedKeys.length][];
-        List<CampaignCandidate>[] fullLists = new List[sortedKeys.length];
-
         for (int b = 0; b < sortedKeys.length; b++) {
             List<IndexedCreative> list = tempMap.get(sortedKeys[b]);
             buckets[b] = list.toArray(new IndexedCreative[0]);
-
-            List<CampaignCandidate> candidateList = new ArrayList<>(list.size());
-            for (IndexedCreative ic : list) {
-                candidateList.add(ic.candidate());
-            }
-            fullLists[b] = List.copyOf(candidateList); // Fast-Path용 불변 리스트 사전 생성
         }
 
-        return new SnapshotIndex(snapshot.version(), snapshot.checksum(), sortedKeys, buckets, fullLists);
+        return new SnapshotIndex(snapshot.version(), snapshot.checksum(), sortedKeys, buckets);
     }
 
     /** 자연수 버전("v10" > "v2")을 올바르게 비교한다. */
@@ -177,8 +177,7 @@ public final class DefaultCampaignSelector implements CampaignSelector {
             String creativeId,
             long bidCpmMilliKrw,
             Instant startsAt,
-            Instant endsAt,
-            CampaignCandidate candidate
+            Instant endsAt
     ) {
         /** 반열린 시간 구간 [startsAt, endsAt) 및 바닥가 적격성 검사 */
         boolean isEligible(Instant evaluatedAt, long bidFloorCpmMilliKrw) {
@@ -192,8 +191,7 @@ public final class DefaultCampaignSelector implements CampaignSelector {
             String version,
             String checksum,
             long[] sortedDimensionKeys,
-            IndexedCreative[][] candidateBuckets,
-            List<CampaignCandidate>[] fullCandidateLists
+            IndexedCreative[][] candidateBuckets
     ) {
     }
 }
