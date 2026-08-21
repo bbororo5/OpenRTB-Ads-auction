@@ -1,7 +1,5 @@
 package com.bbororo.rtb.dsp.campaign;
 
-import static com.bbororo.rtb.dsp.contract.ContractChecks.immutableList;
-
 import com.bbororo.rtb.dsp.campaign.CampaignMessages.Campaign;
 import com.bbororo.rtb.dsp.campaign.CampaignMessages.CampaignCandidate;
 import com.bbororo.rtb.dsp.campaign.CampaignMessages.CampaignSnapshot;
@@ -10,6 +8,7 @@ import com.bbororo.rtb.dsp.campaign.CampaignMessages.RankCampaigns;
 import com.bbororo.rtb.dsp.campaign.CampaignMessages.SnapshotInstallResult;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -17,7 +16,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** 불변 캠페인 스냅숏을 소재 규격별 역색인으로 사전 구축해 무락(Lock-Free)으로 서빙한다. */
+/**
+ * 불변 캠페인 스냅숏을 정렬된 64비트 원시 long[] 배열과 인메모리 버킷으로 구축해
+ * L1 캐시 친화적 이진 탐색(Binary Search)으로 무락 서빙한다.
+ */
 public final class DefaultCampaignSelector implements CampaignSelector {
 
     private final AtomicReference<SnapshotIndex> currentIndex = new AtomicReference<>();
@@ -39,8 +41,7 @@ public final class DefaultCampaignSelector implements CampaignSelector {
             }
         }
 
-        Map<SlotDimension, List<IndexedCreative>> indexMap = buildInvertedIndex(snapshot.campaigns());
-        SnapshotIndex newIndex = new SnapshotIndex(snapshot.version(), snapshot.checksum(), indexMap);
+        SnapshotIndex newIndex = buildSnapshotIndex(snapshot);
         currentIndex.set(newIndex);
         return SnapshotInstallResult.INSTALLED;
     }
@@ -53,17 +54,19 @@ public final class DefaultCampaignSelector implements CampaignSelector {
             return List.of();
         }
 
-        SlotDimension requestedDim = new SlotDimension(
+        long targetKey = SlotDimensionPacker.pack(
                 request.impression().width(),
                 request.impression().height()
         );
-        List<IndexedCreative> indexedCreatives = index.invertedIndex().get(requestedDim);
-        if (indexedCreatives == null || indexedCreatives.isEmpty()) {
-            return List.of();
+
+        int bucketIndex = Arrays.binarySearch(index.sortedDimensionKeys(), targetKey);
+        if (bucketIndex < 0) {
+            return List.of(); // 해당 규격에 매칭되는 소재가 없음
         }
 
-        List<CampaignCandidate> candidates = new ArrayList<>(indexedCreatives.size());
-        for (IndexedCreative creative : indexedCreatives) {
+        IndexedCreative[] creatives = index.candidateBuckets()[bucketIndex];
+        List<CampaignCandidate> candidates = new ArrayList<>(creatives.length);
+        for (IndexedCreative creative : creatives) {
             candidates.add(new CampaignCandidate(
                     creative.campaignId(),
                     creative.creativeId(),
@@ -74,15 +77,15 @@ public final class DefaultCampaignSelector implements CampaignSelector {
         return Collections.unmodifiableList(candidates);
     }
 
-    private static Map<SlotDimension, List<IndexedCreative>> buildInvertedIndex(List<Campaign> campaigns) {
-        Map<SlotDimension, List<IndexedCreative>> builder = new HashMap<>();
-        for (Campaign campaign : campaigns) {
+    private static SnapshotIndex buildSnapshotIndex(CampaignSnapshot snapshot) {
+        Map<Long, List<IndexedCreative>> tempMap = new HashMap<>();
+        for (Campaign campaign : snapshot.campaigns()) {
             if (!campaign.active()) {
-                continue; // 비활성 캠페인은 역색인 버킷에서 사전 제외
+                continue; // 비활성 캠페인은 역색인 버킷에서 사전 배제
             }
             for (Creative creative : campaign.creatives()) {
-                SlotDimension dim = new SlotDimension(creative.width(), creative.height());
-                builder.computeIfAbsent(dim, k -> new ArrayList<>())
+                long packedKey = SlotDimensionPacker.pack(creative.width(), creative.height());
+                tempMap.computeIfAbsent(packedKey, k -> new ArrayList<>())
                         .add(new IndexedCreative(
                                 campaign.id(),
                                 creative.id(),
@@ -93,12 +96,20 @@ public final class DefaultCampaignSelector implements CampaignSelector {
             }
         }
 
-        Map<SlotDimension, List<IndexedCreative>> frozenMap = new HashMap<>();
-        builder.forEach((dim, list) -> frozenMap.put(dim, List.copyOf(list)));
-        return Map.copyOf(frozenMap);
-    }
+        long[] sortedKeys = new long[tempMap.size()];
+        int i = 0;
+        for (Long key : tempMap.keySet()) {
+            sortedKeys[i++] = key;
+        }
+        Arrays.sort(sortedKeys);
 
-    record SlotDimension(int width, int height) {
+        IndexedCreative[][] buckets = new IndexedCreative[sortedKeys.length][];
+        for (int b = 0; b < sortedKeys.length; b++) {
+            List<IndexedCreative> list = tempMap.get(sortedKeys[b]);
+            buckets[b] = list.toArray(new IndexedCreative[0]);
+        }
+
+        return new SnapshotIndex(snapshot.version(), snapshot.checksum(), sortedKeys, buckets);
     }
 
     record IndexedCreative(
@@ -113,7 +124,8 @@ public final class DefaultCampaignSelector implements CampaignSelector {
     record SnapshotIndex(
             String version,
             String checksum,
-            Map<SlotDimension, List<IndexedCreative>> invertedIndex
+            long[] sortedDimensionKeys,
+            IndexedCreative[][] candidateBuckets
     ) {
     }
 }

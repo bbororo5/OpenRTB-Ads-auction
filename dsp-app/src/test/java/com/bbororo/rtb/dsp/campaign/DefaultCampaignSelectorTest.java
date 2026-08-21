@@ -153,6 +153,16 @@ class DefaultCampaignSelectorTest {
         assertTrue(candidates.isEmpty());
     }
 
+    @Test
+    @DisplayName("[이진 탐색] 미등록 규격 조회: 스냅샷에 등록되지 않은 규격(999x999) 요청 시 이진 탐색이 즉시 빈 목록을 반환한다")
+    void unregisteredDimensionReturnsEmptyList() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(activeCampaign("camp-1", 300, 250))));
+
+        List<CampaignCandidate> candidates = selector.rankCandidates(rankRequest(999, 999));
+
+        assertTrue(candidates.isEmpty());
+    }
+
     // =========================================================================
     // 테스트 픽스처 헬퍼 메서드
     // =========================================================================
