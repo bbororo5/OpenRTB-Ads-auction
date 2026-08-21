@@ -76,6 +76,20 @@ class DefaultCampaignSelectorTest {
     }
 
     @Test
+    @DisplayName("[버전] 자연수 비교: v10 스냅샷은 사전순(v10 < v2)이 아닌 자연수(v10 > v2)로 평가되어 정상 설치된다")
+    void numericVersionComparisonAllowsV10AfterV2() {
+        var v2 = sampleSnapshot("v2", "chk-2", List.of(activeCampaign("camp-v2", 300, 250)));
+        var v10 = sampleSnapshot("v10", "chk-10", List.of(activeCampaign("camp-v10", 300, 250)));
+        selector.install(v2);
+
+        SnapshotInstallResult result = selector.install(v10);
+
+        assertEquals(SnapshotInstallResult.INSTALLED, result);
+        List<CampaignCandidate> candidates = selector.rankCandidates(rankRequest(300, 250));
+        assertEquals("camp-v10", candidates.get(0).campaignId());
+    }
+
+    @Test
     @DisplayName("[불변 보존] 거절 후 상태 유지: 설치가 거절되어도 기존에 적재된 정상 스냅샷이 손상 없이 유지된다")
     void rejectedInstallPreservesExistingSnapshotState() {
         var v2 = sampleSnapshot("v2", "chk-2", List.of(activeCampaign("camp-v2", 300, 250)));

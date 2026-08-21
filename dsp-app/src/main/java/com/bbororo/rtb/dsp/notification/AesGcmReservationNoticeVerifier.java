@@ -15,6 +15,14 @@ import javax.crypto.spec.GCMParameterSpec;
 /** JDK AES-256-GCM으로 봉인된 외부 통지 증표를 검증하고 원래 예약 사실을 복원한다. */
 public final class AesGcmReservationNoticeVerifier implements ReservationNoticeVerifier {
 
+    private static final ThreadLocal<Cipher> CIPHER_CACHE = ThreadLocal.withInitial(() -> {
+        try {
+            return Cipher.getInstance(AesGcmReservationNoticeSealer.TRANSFORMATION);
+        } catch (GeneralSecurityException failure) {
+            throw new IllegalStateException("Failed to initialize AES-GCM Cipher instance", failure);
+        }
+    });
+
     private final NoticeTokenKeySource keySource;
 
     public AesGcmReservationNoticeVerifier(NoticeTokenKeySource keySource) {
@@ -40,7 +48,7 @@ public final class AesGcmReservationNoticeVerifier implements ReservationNoticeV
 
         byte[] plaintext;
         try {
-            Cipher cipher = Cipher.getInstance(AesGcmReservationNoticeSealer.TRANSFORMATION);
+            Cipher cipher = CIPHER_CACHE.get();
             cipher.init(
                     Cipher.DECRYPT_MODE,
                     key.secretKey(),

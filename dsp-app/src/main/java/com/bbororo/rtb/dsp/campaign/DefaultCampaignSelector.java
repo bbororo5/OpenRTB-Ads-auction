@@ -6,10 +6,8 @@ import com.bbororo.rtb.dsp.campaign.CampaignMessages.CampaignSnapshot;
 import com.bbororo.rtb.dsp.campaign.CampaignMessages.Creative;
 import com.bbororo.rtb.dsp.campaign.CampaignMessages.RankCampaigns;
 import com.bbororo.rtb.dsp.campaign.CampaignMessages.SnapshotInstallResult;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,8 +15,8 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 불변 캠페인 스냅숏을 정렬된 64비트 원시 long[] 배열과 인메모리 버킷으로 구축해
- * L1 캐시 친화적 이진 탐색(Binary Search)으로 무락 서빙한다.
+ * 불변 캠페인 스냅숏을 정렬된 64비트 원시 long[] 배열과 사전 생성된 불변 후보 리스트로 구축해
+ * Hot-Path에서 힙 메모리 할당 없이(Zero-Allocation) L1 캐시 친화적 이진 탐색으로 서빙한다.
  */
 public final class DefaultCampaignSelector implements CampaignSelector {
 
@@ -28,22 +26,25 @@ public final class DefaultCampaignSelector implements CampaignSelector {
     public SnapshotInstallResult install(CampaignSnapshot snapshot) {
         Objects.requireNonNull(snapshot, "snapshot");
 
-        SnapshotIndex current = currentIndex.get();
-        if (current != null) {
-            if (current.version().equals(snapshot.version())) {
-                if (current.checksum().equals(snapshot.checksum())) {
-                    return SnapshotInstallResult.ALREADY_INSTALLED;
+        while (true) {
+            SnapshotIndex current = currentIndex.get();
+            if (current != null) {
+                if (current.version().equals(snapshot.version())) {
+                    if (current.checksum().equals(snapshot.checksum())) {
+                        return SnapshotInstallResult.ALREADY_INSTALLED;
+                    }
+                    return SnapshotInstallResult.CHECKSUM_MISMATCH;
                 }
-                return SnapshotInstallResult.CHECKSUM_MISMATCH;
+                if (compareVersions(snapshot.version(), current.version()) < 0) {
+                    return SnapshotInstallResult.VERSION_CONFLICT;
+                }
             }
-            if (snapshot.version().compareTo(current.version()) < 0) {
-                return SnapshotInstallResult.VERSION_CONFLICT;
+
+            SnapshotIndex newIndex = buildSnapshotIndex(snapshot);
+            if (currentIndex.compareAndSet(current, newIndex)) {
+                return SnapshotInstallResult.INSTALLED;
             }
         }
-
-        SnapshotIndex newIndex = buildSnapshotIndex(snapshot);
-        currentIndex.set(newIndex);
-        return SnapshotInstallResult.INSTALLED;
     }
 
     @Override
@@ -64,21 +65,13 @@ public final class DefaultCampaignSelector implements CampaignSelector {
             return List.of(); // 해당 규격에 매칭되는 소재가 없음
         }
 
-        IndexedCreative[] creatives = index.candidateBuckets()[bucketIndex];
-        List<CampaignCandidate> candidates = new ArrayList<>(creatives.length);
-        for (IndexedCreative creative : creatives) {
-            candidates.add(new CampaignCandidate(
-                    creative.campaignId(),
-                    creative.creativeId(),
-                    creative.bidCpmMilliKrw(),
-                    0L
-            ));
-        }
-        return Collections.unmodifiableList(candidates);
+        // Zero-Allocation: install() 시점에 미리 만들어둔 불변 리스트를 포인터로 즉시 반환
+        return index.candidateBuckets()[bucketIndex];
     }
 
+    @SuppressWarnings("unchecked")
     private static SnapshotIndex buildSnapshotIndex(CampaignSnapshot snapshot) {
-        Map<Long, List<IndexedCreative>> tempMap = new HashMap<>();
+        Map<Long, List<CampaignCandidate>> tempMap = new HashMap<>();
         for (Campaign campaign : snapshot.campaigns()) {
             if (!campaign.active()) {
                 continue; // 비활성 캠페인은 역색인 버킷에서 사전 배제
@@ -86,12 +79,11 @@ public final class DefaultCampaignSelector implements CampaignSelector {
             for (Creative creative : campaign.creatives()) {
                 long packedKey = SlotDimensionPacker.pack(creative.width(), creative.height());
                 tempMap.computeIfAbsent(packedKey, k -> new ArrayList<>())
-                        .add(new IndexedCreative(
+                        .add(new CampaignCandidate(
                                 campaign.id(),
                                 creative.id(),
                                 campaign.bidCpmMilliKrw(),
-                                campaign.startsAt(),
-                                campaign.endsAt()
+                                0L
                         ));
             }
         }
@@ -103,29 +95,36 @@ public final class DefaultCampaignSelector implements CampaignSelector {
         }
         Arrays.sort(sortedKeys);
 
-        IndexedCreative[][] buckets = new IndexedCreative[sortedKeys.length][];
+        List<CampaignCandidate>[] buckets = new List[sortedKeys.length];
         for (int b = 0; b < sortedKeys.length; b++) {
-            List<IndexedCreative> list = tempMap.get(sortedKeys[b]);
-            buckets[b] = list.toArray(new IndexedCreative[0]);
+            List<CampaignCandidate> list = tempMap.get(sortedKeys[b]);
+            buckets[b] = List.copyOf(list); // 불변 리스트로 고정
         }
 
         return new SnapshotIndex(snapshot.version(), snapshot.checksum(), sortedKeys, buckets);
     }
 
-    record IndexedCreative(
-            String campaignId,
-            String creativeId,
-            long bidCpmMilliKrw,
-            Instant startsAt,
-            Instant endsAt
-    ) {
+    /** 자연수 버전("v10" > "v2")을 올바르게 비교한다. */
+    static int compareVersions(String v1, String v2) {
+        String num1 = v1.replaceAll("\\D", "");
+        String num2 = v2.replaceAll("\\D", "");
+        if (!num1.isEmpty() && !num2.isEmpty()) {
+            try {
+                long n1 = Long.parseLong(num1);
+                long n2 = Long.parseLong(num2);
+                return Long.compare(n1, n2);
+            } catch (NumberFormatException ignored) {
+                // fall back to string compare
+            }
+        }
+        return v1.compareTo(v2);
     }
 
     record SnapshotIndex(
             String version,
             String checksum,
             long[] sortedDimensionKeys,
-            IndexedCreative[][] candidateBuckets
+            List<CampaignCandidate>[] candidateBuckets
     ) {
     }
 }
