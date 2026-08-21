@@ -178,6 +178,102 @@ class DefaultCampaignSelectorTest {
     }
 
     // =========================================================================
+    // 2단계: 실시간 적격성 필터링 (시간 및 바닥가 경계값 테스트)
+    // =========================================================================
+
+    @Test
+    @DisplayName("[시간 경계 1] 시작 전 배제: evaluatedAt이 startsAt - 1ms이면 적격 후보에서 배제된다")
+    void evaluatedAtBeforeStartsAtIsExcluded() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(activeCampaign("camp-1", 300, 250))));
+
+        var request = rankRequest(300, 250, 500, STARTS_AT.minusMillis(1));
+        List<CampaignCandidate> candidates = selector.rankCandidates(request);
+
+        assertTrue(candidates.isEmpty());
+    }
+
+    @Test
+    @DisplayName("[시간 경계 2] 시작 정각 포함: evaluatedAt이 정확히 startsAt이면 적격 후보로 포함된다")
+    void evaluatedAtExactStartsAtIsEligible() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(activeCampaign("camp-1", 300, 250))));
+
+        var request = rankRequest(300, 250, 500, STARTS_AT);
+        List<CampaignCandidate> candidates = selector.rankCandidates(request);
+
+        assertEquals(1, candidates.size());
+        assertEquals("camp-1", candidates.get(0).campaignId());
+    }
+
+    @Test
+    @DisplayName("[시간 경계 3] 집행 기간 중 포함: evaluatedAt이 startsAt < evaluatedAt < endsAt이면 적격 후보로 포함된다")
+    void evaluatedAtDuringActiveWindowIsEligible() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(activeCampaign("camp-1", 300, 250))));
+
+        var request = rankRequest(300, 250, 500, NOW);
+        List<CampaignCandidate> candidates = selector.rankCandidates(request);
+
+        assertEquals(1, candidates.size());
+        assertEquals("camp-1", candidates.get(0).campaignId());
+    }
+
+    @Test
+    @DisplayName("[시간 경계 4] 종료 정각 배제: evaluatedAt이 정확히 endsAt이면 반열린 구간 [startsAt, endsAt)에 따라 배제된다")
+    void evaluatedAtExactEndsAtIsExcluded() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(activeCampaign("camp-1", 300, 250))));
+
+        var request = rankRequest(300, 250, 500, ENDS_AT);
+        List<CampaignCandidate> candidates = selector.rankCandidates(request);
+
+        assertTrue(candidates.isEmpty());
+    }
+
+    @Test
+    @DisplayName("[시간 경계 5] 종료 후 배제: evaluatedAt이 endsAt + 1ms이면 적격 후보에서 배제된다")
+    void evaluatedAtAfterEndsAtIsExcluded() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(activeCampaign("camp-1", 300, 250))));
+
+        var request = rankRequest(300, 250, 500, ENDS_AT.plusMillis(1));
+        List<CampaignCandidate> candidates = selector.rankCandidates(request);
+
+        assertTrue(candidates.isEmpty());
+    }
+
+    @Test
+    @DisplayName("[바닥가 경계 1] 바닥가 초과 포함: 입찰가(1000) > 바닥가(500)이면 적격 후보로 포함된다")
+    void bidCpmGreaterThanBidFloorIsEligible() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(activeCampaignWithBid("camp-1", 300, 250, 1_000))));
+
+        var request = rankRequest(300, 250, 500, NOW);
+        List<CampaignCandidate> candidates = selector.rankCandidates(request);
+
+        assertEquals(1, candidates.size());
+        assertEquals("camp-1", candidates.get(0).campaignId());
+    }
+
+    @Test
+    @DisplayName("[바닥가 경계 2] 바닥가 일치 포함: 입찰가(1000) == 바닥가(1000)이면 적격 후보로 포함된다")
+    void bidCpmEqualToBidFloorIsEligible() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(activeCampaignWithBid("camp-1", 300, 250, 1_000))));
+
+        var request = rankRequest(300, 250, 1_000, NOW);
+        List<CampaignCandidate> candidates = selector.rankCandidates(request);
+
+        assertEquals(1, candidates.size());
+        assertEquals("camp-1", candidates.get(0).campaignId());
+    }
+
+    @Test
+    @DisplayName("[바닥가 경계 3] 바닥가 미달 배제: 입찰가(1000) < 바닥가(1001)이면 적격 후보에서 배제된다")
+    void bidCpmLessThanBidFloorIsExcluded() {
+        selector.install(sampleSnapshot("v1", "chk-1", List.of(activeCampaignWithBid("camp-1", 300, 250, 1_000))));
+
+        var request = rankRequest(300, 250, 1_001, NOW);
+        List<CampaignCandidate> candidates = selector.rankCandidates(request);
+
+        assertTrue(candidates.isEmpty());
+    }
+
+    // =========================================================================
     // 테스트 픽스처 헬퍼 메서드
     // =========================================================================
     private static CampaignSnapshot sampleSnapshot(String version, String checksum, List<Campaign> campaigns) {
@@ -185,10 +281,14 @@ class DefaultCampaignSelectorTest {
     }
 
     private static Campaign activeCampaign(String campaignId, int width, int height) {
+        return activeCampaignWithBid(campaignId, width, height, 1_000);
+    }
+
+    private static Campaign activeCampaignWithBid(String campaignId, int width, int height, long bidCpmMilliKrw) {
         return new Campaign(
                 campaignId,
                 true,
-                1_000,
+                bidCpmMilliKrw,
                 STARTS_AT,
                 ENDS_AT,
                 List.of(new Creative("cr-" + campaignId, width, height))
@@ -196,10 +296,14 @@ class DefaultCampaignSelectorTest {
     }
 
     private static RankCampaigns rankRequest(int width, int height) {
+        return rankRequest(width, height, 500, NOW);
+    }
+
+    private static RankCampaigns rankRequest(int width, int height, long bidFloor, Instant evaluatedAt) {
         return new RankCampaigns(
                 "auction-1",
-                new Impression("imp-1", width, height, 500, 2),
-                NOW
+                new Impression("imp-1", width, height, bidFloor, 2),
+                evaluatedAt
         );
     }
 }
