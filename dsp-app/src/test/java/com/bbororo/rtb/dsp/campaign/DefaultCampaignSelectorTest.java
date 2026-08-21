@@ -3,12 +3,12 @@ package com.bbororo.rtb.dsp.campaign;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.bbororo.rtb.dsp.campaign.CampaignMessages.Campaign;
-import com.bbororo.rtb.dsp.campaign.CampaignMessages.CampaignCandidate;
-import com.bbororo.rtb.dsp.campaign.CampaignMessages.CampaignSnapshot;
-import com.bbororo.rtb.dsp.campaign.CampaignMessages.Creative;
-import com.bbororo.rtb.dsp.campaign.CampaignMessages.RankCampaigns;
-import com.bbororo.rtb.dsp.campaign.CampaignMessages.SnapshotInstallResult;
+import com.bbororo.rtb.dsp.campaign.CampaignModels.Campaign;
+import com.bbororo.rtb.dsp.campaign.CampaignModels.CampaignCandidate;
+import com.bbororo.rtb.dsp.campaign.CampaignModels.CampaignSnapshot;
+import com.bbororo.rtb.dsp.campaign.CampaignModels.Creative;
+import com.bbororo.rtb.dsp.campaign.CampaignModels.RankCampaigns;
+import com.bbororo.rtb.dsp.campaign.CampaignModels.SnapshotInstallResult;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.Impression;
 import java.time.Instant;
 import java.util.List;
