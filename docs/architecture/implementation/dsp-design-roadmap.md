@@ -170,6 +170,15 @@
 
 ## 6. 입찰 중복 방지
 
+### 현재 구현
+
+- `DefaultBidDeduplicator`:
+  - `ConcurrentHashMap`과 `CompletableFuture` 기반 락-프리 **싱글플라이트(Singleflight / Request Coalescing)** 구현: 동일한 `sspId + requestId`에 대해 오직 단 하나의 스레드만 실제 입찰 조정을 실행하고, 동시 인입된 스레드는 리더의 결과를 안전하게 대기·공유 (`ExecutionKind.REUSED`).
+  - **5초 TTL 단조 시계 만료 윈도우**: 5초 이내 재인입 시 캐시된 결과를 즉시 반환하며, 5초 경과 시 만료 캐시 자동 제거 후 신규 실행.
+  - **지문 위변조 감지(Fingerprint Conflict)**: 동일 키이지만 요청 지문(`BidRequestFingerprint`)이 다를 경우 즉시 `REQUEST_CONFLICT`로 거부.
+  - **실행 실패 시 맵 정리**: 공급자(`Supplier<BidDecision>`) 실패 시 엔트리를 안전하게 제거하여 다음 재시도를 허용.
+  - **용량 상한 보호**: `maxEntries` (100,000건) 초과 시 `CAPACITY_EXCEEDED` 거부.
+
 ### 반드시 결정
 
 - 요청 키를 `sspId + BidRequest.id`로, 내용 충돌을 요청 지문으로 판정한다.
