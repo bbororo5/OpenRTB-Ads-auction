@@ -18,7 +18,7 @@ flowchart LR
         subgraph APP["DSP 애플리케이션 [Container: Java 21]"]
             direction TB
             API["OpenRTB 계약<br/>요청·응답·통지 표현"]
-            DEDUPE["입찰 중복 방지<br/>최초 실행·결과 재사용"]
+            DEDUPE["입찰 실행권<br/>최초 실행·중복 즉시 거절"]
             AUCTION["입찰 조정<br/>기한·슬롯별 부분 성공"]
             CAMPAIGN["캠페인 선택<br/>적격성·페이싱 순위"]
             BUDGET["로컬 예산 권한<br/>예약·해제·확정·만료"]
@@ -72,7 +72,7 @@ flowchart LR
 | 컴포넌트 | 함께 묶은 이유 | 소유하는 불변식·정책 | 소유하지 않는 것 |
 |---|---|---|---|
 | OpenRTB 계약 | 외부 규격이 바뀔 때 함께 변한다. | OpenRTB 하위 규격 검증과 내부 메시지 변환 | 캠페인·금액 판단 |
-| 입찰 중복 방지 | 최초 실행과 결과 재사용이 같은 요청 상태를 공유한다. | SSP·요청 키와 지문, 동시 최초 실행 하나, 완성 결과 재사용 | 캠페인·예산 정책 |
+| 입찰 실행권 | 같은 요청의 실행 여부와 내용 충돌이 함께 변한다. | SSP·요청 키와 지문, 최초 실행 하나, 중복 즉시 거절 | 캠페인·예산 정책 |
 | 입찰 조정 | 요청 기한과 슬롯별 협력 순서가 함께 변한다. | 절대 기한, 슬롯별 최대 한 입찰, 슬롯별 부분 성공 | 후보 순위·금액 상태 |
 | 캠페인 선택 | 캠페인 규칙과 조회 구조가 함께 변한다. | 활성·기간·규격 적격성, 페이싱 지연·`campaignId` 순위 | 예산 예약 성공 여부 |
 | 로컬 예산 권한 | 같은 캠페인의 금액·리스·예약 전이는 한 원자 경계에서 처리해야 한다. | 다중 로컬 리스의 액면 보존, 예약의 한 번뿐인 종결 | 통지 진위·내구 기록 |
@@ -88,7 +88,7 @@ flowchart LR
 | 제공 컴포넌트 | 인터페이스 | 입력 → 출력 |
 |---|---|---|
 | OpenRTB 계약 | `DspOpenRtbApi` | `BidRequest` → `BidResponse` 또는 `NoBid`, `AuctionNotice` → 일반 HTTP 판정 |
-| 입찰 중복 방지 | `BidDeduplicator` | `ExecuteBidOnce` → 최초 실행 또는 동일 `BidDecision` |
+| 입찰 실행권 | `BidExecutionGate` | `ExecuteBidOnce` → 최초 실행 또는 빠른 거절 |
 | 입찰 조정 | `BidCoordinator` | `CoordinateBid` → 슬롯별 `BidDecision` |
 | 캠페인 선택 | `CampaignSelector` | `RankCampaigns` → 순서가 있는 `CampaignCandidate` |
 | 로컬 예산 권한 | `LocalBudgetAuthority` | `TryReserve`, `ReleaseReservation`, `CommitReservation`, `ExpireReservation`, `InstallLease` → 상태 변경 결과 |
@@ -102,7 +102,7 @@ flowchart LR
 ### 입찰
 
 1. OpenRTB 계약은 인증된 SSP ID와 요청 ID로 중복 키를 만들고 `tmax`를 단조 시계 기반 절대 기한으로 바꾼다.
-2. 입찰 중복 방지는 같은 키·지문의 동시 최초 실행을 하나로 합치고 완성된 결과를 재사용한다.
+2. 입찰 실행권은 같은 키의 최초 호출 하나만 실행하고 같은 지문의 후속 요청은 기다리지 않고 거절한다.
 3. 입찰 조정은 슬롯마다 캠페인 선택에 순서 있는 후보를 요구한다.
 4. 페이싱 지연이 큰 후보부터 로컬 예산 권한에 예약을 시도한다.
 5. 경합으로 예약이 실패하면 같은 절대 기한 안에서 다음 후보를 시도한다.
