@@ -104,10 +104,9 @@ public final class AuctionMessages {
     public sealed interface BidExecutionResult permits BidExecuted, BidExecutionRejected {
     }
 
-    public record BidExecuted(BidDecision decision, ExecutionKind kind) implements BidExecutionResult {
+    public record BidExecuted(BidDecision decision) implements BidExecutionResult {
         public BidExecuted {
             Objects.requireNonNull(decision, "decision");
-            Objects.requireNonNull(kind, "kind");
         }
     }
 
@@ -117,12 +116,8 @@ public final class AuctionMessages {
         }
     }
 
-    public enum ExecutionKind {
-        FIRST,
-        REUSED
-    }
-
     public enum BidExecutionRejection {
+        DUPLICATE_REQUEST,
         REQUEST_CONFLICT,
         OWNERSHIP_UNKNOWN,
         CAPACITY_EXCEEDED
