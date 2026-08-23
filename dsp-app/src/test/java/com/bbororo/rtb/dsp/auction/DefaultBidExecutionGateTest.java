@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -170,6 +171,105 @@ class DefaultBidExecutionGateTest {
         assertEquals(2, executions.get());
     }
 
+    @Test
+    @DisplayName("종결 엔트리는 기억 수명의 정확한 경계에서 제거되어 새 실행권을 허용한다")
+    void terminalEntryExpiresAtTheRetentionBoundary() {
+        var command = sampleCommand("ssp-1", "request-expiry", fingerprint(0));
+        var executions = new AtomicInteger();
+
+        gate.tryExecute(command, () -> decision("request-expiry", executions));
+        simulatedNanoClock.addAndGet(RETENTION.toNanos() - 1);
+        var beforeBoundary = gate.tryExecute(command, () -> decision("request-expiry", executions));
+        assertEquals(BidExecutionRejection.DUPLICATE_REQUEST,
+                assertInstanceOf(BidExecutionRejected.class, beforeBoundary).reason());
+
+        simulatedNanoClock.incrementAndGet();
+        assertInstanceOf(BidExecuted.class,
+                gate.tryExecute(command, () -> decision("request-expiry", executions)));
+        assertEquals(2, executions.get());
+    }
+
+    @Test
+    @DisplayName("진행 중 엔트리는 기억 수명이 지나도 교체하지 않는다")
+    void inFlightEntryNeverExpiresIntoASecondExecution() throws Exception {
+        var command = sampleCommand("ssp-1", "request-slow", fingerprint(0));
+        var leaderEntered = new CountDownLatch(1);
+        var releaseLeader = new CountDownLatch(1);
+        var executions = new AtomicInteger();
+
+        CompletableFuture<BidExecutionResult> leader = CompletableFuture.supplyAsync(() ->
+                gate.tryExecute(command, () -> {
+                    executions.incrementAndGet();
+                    leaderEntered.countDown();
+                    await(releaseLeader);
+                    return new BidDecision("request-slow", List.of());
+                }));
+        assertTrue(leaderEntered.await(2, TimeUnit.SECONDS));
+        simulatedNanoClock.addAndGet(RETENTION.toNanos());
+
+        BidExecutionResult duplicate = gate.tryExecute(command, () -> {
+            executions.incrementAndGet();
+            return new BidDecision("request-slow", List.of());
+        });
+
+        assertEquals(BidExecutionRejection.DUPLICATE_REQUEST,
+                assertInstanceOf(BidExecutionRejected.class, duplicate).reason());
+        assertEquals(1, executions.get());
+        releaseLeader.countDown();
+        assertInstanceOf(BidExecuted.class, leader.get(2, TimeUnit.SECONDS));
+    }
+
+    @Test
+    @DisplayName("만료 정리는 점유 용량을 회복한다")
+    void expiredTerminalEntryReleasesCapacity() {
+        gate = new DefaultBidExecutionGate(RETENTION, 1, simulatedNanoClock::get);
+        var first = sampleCommand("ssp-1", "request-1", fingerprint(0));
+        var second = sampleCommand("ssp-1", "request-2", fingerprint(0));
+
+        gate.tryExecute(first, () -> new BidDecision("request-1", List.of()));
+        var full = gate.tryExecute(second, () -> new BidDecision("request-2", List.of()));
+        assertEquals(BidExecutionRejection.CAPACITY_EXCEEDED,
+                assertInstanceOf(BidExecutionRejected.class, full).reason());
+
+        simulatedNanoClock.addAndGet(RETENTION.toNanos());
+        assertInstanceOf(BidExecuted.class,
+                gate.tryExecute(second, () -> new BidDecision("request-2", List.of())));
+    }
+
+    @Test
+    @DisplayName("동시 신규 키 경쟁에서도 실제 실행권 수는 용량 상한을 넘지 않는다")
+    void concurrentClaimsRespectTheExactCapacityLimit() throws Exception {
+        int capacity = 4;
+        int contenders = 32;
+        gate = new DefaultBidExecutionGate(RETENTION, capacity, simulatedNanoClock::get);
+        var ownersEntered = new CountDownLatch(capacity);
+        var releaseOwners = new CountDownLatch(1);
+        var executions = new AtomicInteger();
+
+        List<CompletableFuture<BidExecutionResult>> results = java.util.stream.IntStream.range(0, contenders)
+                .mapToObj(index -> CompletableFuture.supplyAsync(() -> gate.tryExecute(
+                        sampleCommand("ssp-1", "request-" + index, fingerprint(0)),
+                        () -> {
+                            executions.incrementAndGet();
+                            ownersEntered.countDown();
+                            await(releaseOwners);
+                            return new BidDecision("request-" + index, List.of());
+                        })))
+                .toList();
+
+        assertTrue(ownersEntered.await(2, TimeUnit.SECONDS));
+        releaseOwners.countDown();
+        List<BidExecutionResult> completed = results.stream().map(DefaultBidExecutionGateTest::join).toList();
+
+        assertEquals(capacity, executions.get());
+        assertEquals(capacity, completed.stream().filter(BidExecuted.class::isInstance).count());
+        assertEquals(contenders - capacity, completed.stream()
+                .filter(BidExecutionRejected.class::isInstance)
+                .map(BidExecutionRejected.class::cast)
+                .filter(result -> result.reason() == BidExecutionRejection.CAPACITY_EXCEEDED)
+                .count());
+    }
+
     private static ExecuteBidOnce sampleCommand(
             String sspId,
             String requestId,
@@ -190,6 +290,21 @@ class DefaultBidExecutionGateTest {
 
     private static BidRequestFingerprint fingerprint(int value) {
         return new BidRequestFingerprint(1, "%02x".formatted(value).repeat(32));
+    }
+
+    private static BidDecision decision(String requestId, AtomicInteger executions) {
+        executions.incrementAndGet();
+        return new BidDecision(requestId, List.of());
+    }
+
+    private static BidExecutionResult join(CompletableFuture<BidExecutionResult> future) {
+        try {
+            return future.get(2, TimeUnit.SECONDS);
+        } catch (ExecutionException failure) {
+            throw new AssertionError(failure.getCause());
+        } catch (Exception failure) {
+            throw new AssertionError(failure);
+        }
     }
 
     private static void await(CountDownLatch latch) {
