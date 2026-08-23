@@ -9,6 +9,7 @@ import com.bbororo.rtb.dsp.notification.NoticeIssuanceMessages.ReservationNotice
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 /** 입찰 중복 방지와 입찰 조정이 주고받는 메시지다. */
@@ -24,9 +25,25 @@ public final class AuctionMessages {
         }
     }
 
-    public record BidRequestFingerprint(String value) {
+    /** 한 슬롯 경매의 경제적 정체성이다. 처리 리전과 인스턴스는 이 키에 포함하지 않는다. */
+    public record SlotAuctionKey(String sspId, String requestId, String impressionId) {
+        public SlotAuctionKey {
+            sspId = requireNonBlank(sspId, "sspId");
+            requestId = requireNonBlank(requestId, "requestId");
+            impressionId = requireNonBlank(impressionId, "impressionId");
+        }
+    }
+
+    /** 요청 키와 분리해 정규화된 입찰 의미가 바뀌었는지 판정하는 버전형 SHA-256 지문이다. */
+    public record BidRequestFingerprint(int version, String digestHex) {
         public BidRequestFingerprint {
-            value = requireNonBlank(value, "value");
+            if (version <= 0) {
+                throw new IllegalArgumentException("version must be positive");
+            }
+            digestHex = requireNonBlank(digestHex, "digestHex").toLowerCase(Locale.ROOT);
+            if (!digestHex.matches("[0-9a-f]{64}")) {
+                throw new IllegalArgumentException("digestHex must be a 32-byte SHA-256 value");
+            }
         }
     }
 

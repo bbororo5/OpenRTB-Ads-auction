@@ -226,7 +226,8 @@ class DefaultBidDeduplicatorTest {
     // =========================================================================
     private static ExecuteBidOnce sampleCommand(String sspId, String requestId, String fingerprint) {
         var key = new BidRequestKey(sspId, requestId);
-        var fp = new BidRequestFingerprint(fingerprint);
+        String digestHex = "fp-TAMPERED".equals(fingerprint) ? "11".repeat(32) : "00".repeat(32);
+        var fp = new BidRequestFingerprint(1, digestHex);
         var openRtbReq = new BidRequest(
                 requestId,
                 50,
