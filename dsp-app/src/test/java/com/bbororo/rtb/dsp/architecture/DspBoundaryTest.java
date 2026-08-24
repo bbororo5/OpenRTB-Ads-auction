@@ -1,7 +1,7 @@
 package com.bbororo.rtb.dsp.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -10,6 +10,16 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import org.junit.jupiter.api.Test;
 
 class DspBoundaryTest {
+
+    private static final String[] ENCAPSULATED_COMPONENTS = {
+            "bidding",
+            "campaignruntime",
+            "spending",
+            "proof",
+            "outcome",
+            "lease",
+            "responsibility"
+    };
 
     private static final JavaClasses DSP_CLASSES = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -38,10 +48,37 @@ class DspBoundaryTest {
         assertDependencies("spending", "contract", "spending");
         assertDependencies("campaignruntime", "campaignruntime", "contract", "openrtb");
         assertDependencies("bidding", "bidding", "contract", "openrtb", "proof");
-        assertDependencies("proof", "contract", "openrtb", "proof", "spending");
-        assertDependencies("outcome", "contract", "openrtb", "outcome", "proof", "spending");
+        assertDependencies("proof", "contract", "proof", "spending");
+        assertDependencies("outcome", "contract", "outcome", "proof", "spending");
         assertDependencies("lease", "contract", "lease", "outcome", "spending");
         assertDependencies("responsibility", "contract", "responsibility");
+    }
+
+    @Test
+    void componentClassesUseApiSpiOrInternalLayers() {
+        for (String component : ENCAPSULATED_COMPONENTS) {
+            classes()
+                    .that().resideInAPackage(componentPackage(component, ""))
+                    .should().resideInAnyPackage(
+                            componentPackage(component, "api"),
+                            componentPackage(component, "spi"),
+                            componentPackage(component, "internal")
+                    )
+                    .check(DSP_CLASSES);
+        }
+    }
+
+    @Test
+    void onlyOwningComponentCanAccessSpiOrInternalTypes() {
+        for (String component : ENCAPSULATED_COMPONENTS) {
+            noClasses()
+                    .that().resideOutsideOfPackage(componentPackage(component, ""))
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            componentPackage(component, "spi"),
+                            componentPackage(component, "internal")
+                    )
+                    .check(DSP_CLASSES);
+        }
     }
 
     @Test
@@ -68,5 +105,10 @@ class DspBoundaryTest {
                 .that().resideInAPackage("com.bbororo.rtb.dsp." + component + "..")
                 .should().onlyDependOnClassesThat().resideInAnyPackage(allowed)
                 .check(DSP_CLASSES);
+    }
+
+    private static String componentPackage(String component, String layer) {
+        String componentRoot = "com.bbororo.rtb.dsp." + component + '.';
+        return layer.isEmpty() ? componentRoot + '.' : componentRoot + layer + "..";
     }
 }

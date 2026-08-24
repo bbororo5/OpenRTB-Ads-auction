@@ -1,6 +1,6 @@
 # DSP 애플리케이션 컴포넌트
 
-상태: 현재 불변식 기준 최상위 경계 재확정 · 구현 마이그레이션 진행 중
+상태: 현재 불변식 기준 최상위 경계 재확정 · 패키지 경계 적용 완료
 
 범위는 [DSP 컨테이너](dsp-containers.md)의 `DSP 애플리케이션` 하나다. 컴포넌트는 처리 순서나 저장소 수가 아니라, 현재 시스템에서 하나의 불변식 군을 증명하는 데 함께 필요한 상태와 연산으로 나눈다. 도출 근거는 [DSP 협력과 메시지](dsp-collaboration.md)에 있다.
 
@@ -86,11 +86,11 @@ flowchart LR
 | 제공 컴포넌트 | 인터페이스 | 입력 → 출력 |
 |---|---|---|
 | OpenRTB 어댑터 | `DspOpenRtbApi` | 외부 OpenRTB 메시지 ↔ 내부 입찰·통지 메시지 |
-| Bidding | `BidRequestHandler` | 인증된 입찰 요청 → 슬롯별 `BidDecision` 또는 빠른 거절 |
+| Bidding | `BidCoordinator` | 인증된 입찰 요청 → 슬롯별 `BidDecision` 또는 빠른 거절 |
 | Campaign Runtime | `CampaignCandidateSource` | 슬롯 조건 → 순서가 있는 `CampaignCandidate` |
 | Local Spending Authority | 예약 포트·종결 포트·리스 설치 포트·투영 포트 | 예약·종결·설치 명령 → 상태 변경 결과 |
-| Reservation Proof | `ReservationProofIssuer`, `ReservationProofVerifier` | 예약 사실 → 증표 URL, 불투명 토큰 → 검증된 예약 사실 |
-| Reservation Outcome | `ReservationOutcomeDecider`, `LeaseOutcomeView` | 종결 후보 → canonical 결과, `leaseId` → 정산 요약 |
+| Reservation Proof | `ReservationNoticeIssuer`, `ReservationNoticeVerifier` | 예약 사실 → 증표 URL, 불투명 토큰 → 검증된 예약 사실 |
+| Reservation Outcome | `ReservationOutcomeProcessor`, `LeaseOutcomeView` | 종결 후보 → canonical 결과, `leaseId` → 정산 요약 |
 | Lease Lifecycle | `LeaseRefill`, `LeaseSettlement` | 보충·정산 명령 → 각 처리 결과 |
 | Responsibility Transfer | `ResponsibilityTransfer` | 책임 이전 요청 → 완료·재사용·거절 |
 
@@ -119,7 +119,7 @@ flowchart LR
 
 1. 리스 생명주기는 입찰 경로 밖에서 리전 예산 원장에 권한을 요청한다.
 2. 발급이 복구 가능하게 확인된 리스만 로컬 예산 권한에 설치한다.
-3. 모든 예약의 5초 기한이 끝난 리스만 금액 사건으로 소비·반환·격리액을 계산한다.
+3. 각 예약에 봉인된 기한과 원장이 정한 안전 회복 시점이 지난 리스만 금액 사건으로 소비·반환·격리액을 계산한다.
 4. 같은 `leaseId`와 정산 세대를 리전 예산 원장에 여러 번 보내도 한 번만 반영한다.
 5. 리전 책임이 부족하면 리전 책임 제어가 전역 원장에 이전을 요청하며 입찰은 이를 기다리지 않는다.
 
@@ -132,19 +132,20 @@ flowchart LR
 - 캠페인 적재기는 캠페인 선택 뒤의 제어 경로 어댑터다. 검증된 완결 스냅숏만 한 번에 공개하며 시험 중 변경하지 않는다.
 - PostgreSQL 접근, 리전 예산 원장과 전역 책임 원장 접근은 각 책임 뒤의 저장소 포트다. 저장소 포트를 별도 업무 컴포넌트로 세지 않는다.
 - 입찰 조정·캠페인 선택·로컬 예약은 동기 로컬 호출이다. 로컬 예약은 캠페인별 `tryLock()` 획득 실패를 경합 거절로 반환하고 다음 후보를 기다리게 하지 않는다. 외부 저장소 I/O가 필요한 통지 기록·리스·책임 이전만 비동기 완료를 표현한다.
-- 인터페이스는 책임과 메시지 의미만 고정한다. HTTP 서버, JSON 라이브러리, 암호 구현, 원장 제품과 실행 자원 수는 후속 구현에서 정한다.
+- 각 업무 컴포넌트는 하나의 Gradle 모듈 안에서도 `api`(제공 계약), `spi`(필요 계약), `internal`(구현)로 나눈다. 다른 컴포넌트는 `api`만 의존할 수 있으며 이 규칙은 ArchUnit으로 검증한다.
+- 인터페이스는 책임과 메시지 의미만 고정한다. HTTP 서버, JSON 라이브러리, 암호 구현, 원장 제품과 실행 자원 수는 조립 계층에서 선택한다.
 
 ## 코드 위치
 
-| 책임 | 메시지·인터페이스 패키지 |
-|---|---|
-| OpenRTB 어댑터 | `com.bbororo.rtb.dsp.openrtb` |
-| Bidding | `com.bbororo.rtb.dsp.bidding` |
-| Campaign Runtime | `com.bbororo.rtb.dsp.campaignruntime` |
-| Local Spending Authority | `com.bbororo.rtb.dsp.spending` |
-| Reservation Proof | `com.bbororo.rtb.dsp.proof` |
-| Reservation Outcome | `com.bbororo.rtb.dsp.outcome` |
-| Lease Lifecycle | `com.bbororo.rtb.dsp.lease` |
-| Responsibility Transfer | `com.bbororo.rtb.dsp.responsibility` |
+| 책임 | 제공 계약 (`api`) | 필요 계약 (`spi`) | 은닉 구현 (`internal`) |
+|---|---|---|---|
+| OpenRTB 어댑터 | `com.bbororo.rtb.dsp.openrtb` | — | — |
+| Bidding | `com.bbororo.rtb.dsp.bidding.api` | — | `com.bbororo.rtb.dsp.bidding.internal` |
+| Campaign Runtime | `com.bbororo.rtb.dsp.campaignruntime.api` | `com.bbororo.rtb.dsp.campaignruntime.spi` | `com.bbororo.rtb.dsp.campaignruntime.internal` |
+| Local Spending Authority | `com.bbororo.rtb.dsp.spending.api` | — | `com.bbororo.rtb.dsp.spending.internal` |
+| Reservation Proof | `com.bbororo.rtb.dsp.proof.api` | `com.bbororo.rtb.dsp.proof.spi` | `com.bbororo.rtb.dsp.proof.internal` |
+| Reservation Outcome | `com.bbororo.rtb.dsp.outcome.api` | `com.bbororo.rtb.dsp.outcome.spi` | `com.bbororo.rtb.dsp.outcome.internal` |
+| Lease Lifecycle | `com.bbororo.rtb.dsp.lease.api` | `com.bbororo.rtb.dsp.lease.spi` | `com.bbororo.rtb.dsp.lease.internal` |
+| Responsibility Transfer | `com.bbororo.rtb.dsp.responsibility.api` | `com.bbororo.rtb.dsp.responsibility.spi` | `com.bbororo.rtb.dsp.responsibility.internal` |
 
-패키지 이동은 단계적으로 수행한다. 이동 중에도 외부 저장소 포트는 해당 저장소를 논리적으로 해석하는 컴포넌트 뒤에 둔다. SSP 코드를 공유하거나 참조하지 않고 양쪽이 각자 OpenRTB 표현을 소유한다.
+`spi`는 해당 컴포넌트가 외부 저장소·키·스냅숏 공급자에게 요구하는 계약이다. 현재 어댑터 구현은 소유 컴포넌트의 `internal`에 두므로 다른 업무 컴포넌트가 `spi`를 직접 조립하거나 호출하지 않는다. SSP 코드를 공유하거나 참조하지 않고 양쪽이 각자 OpenRTB 표현을 소유한다.
