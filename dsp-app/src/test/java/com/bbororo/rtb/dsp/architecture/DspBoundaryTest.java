@@ -7,6 +7,7 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
+import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 
 class DspBoundaryTest {
@@ -95,15 +96,19 @@ class DspBoundaryTest {
     }
 
     private static void assertDependencies(String component, String... dspDependencies) {
-        String[] allowed = new String[dspDependencies.length + 2];
-        allowed[0] = "java..";
-        allowed[1] = "javax..";
-        for (int i = 0; i < dspDependencies.length; i++) {
-            allowed[i + 2] = "com.bbororo.rtb.dsp." + dspDependencies[i] + "..";
+        var allowed = new ArrayList<String>();
+        allowed.add("java..");
+        allowed.add("javax..");
+        if ("openrtb".equals(component)) {
+            allowed.add("com.fasterxml.jackson..");
+        }
+        for (String dspDependency : dspDependencies) {
+            allowed.add("com.bbororo.rtb.dsp." + dspDependency + "..");
         }
         classes()
                 .that().resideInAPackage("com.bbororo.rtb.dsp." + component + "..")
-                .should().onlyDependOnClassesThat().resideInAnyPackage(allowed)
+                .should().onlyDependOnClassesThat().resideInAnyPackage(
+                        allowed.toArray(String[]::new))
                 .check(DSP_CLASSES);
     }
 

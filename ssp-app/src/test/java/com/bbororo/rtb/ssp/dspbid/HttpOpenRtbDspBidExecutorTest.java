@@ -36,9 +36,11 @@ class HttpOpenRtbDspBidExecutorTest {
     @Test
     void fansOutOneOpenRtbRequestAndIsolatesNoBid() throws Exception {
         AtomicReference<String> received = new AtomicReference<>();
+        AtomicReference<String> receivedVersion = new AtomicReference<>();
         try (TestServer server = new TestServer()) {
             server.context("/bid-a", exchange -> {
                 received.set(readRequest(exchange));
+                receivedVersion.set(exchange.getRequestHeaders().getFirst("x-openrtb-version"));
                 respond(exchange, 200, "application/json; charset=utf-8", validBid());
             });
             server.context("/bid-b", exchange -> respond(exchange, 204, null, new byte[0]));
@@ -57,6 +59,7 @@ class HttpOpenRtbDspBidExecutorTest {
             assertEquals(DspCallOutcomeKind.NO_BID, responses.outcomes().get(1).kind());
             assertTrue(received.get().contains("\"bidfloorcur\":\"KRW\""));
             assertTrue(received.get().contains("\"tmax\":100"));
+            assertEquals("2.6", receivedVersion.get());
         }
     }
 

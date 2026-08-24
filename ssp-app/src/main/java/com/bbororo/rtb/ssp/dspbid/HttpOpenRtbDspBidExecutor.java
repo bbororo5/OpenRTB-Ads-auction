@@ -90,6 +90,7 @@ public final class HttpOpenRtbDspBidExecutor implements DspBidExecutor {
                     .timeout(callBudget)
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")
+                    .header("x-openrtb-version", "2.6")
                     .POST(HttpRequest.BodyPublishers.ofByteArray(requestBody))
                     .build();
             CompletableFuture<HttpResponse<byte[]>> transport = channel.send(request, bodyHandler);
