@@ -111,7 +111,7 @@ public final class DspOpenRtbHttpAdapter {
             );
         }
 
-        private static Response noContent(int statusCode) {
+        static Response noContent(int statusCode) {
             return new Response(
                     statusCode,
                     Map.of(VERSION_HEADER, OPENRTB_VERSION),

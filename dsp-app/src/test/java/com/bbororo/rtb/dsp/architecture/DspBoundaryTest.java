@@ -35,6 +35,14 @@ class DspBoundaryTest {
     }
 
     @Test
+    void armeriaRemainsInsideTheOpenRtbTransportBoundary() {
+        noClasses()
+                .that().resideOutsideOfPackage("com.bbororo.rtb.dsp.openrtb..")
+                .should().dependOnClassesThat().resideInAPackage("com.linecorp.armeria..")
+                .check(DSP_CLASSES);
+    }
+
+    @Test
     void topLevelComponentsDoNotFormDependencyCycles() {
         slices()
                 .matching("com.bbororo.rtb.dsp.(*)..")
@@ -101,6 +109,7 @@ class DspBoundaryTest {
         allowed.add("javax..");
         if ("openrtb".equals(component)) {
             allowed.add("com.fasterxml.jackson..");
+            allowed.add("com.linecorp.armeria..");
         }
         for (String dspDependency : dspDependencies) {
             allowed.add("com.bbororo.rtb.dsp." + dspDependency + "..");
