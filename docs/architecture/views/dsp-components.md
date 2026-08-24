@@ -1,8 +1,10 @@
 # DSP 애플리케이션 컴포넌트
 
-상태: C3 책임·협력 경계 확정 · Java 메시지·인터페이스 기준선 적용
+상태: 현재 불변식 기준 최상위 경계 재확정 · 구현 마이그레이션 진행 중
 
-범위는 [DSP 컨테이너](dsp-containers.md)의 `DSP 애플리케이션` 하나다. 컴포넌트는 처리 순서가 아니라 같은 불변식을 보호하는 상태 소유권과 서로 다른 변경 이유로 나눴다. 도출 근거는 [DSP 협력과 메시지](dsp-collaboration.md)에 있다.
+범위는 [DSP 컨테이너](dsp-containers.md)의 `DSP 애플리케이션` 하나다. 컴포넌트는 처리 순서나 저장소 수가 아니라, 현재 시스템에서 하나의 불변식 군을 증명하는 데 함께 필요한 상태와 연산으로 나눈다. 도출 근거는 [DSP 협력과 메시지](dsp-collaboration.md)에 있다.
+
+최상위 체계는 여섯 핵심·제어 컴포넌트와 하나의 지원 컴포넌트다. OpenRTB와 저장소 접근은 이 컴포넌트들을 외부 계약에 연결하는 어댑터이며 별도 업무 권위를 소유하지 않는다.
 
 ## C4 Level 3
 
@@ -17,27 +19,25 @@ flowchart LR
 
         subgraph APP["DSP 애플리케이션 [Container: Java 21]"]
             direction TB
-            API["OpenRTB 계약<br/>요청·응답·통지 표현"]
-            DEDUPE["입찰 실행권<br/>최초 실행·중복 즉시 거절"]
-            AUCTION["입찰 조정<br/>기한·슬롯별 부분 성공"]
-            CAMPAIGN["캠페인 선택<br/>적격성·페이싱 순위"]
-            BUDGET["로컬 예산 권한<br/>예약·해제·확정·만료"]
-            TOKEN["예약 통지 증표<br/>URL 발급·검증"]
-            NOTICE["경매 결과 처리<br/>nurl·lurl·burl 멱등 반영"]
-            LEASE["리스 생명주기<br/>보충·종결·정산"]
-            TRANSFER["리전 책임 제어<br/>부족 감지·책임 이전"]
+            API["OpenRTB 어댑터<br/>요청·응답·통지 변환"]
+            BIDDING["Bidding<br/>실행권·기한·슬롯 조정"]
+            CAMPAIGN["Campaign Runtime<br/>완결 스냅숏·후보 순위"]
+            BUDGET["Local Spending Authority<br/>위임 권한·예약 상태 전이"]
+            PROOF["Reservation Proof<br/>예약 증표 발급·검증"]
+            OUTCOME["Reservation Outcome<br/>최초 종결 결정·재생"]
+            LEASE["Lease Lifecycle<br/>권한 보충·리스 정산"]
+            TRANSFER["Responsibility Transfer<br/>전역 격리·지역 활성화"]
 
-            API -->|"인증된 입찰 요청"| DEDUPE
-            DEDUPE -->|"최초 입찰 명령"| AUCTION
-            AUCTION -->|"후보 요청"| CAMPAIGN
-            CAMPAIGN -->|"페이싱 조회"| BUDGET
-            AUCTION -->|"예약 시도"| BUDGET
-            AUCTION -->|"통지 URL 발급"| TOKEN
-            API -->|"결과 통지"| NOTICE
-            NOTICE -->|"증표 검증"| TOKEN
-            NOTICE -->|"예약 종결"| BUDGET
-            LEASE <-->|"권한 설치·종결"| BUDGET
-            TRANSFER -->|"리전 책임 보충"| LEASE
+            API -->|"인증된 입찰 요청"| BIDDING
+            BIDDING -->|"후보 요청"| CAMPAIGN
+            CAMPAIGN -->|"페이싱 투영"| BUDGET
+            BIDDING -->|"예약 시도"| BUDGET
+            BIDDING -->|"증표 발급"| PROOF
+            API -->|"종결 통지"| OUTCOME
+            OUTCOME -->|"증표 검증"| PROOF
+            OUTCOME -->|"canonical 결과 재생"| BUDGET
+            LEASE -->|"권한 설치"| BUDGET
+            LEASE -->|"리스별 결과 요약"| OUTCOME
         end
 
         CAMPAIGN_STORE[("버전형 캠페인 데이터<br/>[Container]")]
@@ -49,16 +49,16 @@ flowchart LR
     SSP <-->|"BidRequest · BidResponse<br/>nurl · lurl · burl"| GATEWAY
     GATEWAY <-->|"입찰·통지 전달"| API
     CAMPAIGN_STORE -->|"버전·체크섬"| CAMPAIGN
-    NOTICE -->|"최초·중복·충돌 사건"| MONEY
-    LEASE -->|"리스 사건 집계"| MONEY
+    OUTCOME -->|"최초·중복·충돌 결정"| MONEY
     LEASE <-->|"발급·멱등 정산"| REGIONAL
-    TRANSFER <-->|"지역 활성화"| REGIONAL
+    TRANSFER <-->|"지역 책임 활성화"| REGIONAL
     TRANSFER <-->|"격리·완료"| GLOBAL
 
     classDef component fill:#2563eb,color:#fff,stroke:#1d4ed8,stroke-width:1.5px;
     classDef external fill:#fff,color:#172033,stroke:#94a3b8,stroke-width:1.5px;
     classDef store fill:#d1fae5,color:#064e3b,stroke:#10b981,stroke-width:1.5px;
-    class API,DEDUPE,AUCTION,CAMPAIGN,BUDGET,TOKEN,NOTICE,LEASE,TRANSFER component;
+    class BIDDING,CAMPAIGN,BUDGET,PROOF,OUTCOME,LEASE,TRANSFER component;
+    class API external;
     class SSP,GATEWAY external;
     class CAMPAIGN_STORE,REGIONAL,MONEY,GLOBAL store;
     style DSP fill:#eff6ff,stroke:#2563eb,stroke-width:2px
@@ -71,15 +71,13 @@ flowchart LR
 
 | 컴포넌트 | 함께 묶은 이유 | 소유하는 불변식·정책 | 소유하지 않는 것 |
 |---|---|---|---|
-| OpenRTB 계약 | 외부 규격이 바뀔 때 함께 변한다. | OpenRTB 하위 규격 검증과 내부 메시지 변환 | 캠페인·금액 판단 |
-| 입찰 실행권 | 같은 요청의 실행 여부와 내용 충돌이 함께 변한다. | SSP·요청 키와 지문, 최초 실행 하나, 중복 즉시 거절 | 캠페인·예산 정책 |
-| 입찰 조정 | 요청 기한과 슬롯별 협력 순서가 함께 변한다. | 절대 기한, 슬롯별 최대 한 입찰, 슬롯별 부분 성공 | 후보 순위·금액 상태 |
-| 캠페인 선택 | 캠페인 규칙과 조회 구조가 함께 변한다. | 활성·기간·규격 적격성, 페이싱 지연·`campaignId` 순위 | 예산 예약 성공 여부 |
-| 로컬 예산 권한 | 같은 캠페인의 금액·리스·예약 전이는 한 원자 경계에서 처리해야 한다. | 다중 로컬 리스의 액면 보존, 예약의 한 번뿐인 종결 | 통지 진위·내구 기록 |
-| 예약 통지 증표 | 외부에 공개하는 예약 신원과 무결성 규칙이 함께 변한다. | 예약·리스·금액·발급 리전·기한의 인증된 URL 발급·검증 | 예약 상태 변경 |
-| 경매 결과 처리 | 통지 멱등성과 내구 기록 순서가 함께 변한다. | `nurl` 관측, `lurl`·`burl` 최초·중복·충돌 판정, 기록 후 종결 | 리스 총량·정산 |
-| 리스 생명주기 | 로컬 권한의 공급과 반환이 같은 리스 상태를 공유한다. | 비동기 보충, 끝난 리스의 소비·반환·격리 합계, 멱등 정산 | 전역 책임 배분 |
-| 리전 책임 제어 | 전역과 리전 사이의 책임 이전 불변식이 별도다. | 이전 중 격리, 지역 활성화, 이전 ID 멱등성 | DSP 로컬 예약 |
+| Campaign Runtime | 완결된 캠페인 버전과 그 조회 구조를 함께 공개해야 한다. | 한 조회에서 한 버전, 캠페인·소재 적격성, 결정적인 후보 순위 | 원자적 예산 승인 |
+| Bidding | 요청 실행권·절대 기한·슬롯 진행이 하나의 요청 수명을 공유한다. | 같은 요청 실행 최대 한 번, 기한 이후 무입찰, 슬롯별 최대 한 입찰과 부분 성공 | 후보 내부 규칙·금액 상태 |
+| Local Spending Authority | 같은 캠페인의 리스·금액·예약 전이를 한 원자 경계에서 처리해야 한다. | 다중 로컬 리스의 액면 보존, 예약의 한 번뿐인 종결 | 통지 진위·내구 결과 결정 |
+| Reservation Outcome | 종결 후보의 최초 결정과 그 결정의 재생이 하나의 내구 계약이다. | 예약별 canonical `LOSS`·`BILLING`·`EXPIRY` 하나, 결정 후 로컬 재생 | 예약 생성·리스 총량 |
+| Lease Lifecycle | 위임 권한의 유입과 반환이 같은 리스 액면을 보존해야 한다. | 확인된 리스만 설치, 안전 회복 시점 이후 소비·반환·격리 합계, 멱등 정산 | 전역 책임 배분 |
+| Responsibility Transfer | 전역과 리전 사이의 준비·활성화·완료 순서가 하나의 이전 프로토콜이다. | 이전 중 격리, 지역 활성화, `transferId` 멱등성 | DSP 로컬 예약·리스 발급 |
+| Reservation Proof | 발급자와 검증자가 같은 예약 신원·무결성 계약을 사용해야 한다. | 예약·리스·금액·SSP·리전·기한의 인증된 증표 발급·검증 | 예약·결과 상태 변경 |
 
 ## 핵심 메시지와 인터페이스
 
@@ -87,23 +85,22 @@ flowchart LR
 
 | 제공 컴포넌트 | 인터페이스 | 입력 → 출력 |
 |---|---|---|
-| OpenRTB 계약 | `DspOpenRtbApi` | `BidRequest` → `BidResponse` 또는 `NoBid`, `AuctionNotice` → 일반 HTTP 판정 |
-| 입찰 실행권 | `BidExecutionGate` | `ExecuteBidOnce` → 최초 실행 또는 빠른 거절 |
-| 입찰 조정 | `BidCoordinator` | `CoordinateBid` → 슬롯별 `BidDecision` |
-| 캠페인 선택 | `CampaignSelector` | `RankCampaigns` → 순서가 있는 `CampaignCandidate` |
-| 로컬 예산 권한 | `LocalBudgetAuthority` | `TryReserve`, `ReleaseReservation`, `CommitReservation`, `ExpireReservation`, `InstallLease` → 상태 변경 결과 |
-| 예약 통지 증표 | `ReservationNoticeIssuer`, `ReservationNoticeVerifier` | `IssueReservationNotices` → `ReservationNoticeUrls`, 불투명 토큰 → `VerifiedReservationNotice` |
-| 경매 결과 처리 | `AuctionNoticeProcessor` | `AuctionNotice` → 검증·기록·종결한 `NoticeProcessingResult` |
-| 리스 생명주기 | `LeaseLifecycle` | `RefillLease`, 원장이 임대한 `SettlementWork` → 리스 처리 결과 |
-| 리전 책임 제어 | `RegionalResponsibilityController` | `RequestRegionalResponsibility` → 이전 처리 결과 |
+| OpenRTB 어댑터 | `DspOpenRtbApi` | 외부 OpenRTB 메시지 ↔ 내부 입찰·통지 메시지 |
+| Bidding | `BidRequestHandler` | 인증된 입찰 요청 → 슬롯별 `BidDecision` 또는 빠른 거절 |
+| Campaign Runtime | `CampaignCandidateSource` | 슬롯 조건 → 순서가 있는 `CampaignCandidate` |
+| Local Spending Authority | 예약 포트·종결 포트·리스 설치 포트·투영 포트 | 예약·종결·설치 명령 → 상태 변경 결과 |
+| Reservation Proof | `ReservationProofIssuer`, `ReservationProofVerifier` | 예약 사실 → 증표 URL, 불투명 토큰 → 검증된 예약 사실 |
+| Reservation Outcome | `ReservationOutcomeDecider`, `LeaseOutcomeView` | 종결 후보 → canonical 결과, `leaseId` → 정산 요약 |
+| Lease Lifecycle | `LeaseRefill`, `LeaseSettlement` | 보충·정산 명령 → 각 처리 결과 |
+| Responsibility Transfer | `ResponsibilityTransfer` | 책임 이전 요청 → 완료·재사용·거절 |
 
 ## 협력 계약
 
 ### 입찰
 
-1. OpenRTB 계약은 인증된 SSP ID와 요청 ID로 중복 키를 만들고 `tmax`를 단조 시계 기반 절대 기한으로 바꾼다.
-2. 입찰 실행권은 같은 키의 최초 호출 하나만 실행하고 같은 지문의 후속 요청은 기다리지 않고 거절한다.
-3. 입찰 조정은 슬롯마다 캠페인 선택에 순서 있는 후보를 요구한다.
+1. OpenRTB 어댑터는 인증된 SSP ID와 요청 ID를 내부 요청으로 바꾸고 `tmax`를 단조 시계 기반 절대 기한으로 바꾼다.
+2. Bidding의 내부 실행권은 같은 키의 최초 호출 하나만 실행하고 후속 요청은 기다리지 않고 거절한다.
+3. Bidding은 슬롯마다 Campaign Runtime에 순서 있는 후보를 요구한다.
 4. 페이싱 지연이 큰 후보부터 로컬 예산 권한에 예약을 시도한다.
 5. 경합으로 예약이 실패하면 같은 절대 기한 안에서 다음 후보를 시도한다.
 6. 예약에 성공한 슬롯만 예약 통지 증표를 발급해 응답한다.
@@ -114,8 +111,8 @@ flowchart LR
 1. OpenRTB 계약은 URL 종류와 불투명 토큰을 내부 통지로 바꾼다.
 2. 예약 통지 증표는 신원·금액·리스·기한과 무결성을 검증한다.
 3. `nurl`은 관측만 남기고 금액을 바꾸지 않는다.
-4. `lurl`·`burl`은 지역 금액 사건 기록에서 최초·중복·충돌을 판정한다.
-5. 최초 사건을 복구 가능하게 기록한 뒤 로컬 예산 권한에 해제 또는 확정을 명령한다.
+4. `lurl`·`burl`·만료는 Reservation Outcome에서 하나의 canonical 결과를 내구 결정한다.
+5. canonical 결과를 Local Spending Authority에 해제·확정·만료 명령으로 재생한다.
 6. 같은 종결 메시지는 같은 결과를 내며 모순된 메시지는 기존 금액 상태를 뒤집지 않는다.
 
 ### 권한과 정산
@@ -130,7 +127,7 @@ flowchart LR
 
 ## 구현 경계
 
-- 아홉 컴포넌트는 우선 하나의 DSP 애플리케이션 프로세스에 둔다.
+- 여섯 핵심·제어 컴포넌트와 Reservation Proof는 하나의 DSP 애플리케이션 프로세스에 둔다.
 - DSP 게이트웨이는 `sspId + BidRequest.id`의 안정된 소유 인스턴스로 요청을 보내 로컬 중복 상태를 유효하게 만든다. 소유권이 불확실한 장애 전환에서는 같은 요청을 새로 실행하지 않는다.
 - 캠페인 적재기는 캠페인 선택 뒤의 제어 경로 어댑터다. 검증된 완결 스냅숏만 한 번에 공개하며 시험 중 변경하지 않는다.
 - PostgreSQL 접근, 리전 예산 원장과 전역 책임 원장 접근은 각 책임 뒤의 저장소 포트다. 저장소 포트를 별도 업무 컴포넌트로 세지 않는다.
@@ -141,12 +138,13 @@ flowchart LR
 
 | 책임 | 메시지·인터페이스 패키지 |
 |---|---|
-| OpenRTB 계약 | `com.bbororo.rtb.dsp.openrtb` |
-| 입찰 중복 방지·입찰 조정 | `com.bbororo.rtb.dsp.auction` |
-| 캠페인 적재·선택 | `com.bbororo.rtb.dsp.campaign` |
-| 로컬 예산·페이싱 투영 | `com.bbororo.rtb.dsp.budget` |
-| 예약 통지 증표·경매 결과 처리 | `com.bbororo.rtb.dsp.notification` |
-| 리스 보충·정산 | `com.bbororo.rtb.dsp.lease` |
-| 전역·리전 책임 이전 | `com.bbororo.rtb.dsp.allocation` |
+| OpenRTB 어댑터 | `com.bbororo.rtb.dsp.openrtb` |
+| Bidding | `com.bbororo.rtb.dsp.bidding` |
+| Campaign Runtime | `com.bbororo.rtb.dsp.campaignruntime` |
+| Local Spending Authority | `com.bbororo.rtb.dsp.spending` |
+| Reservation Proof | `com.bbororo.rtb.dsp.proof` |
+| Reservation Outcome | `com.bbororo.rtb.dsp.outcome` |
+| Lease Lifecycle | `com.bbororo.rtb.dsp.lease` |
+| Responsibility Transfer | `com.bbororo.rtb.dsp.responsibility` |
 
-각 패키지의 `*Messages`는 불변 값, 컴포넌트 이름의 인터페이스는 제공 경계, `*Source`·`*Ledger`·`*Journal`은 외부 저장소 포트다. SSP 코드를 공유하거나 참조하지 않고 양쪽이 각자 OpenRTB 표현을 소유한다.
+패키지 이동은 단계적으로 수행한다. 이동 중에도 외부 저장소 포트는 해당 저장소를 논리적으로 해석하는 컴포넌트 뒤에 둔다. SSP 코드를 공유하거나 참조하지 않고 양쪽이 각자 OpenRTB 표현을 소유한다.
