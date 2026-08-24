@@ -1,11 +1,11 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.spi;
 
-import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.ClaimDueSettlements;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillResult;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementAmounts;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementResult;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.RefillLease;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.SettlementWork;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 

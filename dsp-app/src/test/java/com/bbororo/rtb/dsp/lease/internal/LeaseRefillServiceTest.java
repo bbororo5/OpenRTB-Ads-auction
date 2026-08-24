@@ -1,17 +1,19 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.internal;
 
 import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.CAPACITY_EXCEEDED;
 import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.INSTALLED;
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.LOCAL_INSTALL_REJECTED;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillRejection.LOCAL_INSTALL_REJECTED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages;
+import com.bbororo.rtb.dsp.lease.spi.RegionalBudgetLedger;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.InstallLease;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult;
 import com.bbororo.rtb.dsp.spending.api.LeaseInstaller;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillRejected;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefilled;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.RefillLease;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

@@ -1,12 +1,12 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.api;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.ClaimDueSettlements;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementAmounts;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.RefillLease;
 import com.bbororo.rtb.dsp.outcome.api.LeaseOutcomeView.LeaseOutcomeSummary;
 import java.time.Duration;
 import java.time.Instant;

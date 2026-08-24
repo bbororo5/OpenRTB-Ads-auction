@@ -1,4 +1,4 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.internal;
 
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
 import java.time.Duration;

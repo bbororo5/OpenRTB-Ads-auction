@@ -1,14 +1,16 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.internal;
 
 import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.ALREADY_INSTALLED;
 import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.INSTALLED;
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.LOCAL_INSTALL_REJECTED;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillRejection.LOCAL_INSTALL_REJECTED;
 
 import com.bbororo.rtb.dsp.spending.api.LeaseInstaller;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
+import com.bbororo.rtb.dsp.lease.api.LeaseRefill;
+import com.bbororo.rtb.dsp.lease.spi.RegionalBudgetLedger;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillResult;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillRejected;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefilled;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.RefillLease;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 import java.util.function.LongSupplier;

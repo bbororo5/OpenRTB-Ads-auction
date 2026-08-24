@@ -1,13 +1,15 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.internal;
 
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.APPLIED;
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.CONFLICT;
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.NOT_READY;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementResult.APPLIED;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementResult.CONFLICT;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementResult.NOT_READY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages;
+import com.bbororo.rtb.dsp.lease.spi.RegionalBudgetLedger;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementAmounts;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.SettlementWork;
 import com.bbororo.rtb.dsp.outcome.api.LeaseOutcomeView;
 import com.bbororo.rtb.dsp.outcome.api.LeaseOutcomeView.LeaseOutcomeSummary;
 import java.time.Instant;

@@ -1,17 +1,21 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.internal;
 
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.LOCAL_INSTALL_REJECTED;
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.REGIONAL_LEDGER_UNAVAILABLE;
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.ALREADY_APPLIED;
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.APPLIED;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillRejection.LOCAL_INSTALL_REJECTED;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillRejection.REGIONAL_LEDGER_UNAVAILABLE;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementResult.ALREADY_APPLIED;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementResult.APPLIED;
 
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages;
+import com.bbororo.rtb.dsp.lease.api.LeaseRefill;
+import com.bbororo.rtb.dsp.lease.api.LeaseSettlement;
+import com.bbororo.rtb.dsp.lease.spi.RegionalBudgetLedger;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.spending.api.LocalLeaseSupplyView;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.ClaimDueSettlements;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillRejected;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefilled;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.RefillLease;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.SettlementWork;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;

@@ -1,19 +1,22 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.internal;
 
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.REGIONAL_LEDGER_UNAVAILABLE;
-import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.APPLIED;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillRejection.REGIONAL_LEDGER_UNAVAILABLE;
+import static com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementResult.APPLIED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.bbororo.rtb.dsp.lease.api.LeaseRefill;
+import com.bbororo.rtb.dsp.lease.api.LeaseSettlement;
+import com.bbororo.rtb.dsp.lease.spi.RegionalBudgetLedger;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.InstallLease;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.ClaimDueSettlements;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillRejected;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefillResult;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseRefilled;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementAmounts;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.LeaseSettlementResult;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.RefillLease;
+import com.bbororo.rtb.dsp.lease.api.LeaseMessages.SettlementWork;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;

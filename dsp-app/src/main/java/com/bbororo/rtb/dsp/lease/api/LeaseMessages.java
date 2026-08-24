@@ -1,4 +1,4 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.api;
 
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireAfter;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;

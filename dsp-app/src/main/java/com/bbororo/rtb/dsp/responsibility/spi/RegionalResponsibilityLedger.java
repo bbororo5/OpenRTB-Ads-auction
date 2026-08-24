@@ -1,7 +1,7 @@
-package com.bbororo.rtb.dsp.responsibility;
+package com.bbororo.rtb.dsp.responsibility.spi;
 
-import com.bbororo.rtb.dsp.responsibility.ResponsibilityMessages.RegionalTransferActivation;
-import com.bbororo.rtb.dsp.responsibility.ResponsibilityMessages.TransferActivation;
+import com.bbororo.rtb.dsp.responsibility.api.ResponsibilityMessages.RegionalTransferActivation;
+import com.bbororo.rtb.dsp.responsibility.api.ResponsibilityMessages.TransferActivation;
 import java.util.concurrent.CompletionStage;
 
 /** 준비된 이전을 대상 리전 책임액으로 한 번 활성화하는 원장 포트다. */

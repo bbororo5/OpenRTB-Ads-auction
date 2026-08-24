@@ -1,4 +1,4 @@
-package com.bbororo.rtb.dsp.responsibility;
+package com.bbororo.rtb.dsp.responsibility.api;
 
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;

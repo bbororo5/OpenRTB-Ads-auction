@@ -1,4 +1,4 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.lease.internal;
 
 import java.time.Duration;
 import java.util.Objects;
