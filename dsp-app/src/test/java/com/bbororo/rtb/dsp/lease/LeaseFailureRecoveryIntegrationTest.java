@@ -2,7 +2,7 @@ package com.bbororo.rtb.dsp.lease;
 
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.APPLIED;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.STALE_CLAIM;
-import static com.bbororo.rtb.dsp.notification.NoticeProcessingMessages.MonetaryEventKind.BILLING;
+import static com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryEventKind.BILLING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
@@ -10,8 +10,8 @@ import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
-import com.bbororo.rtb.dsp.notification.NoticeProcessingMessages.MonetaryNoticeEvent;
-import com.bbororo.rtb.dsp.notification.PostgreSqlMoneyEventJournal;
+import com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryNoticeEvent;
+import com.bbororo.rtb.dsp.outcome.PostgreSqlMoneyEventJournal;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
@@ -89,7 +89,7 @@ class LeaseFailureRecoveryIntegrationTest {
         );
         String leaseId = issued.lease().leaseId();
         Instant deadline = Instant.now().plusSeconds(1);
-        journal.append(new MonetaryNoticeEvent(
+        journal.decide(new MonetaryNoticeEvent(
                 "reservation-1:BILLING", BILLING, "reservation-1", leaseId,
                 "campaign-1", 300, deadline, deadline.minusMillis(1)
         )).toCompletableFuture().join();

@@ -10,7 +10,7 @@ import com.bbororo.rtb.dsp.auction.AuctionMessages.CoordinateBid;
 import com.bbororo.rtb.dsp.auction.AuctionMessages.PreparedBid;
 import com.bbororo.rtb.dsp.auction.AuctionMessages.SlotAuctionKey;
 import com.bbororo.rtb.dsp.contract.AuctionDeadline;
-import com.bbororo.rtb.dsp.notification.NoticeIssuanceMessages.ReservationNoticeUrls;
+import com.bbororo.rtb.dsp.proof.NoticeIssuanceMessages.ReservationNoticeUrls;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.BidRequest;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.Impression;
