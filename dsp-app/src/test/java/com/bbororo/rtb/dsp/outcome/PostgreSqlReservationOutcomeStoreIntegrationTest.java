@@ -12,6 +12,7 @@ import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryNoticeEven
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeChosen;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeConflict;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeDecision;
+import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeIgnored;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
@@ -92,7 +93,17 @@ class PostgreSqlReservationOutcomeStoreIntegrationTest {
         Instant deadline = Instant.now().plusSeconds(1);
         decide(event("reservation-1", leaseId, BILLING, 300, deadline, deadline.minusMillis(1)));
         decide(event("reservation-2", leaseId, EXPIRY, 200, deadline, deadline));
-        decide(event("reservation-3", leaseId, BILLING, 100, deadline, deadline.plusMillis(1)));
+        assertInstanceOf(
+                OutcomeIgnored.class,
+                decide(event(
+                        "reservation-3", leaseId, BILLING, 100,
+                        deadline, deadline.plusMillis(1)
+                ))
+        );
+        assertInstanceOf(
+                OutcomeChosen.class,
+                decide(event("reservation-3", leaseId, EXPIRY, 100, deadline, deadline))
+        );
 
         var summary = reader.summarize(
                 leaseId, 1_000, Instant.now().minusSeconds(1)

@@ -20,6 +20,7 @@ import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.NoticeRejected;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeChosen;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeDecision;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeConflict;
+import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeIgnored;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuctionNotice;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeKind;
 import java.util.Objects;
@@ -81,17 +82,17 @@ public final class DefaultReservationOutcomeProcessor implements ReservationOutc
 
     private NoticeProcessingResult applyDecision(OutcomeDecision decision) {
         MonetaryNoticeEvent outcome = decision.outcome();
+        if (decision instanceof OutcomeIgnored ignored) {
+            return new NoticeProcessed(
+                    ignored.firstObservation() ? LATE_NO_EFFECT : DUPLICATE,
+                    outcome.reservationId()
+            );
+        }
         replayer.replay(outcome);
         if (decision instanceof OutcomeConflict) {
             return new NoticeProcessed(CONFLICT, outcome.reservationId());
         }
         var chosen = (OutcomeChosen) decision;
-        if (outcome.arrivedAfterDeadline()) {
-            return new NoticeProcessed(
-                    chosen.firstDecision() ? LATE_NO_EFFECT : DUPLICATE,
-                    outcome.reservationId()
-            );
-        }
         return new NoticeProcessed(
                 chosen.firstDecision() ? ACCEPTED : DUPLICATE,
                 outcome.reservationId()

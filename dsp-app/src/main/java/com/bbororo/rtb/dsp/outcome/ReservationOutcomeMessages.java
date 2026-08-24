@@ -39,7 +39,7 @@ public final class ReservationOutcomeMessages {
     }
 
     /** 저장소가 선택한 예약의 canonical 금액 결과다. */
-    public sealed interface OutcomeDecision permits OutcomeChosen, OutcomeConflict {
+    public sealed interface OutcomeDecision permits OutcomeChosen, OutcomeConflict, OutcomeIgnored {
 
         MonetaryNoticeEvent outcome();
     }
@@ -56,6 +56,14 @@ public final class ReservationOutcomeMessages {
         public OutcomeConflict {
             Objects.requireNonNull(outcome, "outcome");
             Objects.requireNonNull(rejectedKind, "rejectedKind");
+        }
+    }
+
+    /** 감사 사건은 기록했지만 금액 종결 후보로 채택하지 않은 결과다. */
+    public record OutcomeIgnored(MonetaryNoticeEvent outcome, boolean firstObservation)
+            implements OutcomeDecision {
+        public OutcomeIgnored {
+            Objects.requireNonNull(outcome, "outcome");
         }
     }
 

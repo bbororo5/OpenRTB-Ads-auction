@@ -6,6 +6,7 @@ import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationExpiration;
 import com.bbororo.rtb.dsp.spending.LocalSpendingAuthority;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryNoticeEvent;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeConflict;
+import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeIgnored;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 
@@ -34,6 +35,9 @@ public final class ReservationExpirationService {
                 expiration.expiresAt()
         );
         return journal.decide(event).thenApply(decision -> {
+            if (decision instanceof OutcomeIgnored) {
+                throw new IllegalStateException("expiration cannot be ignored");
+            }
             replayer.replay(decision.outcome());
             return !(decision instanceof OutcomeConflict);
         });

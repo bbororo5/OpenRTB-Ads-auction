@@ -5,6 +5,7 @@ import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryNoticeEven
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeChosen;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeConflict;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeDecision;
+import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeIgnored;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -78,6 +79,11 @@ public final class PostgreSqlReservationOutcomeStore implements ReservationOutco
                         connection.commit();
                         return new OutcomeConflict(existing.toEvent(), event.kind());
                     }
+                }
+
+                if (event.kind() != MonetaryEventKind.EXPIRY && event.arrivedAfterDeadline()) {
+                    connection.commit();
+                    return new OutcomeIgnored(event, inserted == 1);
                 }
 
                 int outcomeInserted = insertOutcome(connection, event);
