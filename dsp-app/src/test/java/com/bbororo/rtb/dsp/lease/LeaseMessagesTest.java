@@ -7,7 +7,7 @@ import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
-import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView.LeaseOutcomeSummary;
+import com.bbororo.rtb.dsp.outcome.api.LeaseOutcomeView.LeaseOutcomeSummary;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;

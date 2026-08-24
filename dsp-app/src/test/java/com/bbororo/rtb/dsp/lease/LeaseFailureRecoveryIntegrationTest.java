@@ -2,7 +2,7 @@ package com.bbororo.rtb.dsp.lease;
 
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.APPLIED;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.STALE_CLAIM;
-import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryEventKind.BILLING;
+import static com.bbororo.rtb.dsp.outcome.api.ReservationOutcomeMessages.MonetaryEventKind.BILLING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
@@ -10,9 +10,9 @@ import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
-import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryNoticeEvent;
-import com.bbororo.rtb.dsp.outcome.PostgreSqlReservationOutcomeStore;
-import com.bbororo.rtb.dsp.outcome.PostgreSqlLeaseOutcomeView;
+import com.bbororo.rtb.dsp.outcome.api.ReservationOutcomeMessages.MonetaryNoticeEvent;
+import com.bbororo.rtb.dsp.outcome.internal.PostgreSqlReservationOutcomeStore;
+import com.bbororo.rtb.dsp.outcome.internal.PostgreSqlLeaseOutcomeView;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;

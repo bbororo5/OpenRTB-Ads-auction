@@ -6,8 +6,8 @@ import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.NOT_
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
-import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView;
-import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView.LeaseOutcomeSummary;
+import com.bbororo.rtb.dsp.outcome.api.LeaseOutcomeView;
+import com.bbororo.rtb.dsp.outcome.api.LeaseOutcomeView.LeaseOutcomeSummary;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;

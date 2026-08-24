@@ -5,7 +5,7 @@ import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
 import com.bbororo.rtb.dsp.contract.AuctionDeadline;
-import com.bbororo.rtb.dsp.proof.NoticeIssuanceMessages.ReservationNoticeUrls;
+import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.ReservationNoticeUrls;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
 import java.util.HashSet;
 import java.util.List;

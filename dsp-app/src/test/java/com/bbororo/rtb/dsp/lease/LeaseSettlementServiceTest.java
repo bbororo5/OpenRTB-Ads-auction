@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
-import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView;
-import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView.LeaseOutcomeSummary;
+import com.bbororo.rtb.dsp.outcome.api.LeaseOutcomeView;
+import com.bbororo.rtb.dsp.outcome.api.LeaseOutcomeView.LeaseOutcomeSummary;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
