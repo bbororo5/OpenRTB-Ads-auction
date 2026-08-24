@@ -4,11 +4,11 @@ import com.bbororo.rtb.ssp.contract.SspMessages.ProofIssuance;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderCompleted;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderProof;
 import com.bbororo.rtb.ssp.contract.SspMessages.VerifiedRender;
+import com.bbororo.rtb.ssp.contract.NoticeUrlTemplate;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -28,7 +28,7 @@ import javax.crypto.spec.GCMParameterSpec;
 /** 버전형 이진 페이로드를 AES-GCM으로 봉인하는 실제 렌더링 증표 구현이다. */
 public final class AeadRenderProofService implements RenderProofService {
 
-    private static final byte FORMAT_VERSION = 2;
+    private static final byte FORMAT_VERSION = 3;
     private static final int NONCE_BYTES = 12;
     private static final int TAG_BITS = 128;
     private static final int MAX_ENCODED_TOKEN_CHARS = 4_096;
@@ -122,7 +122,8 @@ public final class AeadRenderProofService implements RenderProofService {
             Cipher cipher = cipher(Cipher.DECRYPT_MODE, key, nonce, header);
             VerifiedRender render = decodePayload(
                     cipher.doFinal(encrypted),
-                    encodedProof
+                    encodedProof,
+                    completed.receivedAt()
             );
             if (completed.receivedAt().isBefore(render.auctionIssuedAt())
                     || completed.receivedAt().isAfter(render.renderExpiresAt())) {
@@ -151,11 +152,12 @@ public final class AeadRenderProofService implements RenderProofService {
             output.writeUTF(localRegion);
             output.writeUTF(issuance.auction().providerId());
             output.writeUTF(issuance.auction().providerRequestId());
+            output.writeUTF(issuance.auctionId());
             output.writeUTF(issuance.winner().impId());
             output.writeUTF(issuance.winner().slotAuctionKey());
             output.writeUTF(issuance.winner().dspId());
             output.writeLong(issuance.winner().cpmMilliKrw());
-            output.writeUTF(issuance.winner().burl().toString());
+            output.writeUTF(issuance.winner().burl().value());
             output.writeLong(issuedAt.toEpochMilli());
             output.writeLong(expiresAt.toEpochMilli());
             output.flush();
@@ -163,7 +165,11 @@ public final class AeadRenderProofService implements RenderProofService {
         }
     }
 
-    private VerifiedRender decodePayload(byte[] payload, String encodedProof) throws Exception {
+    private VerifiedRender decodePayload(
+            byte[] payload,
+            String encodedProof,
+            Instant impressionAt
+    ) throws Exception {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(payload))) {
             String issuerRegion = input.readUTF();
             if (!localRegion.equals(issuerRegion)) {
@@ -171,11 +177,12 @@ public final class AeadRenderProofService implements RenderProofService {
             }
             String providerId = input.readUTF();
             String providerRequestId = input.readUTF();
+            String auctionId = input.readUTF();
             String impId = input.readUTF();
             String slotAuctionKey = input.readUTF();
             String dspId = input.readUTF();
             long cpmMilliKrw = input.readLong();
-            URI billingUrl = URI.create(input.readUTF());
+            NoticeUrlTemplate billingUrlTemplate = new NoticeUrlTemplate(input.readUTF());
             Instant issuedAt = Instant.ofEpochMilli(input.readLong());
             Instant expiresAt = Instant.ofEpochMilli(input.readLong());
             validateValidity(issuedAt, expiresAt);
@@ -185,8 +192,8 @@ public final class AeadRenderProofService implements RenderProofService {
             String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(encodedProof.getBytes(StandardCharsets.UTF_8)));
             return new VerifiedRender(
-                    providerId, providerRequestId, impId, slotAuctionKey, digest,
-                    dspId, cpmMilliKrw, billingUrl, issuedAt, expiresAt
+                    providerId, providerRequestId, auctionId, impId, slotAuctionKey, digest,
+                    dspId, cpmMilliKrw, billingUrlTemplate, issuedAt, expiresAt, impressionAt
             );
         }
     }

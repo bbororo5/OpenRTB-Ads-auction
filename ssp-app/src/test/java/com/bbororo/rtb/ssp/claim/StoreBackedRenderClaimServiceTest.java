@@ -8,8 +8,8 @@ import com.bbororo.rtb.ssp.contract.SspMessages.BillingClaim;
 import com.bbororo.rtb.ssp.contract.SspMessages.DeliveryLease;
 import com.bbororo.rtb.ssp.contract.SspMessages.DeliveryOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.LeasedBillingDelivery;
+import com.bbororo.rtb.ssp.contract.NoticeUrlTemplate;
 import com.bbororo.rtb.ssp.trust.ProviderTrustSnapshot;
-import java.net.URI;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -46,12 +46,40 @@ class StoreBackedRenderClaimServiceTest {
         assertEquals(RenderAcceptance.RETRY_LATER, service.acceptRender(verifiedRender()));
     }
 
+    @Test
+    void expandsBillingMacrosWithTheVerifiedImpressionTimestamp() {
+        InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
+        RenderClaimService service = new StoreBackedRenderClaimService(store, trust(true));
+        Instant issuedAt = Instant.parse("2026-07-27T00:00:00Z");
+        Instant impressionAt = issuedAt.plusMillis(200);
+        VerifiedRender render = new VerifiedRender(
+                "provider-1", "request-1", "auction-1", "imp-1",
+                "auction-1/imp-1", "a".repeat(64),
+                "project-dsp", 2_000,
+                new NoticeUrlTemplate(
+                        "https://dsp.test/burl?price=${AUCTION_PRICE}"
+                                + "&currency=${AUCTION_CURRENCY}&ts=${AUCTION_IMP_TS}"
+                ),
+                issuedAt, issuedAt.plusSeconds(2), impressionAt
+        );
+
+        assertEquals(RenderAcceptance.ACCEPTED, service.acceptRender(render));
+        var claim = store.leaseDueDelivery(issuedAt).orElseThrow().task().claim();
+
+        assertEquals(
+                "https://dsp.test/burl?price=2&currency=KRW&ts=" + impressionAt.toEpochMilli(),
+                claim.billingUrl().toString()
+        );
+    }
+
     private static VerifiedRender verifiedRender() {
         Instant issuedAt = Instant.parse("2026-07-27T00:00:00Z");
         return new VerifiedRender(
-                "provider-1", "request-1", "imp-1", "auction-1/imp-1", "a".repeat(64),
-                "project-dsp", 2_000, URI.create("https://dsp.example.test/burl"),
-                issuedAt, issuedAt.plusSeconds(2)
+                "provider-1", "request-1", "auction-1", "imp-1",
+                "auction-1/imp-1", "a".repeat(64),
+                "project-dsp", 2_000,
+                new NoticeUrlTemplate("https://dsp.example.test/burl"),
+                issuedAt, issuedAt.plusSeconds(2), issuedAt.plusMillis(200)
         );
     }
 

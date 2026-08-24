@@ -86,6 +86,24 @@ class OpenRtb26CodecTest {
     }
 
     @Test
+    void preservesStandardNoticeMacrosUntilTheAuctionResultIsKnown() {
+        String json = validBidJson("\"impid\":\"imp-1\",\"exp\":2")
+                .replace(
+                        "https://dsp.test/nurl/1",
+                        "https://dsp.test/nurl?price=${AUCTION_PRICE}"
+                );
+
+        var result = codec.decodeBidResponse(
+                "dsp-1", batch(), json.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(DspCallOutcomeKind.VALID_BID, result.kind());
+        assertEquals(
+                "https://dsp.test/nurl?price=${AUCTION_PRICE}",
+                result.bids().getFirst().nurl().value()
+        );
+    }
+
+    @Test
     void rejectsAMismatchedAuctionId() {
         byte[] body = "{\"id\":\"another-auction\",\"seatbid\":[]}".getBytes(StandardCharsets.UTF_8);
 

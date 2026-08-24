@@ -1,6 +1,7 @@
 package com.bbororo.rtb.ssp.openrtb;
 
 import com.bbororo.rtb.ssp.contract.KrwCpm;
+import com.bbororo.rtb.ssp.contract.NoticeUrlTemplate;
 import com.bbororo.rtb.ssp.contract.SspMessages.BidRequestBatch;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspBid;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcome;
@@ -9,7 +10,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
-import java.net.URI;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -106,9 +106,9 @@ public final class OpenRtb26Codec {
                 bid.impid(),
                 bid.id(),
                 KrwCpm.toMilliKrw(bid.price()),
-                URI.create(bid.nurl()),
-                URI.create(bid.lurl()),
-                URI.create(bid.burl())
+                new NoticeUrlTemplate(bid.nurl()),
+                new NoticeUrlTemplate(bid.lurl()),
+                new NoticeUrlTemplate(bid.burl())
         );
     }
 

@@ -111,9 +111,9 @@ public final class SspMessages {
             String dspId,
             String bidId,
             long cpmMilliKrw,
-            URI nurl,
-            URI lurl,
-            URI burl
+            NoticeUrlTemplate nurl,
+            NoticeUrlTemplate lurl,
+            NoticeUrlTemplate burl
     ) {
         public WinningBid {
             slotAuctionKey = requireNonBlank(slotAuctionKey, "slotAuctionKey");
@@ -121,9 +121,27 @@ public final class SspMessages {
             dspId = requireNonBlank(dspId, "dspId");
             bidId = requireNonBlank(bidId, "bidId");
             requirePositive(cpmMilliKrw, "cpmMilliKrw");
-            nurl = requireHttpUrl(nurl, "nurl");
-            lurl = requireHttpUrl(lurl, "lurl");
-            burl = requireHttpUrl(burl, "burl");
+            Objects.requireNonNull(nurl, "nurl");
+            Objects.requireNonNull(lurl, "lurl");
+            Objects.requireNonNull(burl, "burl");
+        }
+
+        public WinningBid(
+                String slotAuctionKey,
+                String impId,
+                String dspId,
+                String bidId,
+                long cpmMilliKrw,
+                URI nurl,
+                URI lurl,
+                URI burl
+        ) {
+            this(
+                    slotAuctionKey, impId, dspId, bidId, cpmMilliKrw,
+                    new NoticeUrlTemplate(nurl),
+                    new NoticeUrlTemplate(lurl),
+                    new NoticeUrlTemplate(burl)
+            );
         }
     }
 
@@ -147,18 +165,35 @@ public final class SspMessages {
             String impId,
             String bidId,
             long cpmMilliKrw,
-            URI nurl,
-            URI lurl,
-            URI burl
+            NoticeUrlTemplate nurl,
+            NoticeUrlTemplate lurl,
+            NoticeUrlTemplate burl
     ) {
         public DspBid {
             dspId = requireNonBlank(dspId, "dspId");
             impId = requireNonBlank(impId, "impId");
             bidId = requireNonBlank(bidId, "bidId");
             requirePositive(cpmMilliKrw, "cpmMilliKrw");
-            nurl = requireHttpUrl(nurl, "nurl");
-            lurl = requireHttpUrl(lurl, "lurl");
-            burl = requireHttpUrl(burl, "burl");
+            Objects.requireNonNull(nurl, "nurl");
+            Objects.requireNonNull(lurl, "lurl");
+            Objects.requireNonNull(burl, "burl");
+        }
+
+        public DspBid(
+                String dspId,
+                String impId,
+                String bidId,
+                long cpmMilliKrw,
+                URI nurl,
+                URI lurl,
+                URI burl
+        ) {
+            this(
+                    dspId, impId, bidId, cpmMilliKrw,
+                    new NoticeUrlTemplate(nurl),
+                    new NoticeUrlTemplate(lurl),
+                    new NoticeUrlTemplate(burl)
+            );
         }
     }
 
@@ -243,29 +278,36 @@ public final class SspMessages {
     public record VerifiedRender(
             String providerId,
             String providerRequestId,
+            String auctionId,
             String impId,
             String slotAuctionKey,
             String proofDigest,
             String dspId,
             long cpmMilliKrw,
-            URI billingUrl,
+            NoticeUrlTemplate billingUrlTemplate,
             Instant auctionIssuedAt,
-            Instant renderExpiresAt
+            Instant renderExpiresAt,
+            Instant impressionAt
     ) {
         public VerifiedRender {
             providerId = requireNonBlank(providerId, "providerId");
             providerRequestId = requireNonBlank(providerRequestId, "providerRequestId");
+            auctionId = requireNonBlank(auctionId, "auctionId");
             impId = requireNonBlank(impId, "impId");
             slotAuctionKey = requireNonBlank(slotAuctionKey, "slotAuctionKey");
             proofDigest = requireSha256Hex(proofDigest);
             dspId = requireNonBlank(dspId, "dspId");
             requirePositive(cpmMilliKrw, "cpmMilliKrw");
-            billingUrl = requireHttpUrl(billingUrl, "billingUrl");
+            Objects.requireNonNull(billingUrlTemplate, "billingUrlTemplate");
             requireOrderedInstants(
                     auctionIssuedAt,
                     renderExpiresAt,
                     "renderExpiresAt must be after auctionIssuedAt"
             );
+            Objects.requireNonNull(impressionAt, "impressionAt");
+            if (impressionAt.isBefore(auctionIssuedAt) || impressionAt.isAfter(renderExpiresAt)) {
+                throw new IllegalArgumentException("impressionAt must fit within the render window");
+            }
         }
     }
 

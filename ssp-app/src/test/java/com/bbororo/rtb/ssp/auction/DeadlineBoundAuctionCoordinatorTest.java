@@ -12,6 +12,7 @@ import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcome;
 import com.bbororo.rtb.ssp.contract.SspMessages.DspCallOutcomeKind;
 import com.bbororo.rtb.ssp.contract.SspMessages.NoticeKind;
 import com.bbororo.rtb.ssp.contract.SspMessages.StartAuction;
+import com.bbororo.rtb.ssp.contract.NoticeUrlTemplate;
 import com.bbororo.rtb.ssp.dspbid.DspBidExecutor;
 import com.bbororo.rtb.ssp.winner.FirstPriceWinnerSelector;
 import com.bbororo.rtb.ssp.winner.WinnerSelector;
@@ -99,6 +100,33 @@ class DeadlineBoundAuctionCoordinatorTest {
     }
 
     @Test
+    void expandsWinAndLossNoticeMacrosAfterTheFirstPriceResultIsKnown() {
+        String template = "https://dsp.test/notice?auction=${AUCTION_ID}"
+                + "&imp=${AUCTION_IMP_ID}&price=${AUCTION_PRICE}"
+                + "&currency=${AUCTION_CURRENCY}&loss=${AUCTION_LOSS}";
+        AuctionCoordinator coordinator = coordinator(batch -> responses(
+                new DspCallOutcome(
+                        "project-dsp", DspCallOutcomeKind.VALID_BID,
+                        List.of(bid("project-dsp", 3_000, template))
+                ),
+                new DspCallOutcome(
+                        "external-dsp-1", DspCallOutcomeKind.VALID_BID,
+                        List.of(bid("external-dsp-1", 2_000, template))
+                )
+        ));
+
+        var outcome = coordinator.runAuction(start(AuctionDeadline.start(180, System::nanoTime)));
+
+        assertEquals(NoticeKind.WIN, outcome.notices().get(0).kind());
+        assertEquals(NoticeKind.LOSS, outcome.notices().get(1).kind());
+        assertEquals("imp-1", query(outcome.notices().get(0).url(), "imp"));
+        assertEquals("3", query(outcome.notices().get(0).url(), "price"));
+        assertEquals("KRW", query(outcome.notices().get(0).url(), "currency"));
+        assertEquals("", query(outcome.notices().get(0).url(), "loss"));
+        assertEquals("102", query(outcome.notices().get(1).url(), "loss"));
+    }
+
+    @Test
     void rejectsAnOutcomeFromAnUnrequestedDsp() {
         AuctionCoordinator coordinator = coordinator(batch -> responses(
                 new DspCallOutcome(
@@ -170,5 +198,23 @@ class DeadlineBoundAuctionCoordinatorTest {
     private static DspBid bid(String dspId, long cpmMilliKrw) {
         URI callback = URI.create("https://" + dspId + ".example.test/notice");
         return new DspBid(dspId, "imp-1", "bid-1", cpmMilliKrw, callback, callback, callback);
+    }
+
+    private static DspBid bid(String dspId, long cpmMilliKrw, String template) {
+        var notice = new NoticeUrlTemplate(template);
+        return new DspBid(
+                dspId, "imp-1", "bid-1", cpmMilliKrw,
+                notice, notice, notice
+        );
+    }
+
+    private static String query(URI uri, String name) {
+        for (String pair : uri.getRawQuery().split("&", -1)) {
+            String[] parts = pair.split("=", 2);
+            if (parts[0].equals(name)) {
+                return parts.length == 1 ? "" : parts[1];
+            }
+        }
+        throw new AssertionError("missing query parameter: " + name);
     }
 }

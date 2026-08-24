@@ -3,6 +3,7 @@ package com.bbororo.rtb.ssp.claim;
 import com.bbororo.rtb.ssp.contract.SspMessages.BillingClaim;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderAcceptance;
 import com.bbororo.rtb.ssp.contract.SspMessages.VerifiedRender;
+import com.bbororo.rtb.ssp.contract.NoticeUrlTemplate.Context;
 import com.bbororo.rtb.ssp.trust.ProviderTrustSnapshot;
 import java.time.Duration;
 import java.util.Objects;
@@ -34,7 +35,13 @@ public final class StoreBackedRenderClaimService implements RenderClaimService {
                 render.proofDigest(),
                 render.dspId(),
                 render.cpmMilliKrw(),
-                render.billingUrl(),
+                render.billingUrlTemplate().render(new Context(
+                        render.auctionId(),
+                        render.impId(),
+                        render.cpmMilliKrw(),
+                        null,
+                        render.impressionAt()
+                )),
                 render.auctionIssuedAt().plus(BILLING_DELIVERY_WINDOW)
         ));
     }

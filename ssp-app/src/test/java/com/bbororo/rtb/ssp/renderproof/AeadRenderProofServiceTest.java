@@ -40,7 +40,9 @@ class AeadRenderProofServiceTest {
         assertEquals("auction-1/imp-1", render.slotAuctionKey());
         assertEquals("project-dsp", render.dspId());
         assertEquals(2_000L, render.cpmMilliKrw());
-        assertEquals(URI.create("https://dsp.test/burl/1"), render.billingUrl());
+        assertEquals("auction-1", render.auctionId());
+        assertEquals("https://dsp.test/burl/1", render.billingUrlTemplate().value());
+        assertEquals(ISSUED_AT.plusMillis(200), render.impressionAt());
         assertTrue(render.proofDigest().matches("[0-9a-f]{64}"));
     }
 
