@@ -224,7 +224,7 @@ class HttpOpenRtbDspBidExecutorTest {
 
     private static byte[] validBid() {
         return """
-                {"id":"auction-1","seatbid":[{"bid":[{
+                {"id":"auction-1","cur":"KRW","seatbid":[{"bid":[{
                   "id":"bid-1","impid":"imp-1","price":2000.0,
                   "nurl":"http://dsp.test/nurl","lurl":"http://dsp.test/lurl",
                   "burl":"http://dsp.test/burl","exp":2

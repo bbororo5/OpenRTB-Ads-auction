@@ -17,6 +17,7 @@ import java.util.Set;
 /** SSP가 소유하는 OpenRTB 2.6 하위 규격 JSON 변환기다. */
 public final class OpenRtb26Codec {
 
+    private static final int FIRST_PRICE_AUCTION = 1;
     private static final String CURRENCY = "KRW";
     private static final int RENDER_EXPIRY_SECONDS = 2;
 
@@ -34,6 +35,7 @@ public final class OpenRtb26Codec {
         Objects.requireNonNull(batch);
         var request = new BidRequestJson(
                 batch.auctionId(),
+                FIRST_PRICE_AUCTION,
                 batch.auction().tmaxMillis(),
                 List.of(CURRENCY),
                 batch.auction().slots().stream()
@@ -69,6 +71,9 @@ public final class OpenRtb26Codec {
                     .flatMap(seat -> seat.bid() == null ? java.util.stream.Stream.empty() : seat.bid().stream())
                     .map(bid -> toDspBid(dspId, bid, requestedImpressions))
                     .toList();
+            if (!bids.isEmpty() && !CURRENCY.equals(response.cur())) {
+                return invalid(dspId);
+            }
             return bids.isEmpty()
                     ? new DspCallOutcome(dspId, DspCallOutcomeKind.NO_BID, List.of())
                     : new DspCallOutcome(dspId, DspCallOutcomeKind.VALID_BID, bids);
@@ -109,6 +114,7 @@ public final class OpenRtb26Codec {
 
     private record BidRequestJson(
             String id,
+            int at,
             int tmax,
             List<String> cur,
             List<ImpJson> imp
@@ -124,7 +130,7 @@ public final class OpenRtb26Codec {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record BidResponseJson(String id, List<SeatBidJson> seatbid) {
+    private record BidResponseJson(String id, String cur, List<SeatBidJson> seatbid) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

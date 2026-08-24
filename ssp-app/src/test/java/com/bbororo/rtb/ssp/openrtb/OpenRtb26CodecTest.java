@@ -30,6 +30,7 @@ class OpenRtb26CodecTest {
         String text = new String(json, StandardCharsets.UTF_8);
 
         assertTrue(text.contains("\"id\":\"auction-1\""));
+        assertTrue(text.contains("\"at\":1"));
         assertTrue(text.contains("\"tmax\":50"));
         assertTrue(text.contains("\"bidfloor\":1000.000"));
         assertTrue(text.contains("\"bidfloorcur\":\"KRW\""));
@@ -41,6 +42,7 @@ class OpenRtb26CodecTest {
         String json = """
                 {
                   "id": "auction-1",
+                  "cur": "KRW",
                   "seatbid": [{"bid": [{
                     "id": "bid-1",
                     "impid": "imp-1",
@@ -61,6 +63,28 @@ class OpenRtb26CodecTest {
     }
 
     @Test
+    void rejectsABidWhoseCurrencyIsNotTheContractedKrw() {
+        String json = validBidJson("\"impid\":\"imp-1\",\"exp\":2")
+                .replace("\"cur\":\"KRW\"", "\"cur\":\"USD\"");
+
+        assertEquals(
+                DspCallOutcomeKind.INVALID_BID,
+                codec.decodeBidResponse("dsp-1", batch(), json.getBytes(StandardCharsets.UTF_8)).kind()
+        );
+    }
+
+    @Test
+    void rejectsABidWithoutAnExplicitCurrency() {
+        String json = validBidJson("\"impid\":\"imp-1\",\"exp\":2")
+                .replace("\"cur\":\"KRW\",", "");
+
+        assertEquals(
+                DspCallOutcomeKind.INVALID_BID,
+                codec.decodeBidResponse("dsp-1", batch(), json.getBytes(StandardCharsets.UTF_8)).kind()
+        );
+    }
+
+    @Test
     void rejectsAMismatchedAuctionId() {
         byte[] body = "{\"id\":\"another-auction\",\"seatbid\":[]}".getBytes(StandardCharsets.UTF_8);
 
@@ -73,7 +97,7 @@ class OpenRtb26CodecTest {
     @Test
     void rejectsAnOpenRtbBidBeyondThreeDecimalPlaces() {
         String json = """
-                {"id":"auction-1","seatbid":[{"bid":[{
+                {"id":"auction-1","cur":"KRW","seatbid":[{"bid":[{
                   "id":"bid-1","impid":"imp-1","price":2000.0001,
                   "nurl":"https://dsp.test/nurl/1",
                   "lurl":"https://dsp.test/lurl/1",
@@ -110,7 +134,7 @@ class OpenRtb26CodecTest {
     @Test
     void rejectsTheWholeDspResponseWhenOneBidIsInvalid() {
         String json = """
-                {"id":"auction-1","seatbid":[{"bid":[{
+                {"id":"auction-1","cur":"KRW","seatbid":[{"bid":[{
                   "id":"valid","impid":"imp-1","price":2000.000,
                   "nurl":"https://dsp.test/nurl/1",
                   "lurl":"https://dsp.test/lurl/1",
@@ -143,7 +167,7 @@ class OpenRtb26CodecTest {
 
     private static String validBidJson(String impressionAndExpiry) {
         return """
-                {"id":"auction-1","seatbid":[{"bid":[{
+                {"id":"auction-1","cur":"KRW","seatbid":[{"bid":[{
                   "id":"bid-1",%s,"price":2000.000,
                   "nurl":"https://dsp.test/nurl/1",
                   "lurl":"https://dsp.test/lurl/1",

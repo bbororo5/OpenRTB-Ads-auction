@@ -24,6 +24,7 @@ class OpenRtbMessagesTest {
         ));
 
         assertEquals("auction-1", response.id());
+        assertEquals("KRW", response.currency());
         assertEquals(1, response.seatbid().size());
         assertEquals(OptionalInt.empty(), response.nbr());
     }
@@ -45,7 +46,7 @@ class OpenRtbMessagesTest {
     void bidResponseRejectsAnEmptyReasonlessHttp200Body() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new BidResponse("auction-1", List.of(), OptionalInt.empty())
+                () -> new BidResponse("auction-1", List.of(), "KRW", OptionalInt.empty())
         );
     }
 
@@ -56,6 +57,7 @@ class OpenRtbMessagesTest {
                 () -> new BidResponse(
                         "auction-1",
                         List.of(new SeatBid(List.of(bid()))),
+                        "KRW",
                         OptionalInt.of(2)
                 )
         );

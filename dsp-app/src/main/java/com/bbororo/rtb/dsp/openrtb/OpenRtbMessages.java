@@ -16,6 +16,7 @@ import java.util.OptionalInt;
 public final class OpenRtbMessages {
 
     public static final int RENDER_EXPIRY_SECONDS = 2;
+    public static final String BID_CURRENCY = "KRW";
 
     private OpenRtbMessages() {
     }
@@ -74,12 +75,17 @@ public final class OpenRtbMessages {
     public record BidResponse(
             String id,
             List<SeatBid> seatbid,
+            String currency,
             OptionalInt nbr
     ) implements BidHttpResult {
 
         public BidResponse {
             id = requireNonBlank(id, "id");
             seatbid = immutableList(seatbid, "seatbid");
+            currency = requireNonBlank(currency, "currency");
+            if (!BID_CURRENCY.equals(currency)) {
+                throw new IllegalArgumentException("currency must be KRW");
+            }
             Objects.requireNonNull(nbr, "nbr");
             if (nbr.isPresent() && nbr.getAsInt() < 0) {
                 throw new IllegalArgumentException("nbr must not be negative");
@@ -92,11 +98,11 @@ public final class OpenRtbMessages {
         }
 
         public static BidResponse withBids(String id, List<SeatBid> seatbid) {
-            return new BidResponse(id, seatbid, OptionalInt.empty());
+            return new BidResponse(id, seatbid, BID_CURRENCY, OptionalInt.empty());
         }
 
         public static BidResponse noBid(String id, int nbr) {
-            return new BidResponse(id, List.of(), OptionalInt.of(nbr));
+            return new BidResponse(id, List.of(), BID_CURRENCY, OptionalInt.of(nbr));
         }
     }
 
