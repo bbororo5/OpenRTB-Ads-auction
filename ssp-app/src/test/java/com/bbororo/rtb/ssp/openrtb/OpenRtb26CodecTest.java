@@ -22,7 +22,7 @@ class OpenRtb26CodecTest {
                 "auction-1",
                 new AuctionRequest(
                         "provider-1", "key-1", "request-1", 50,
-                        List.of(new AuctionSlot("imp-1", 1_000_000))
+                        List.of(new AuctionSlot("imp-1", 300, 250, 1_000_000))
                 ),
                 List.of("dsp-1"),
                 AuctionDeadline.start(50, System::nanoTime)
@@ -34,6 +34,7 @@ class OpenRtb26CodecTest {
         assertTrue(text.contains("\"tmax\":50"));
         assertTrue(text.contains("\"bidfloor\":1000.000"));
         assertTrue(text.contains("\"bidfloorcur\":\"KRW\""));
+        assertTrue(text.contains("\"banner\":{\"format\":[{\"w\":300,\"h\":250}]}"));
         assertTrue(text.contains("\"exp\":2"));
     }
 
@@ -158,7 +159,7 @@ class OpenRtb26CodecTest {
                 "auction-1",
                 new AuctionRequest(
                         "provider-1", "key-1", "request-1", 50,
-                        List.of(new AuctionSlot("imp-1", 1_000))
+                        List.of(new AuctionSlot("imp-1", 300, 250, 1_000))
                 ),
                 List.of("dsp-1"),
                 AuctionDeadline.start(50, System::nanoTime)

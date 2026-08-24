@@ -36,8 +36,18 @@ class AuctionRequestFingerprintTest {
 
     @Test
     void changesWhenASlotFloorChanges() {
-        AuctionRequest original = requestWithSlots("key-1", 180, List.of(new AuctionSlot("imp-1", 1_000_000)));
-        AuctionRequest changed = requestWithSlots("key-1", 180, List.of(new AuctionSlot("imp-1", 1_000_001)));
+        AuctionRequest original = requestWithSlots("key-1", 180, List.of(new AuctionSlot("imp-1", 300, 250, 1_000_000)));
+        AuctionRequest changed = requestWithSlots("key-1", 180, List.of(new AuctionSlot("imp-1", 300, 250, 1_000_001)));
+
+        assertNotEquals(original.fingerprint(), changed.fingerprint());
+    }
+
+    @Test
+    void changesWhenASlotDimensionChanges() {
+        AuctionRequest original = requestWithSlots(
+                "key-1", 180, List.of(new AuctionSlot("imp-1", 300, 250, 1_000_000)));
+        AuctionRequest changed = requestWithSlots(
+                "key-1", 180, List.of(new AuctionSlot("imp-1", 320, 250, 1_000_000)));
 
         assertNotEquals(original.fingerprint(), changed.fingerprint());
     }
@@ -46,7 +56,7 @@ class AuctionRequestFingerprintTest {
         return requestWithSlots(
                 keyId,
                 tmaxMillis,
-                impIds.stream().map(impId -> new AuctionSlot(impId, 0)).toList()
+                impIds.stream().map(impId -> new AuctionSlot(impId, 300, 250, 0)).toList()
         );
     }
 

@@ -22,10 +22,13 @@ class ProviderApiJsonCodecTest {
         var request = codec.decodeAuctionRequest(("""
                 {"providerId":"provider-1","providerKeyId":"key-1",
                  "providerRequestId":"request-1","tmaxMillis":50,
-                 "slots":[{"impId":"imp-1","floorCpmKrw":1234.567}]}
+                 "slots":[{"impId":"imp-1","width":300,"height":250,
+                           "floorCpmKrw":1234.567}]}
                 """).getBytes(StandardCharsets.UTF_8));
 
         assertEquals(1_234_567L, request.slots().getFirst().floorCpmMilliKrw());
+        assertEquals(300, request.slots().getFirst().width());
+        assertEquals(250, request.slots().getFirst().height());
     }
 
     @Test
@@ -33,7 +36,8 @@ class ProviderApiJsonCodecTest {
         byte[] body = ("""
                 {"providerId":"provider-1","providerKeyId":"key-1",
                  "providerRequestId":"request-1","tmaxMillis":50,
-                 "slots":[{"impId":"imp-1","floorCpmKrw":1234.5678}]}
+                 "slots":[{"impId":"imp-1","width":300,"height":250,
+                           "floorCpmKrw":1234.5678}]}
                 """).getBytes(StandardCharsets.UTF_8);
 
         assertThrows(IllegalArgumentException.class, () -> codec.decodeAuctionRequest(body));

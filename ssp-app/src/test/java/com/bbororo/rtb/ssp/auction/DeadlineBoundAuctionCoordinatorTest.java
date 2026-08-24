@@ -158,7 +158,8 @@ class DeadlineBoundAuctionCoordinatorTest {
 
     private static StartAuction start(AuctionDeadline deadline) {
         return new StartAuction(new AuctionRequest(
-                "provider-1", "key-1", "request-1", 180, List.of(new AuctionSlot("imp-1", 0))
+                "provider-1", "key-1", "request-1", 180,
+                List.of(new AuctionSlot("imp-1", 300, 250, 0))
         ), deadline);
     }
 

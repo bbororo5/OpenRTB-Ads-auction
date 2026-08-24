@@ -144,7 +144,10 @@ class FirstPriceWinnerSelectorTest {
                 "key-1",
                 "request-1",
                 180,
-                List.of(new AuctionSlot("imp-1", 1_000), new AuctionSlot("imp-2", 0))
+                List.of(
+                        new AuctionSlot("imp-1", 300, 250, 1_000),
+                        new AuctionSlot("imp-2", 320, 50, 0)
+                )
         );
     }
 

@@ -34,6 +34,8 @@ public final class ProviderApiJsonCodec {
                     request.slots().stream()
                             .map(slot -> new AuctionSlot(
                                     slot.impId(),
+                                    slot.width(),
+                                    slot.height(),
                                     KrwCpm.toMilliKrw(slot.floorCpmKrw())
                             ))
                             .toList()
@@ -88,7 +90,7 @@ public final class ProviderApiJsonCodec {
     ) {
     }
 
-    private record SlotJson(String impId, BigDecimal floorCpmKrw) {
+    private record SlotJson(String impId, int width, int height, BigDecimal floorCpmKrw) {
     }
 
     private record RenderCompletedJson(String renderProof) {

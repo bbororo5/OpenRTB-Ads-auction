@@ -32,7 +32,10 @@ class AuctionResultAssemblerTest {
         );
         AuctionRequest request = new AuctionRequest(
                 "provider-1", "key-1", "request-1", 50,
-                List.of(new AuctionSlot("imp-1", 0), new AuctionSlot("imp-2", 0))
+                List.of(
+                        new AuctionSlot("imp-1", 300, 250, 0),
+                        new AuctionSlot("imp-2", 320, 50, 0)
+                )
         );
         AuctionOutcome outcome = new AuctionOutcome(
                 "auction-1",

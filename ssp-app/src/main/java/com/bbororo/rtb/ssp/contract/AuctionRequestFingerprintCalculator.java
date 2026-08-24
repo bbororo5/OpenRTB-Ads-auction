@@ -21,6 +21,8 @@ final class AuctionRequestFingerprintCalculator {
         update(digest, Integer.toString(request.slots().size()));
         request.slots().forEach(slot -> {
             update(digest, slot.impId());
+            update(digest, Integer.toString(slot.width()));
+            update(digest, Integer.toString(slot.height()));
             update(digest, Long.toString(slot.floorCpmMilliKrw()));
         });
 

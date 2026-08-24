@@ -44,6 +44,7 @@ public final class OpenRtb26Codec {
                 batch.auction().slots().stream()
                         .map(slot -> new ImpJson(
                                 slot.impId(),
+                                new BannerJson(List.of(new FormatJson(slot.width(), slot.height()))),
                                 KrwCpm.fromMilliKrw(slot.floorCpmMilliKrw()),
                                 CURRENCY,
                                 RENDER_EXPIRY_SECONDS
@@ -126,10 +127,17 @@ public final class OpenRtb26Codec {
 
     private record ImpJson(
             String id,
+            BannerJson banner,
             BigDecimal bidfloor,
             String bidfloorcur,
             int exp
     ) {
+    }
+
+    private record BannerJson(List<FormatJson> format) {
+    }
+
+    private record FormatJson(int w, int h) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

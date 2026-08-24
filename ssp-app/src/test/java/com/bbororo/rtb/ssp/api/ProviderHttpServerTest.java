@@ -34,7 +34,7 @@ class ProviderHttpServerTest {
     private static final String AUCTION_JSON = """
             {"providerId":"provider-1","providerKeyId":"key-1",
              "providerRequestId":"request-1","tmaxMillis":50,
-             "slots":[{"impId":"imp-1","floorCpmKrw":1000}]}
+             "slots":[{"impId":"imp-1","width":300,"height":250,"floorCpmKrw":1000}]}
             """;
 
     @Test

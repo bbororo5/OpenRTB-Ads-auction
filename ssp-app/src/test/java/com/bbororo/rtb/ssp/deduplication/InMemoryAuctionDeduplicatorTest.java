@@ -260,7 +260,7 @@ class InMemoryAuctionDeduplicatorTest {
                 "key-1",
                 providerRequestId,
                 180,
-                List.of(new AuctionSlot(impId, 0))
+                List.of(new AuctionSlot(impId, 300, 250, 0))
         );
     }
 

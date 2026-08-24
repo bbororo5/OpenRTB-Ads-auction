@@ -20,7 +20,13 @@ class AuctionContractTest {
 
     @Test
     void rejectsANegativeSlotFloor() {
-        assertThrows(IllegalArgumentException.class, () -> new AuctionSlot("imp-1", -1));
+        assertThrows(IllegalArgumentException.class, () -> new AuctionSlot("imp-1", 300, 250, -1));
+    }
+
+    @Test
+    void rejectsANonPositiveBannerDimension() {
+        assertThrows(IllegalArgumentException.class, () -> new AuctionSlot("imp-1", 0, 250, 0));
+        assertThrows(IllegalArgumentException.class, () -> new AuctionSlot("imp-1", 300, 0, 0));
     }
 
     @Test
@@ -29,7 +35,10 @@ class AuctionContractTest {
                 IllegalArgumentException.class,
                 () -> new com.bbororo.rtb.ssp.contract.SspMessages.AuctionRequest(
                         "provider-1", "key-1", "request-1", 180,
-                        List.of(new AuctionSlot("imp-1", 0), new AuctionSlot("imp-1", 0))
+                        List.of(
+                                new AuctionSlot("imp-1", 300, 250, 0),
+                                new AuctionSlot("imp-1", 300, 250, 0)
+                        )
                 )
         );
     }
@@ -38,7 +47,10 @@ class AuctionContractTest {
     void rejectsAnIncompleteAuctionRequest() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new AuctionRequest("", "key-1", "request-1", 180, List.of(new AuctionSlot("imp-1", 0)))
+                () -> new AuctionRequest(
+                        "", "key-1", "request-1", 180,
+                        List.of(new AuctionSlot("imp-1", 300, 250, 0))
+                )
         );
         assertThrows(
                 IllegalArgumentException.class,
@@ -119,7 +131,7 @@ class AuctionContractTest {
         Instant issuedAt = Instant.parse("2026-07-29T00:00:00Z");
         AuctionRequest request = new AuctionRequest(
                 "provider-1", "key-1", "request-1", 180,
-                List.of(new AuctionSlot("imp-1", 2_000))
+                List.of(new AuctionSlot("imp-1", 300, 250, 2_000))
         );
 
         assertThrows(
@@ -174,7 +186,7 @@ class AuctionContractTest {
     private static AuctionRequest auction() {
         return new AuctionRequest(
                 "provider-1", "key-1", "request-1", 180,
-                List.of(new AuctionSlot("imp-1", 0))
+                List.of(new AuctionSlot("imp-1", 300, 250, 0))
         );
     }
 

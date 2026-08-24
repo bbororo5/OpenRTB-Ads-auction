@@ -81,7 +81,7 @@ class AuctionAdmissionServiceTest {
                 keyId,
                 requestId,
                 180,
-                List.of(new AuctionSlot("imp-1", 0))
+                List.of(new AuctionSlot("imp-1", 300, 250, 0))
         );
     }
 

@@ -247,7 +247,7 @@ class HttpOpenRtbDspBidExecutorTest {
                 "auction-1",
                 new AuctionRequest(
                         "provider-1", "key-1", "request-1", 180,
-                        List.of(new AuctionSlot("imp-1", 1_000))
+                        List.of(new AuctionSlot("imp-1", 300, 250, 1_000))
                 ),
                 List.of(dspIds),
                 deadline

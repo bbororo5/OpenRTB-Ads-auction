@@ -169,7 +169,8 @@ class AeadRenderProofServiceTest {
 
     private static ProofIssuance issuance(Instant expiresAt) {
         AuctionRequest request = new AuctionRequest(
-                "provider-1", "key-1", "request-1", 50, List.of(new AuctionSlot("imp-1", 1_000))
+                "provider-1", "key-1", "request-1", 50,
+                List.of(new AuctionSlot("imp-1", 300, 250, 1_000))
         );
         URI url = URI.create("https://dsp.test/burl/1");
         WinningBid winner = new WinningBid(

@@ -50,11 +50,19 @@ public final class SspMessages {
         }
     }
 
-    public record AuctionSlot(String impId, long floorCpmMilliKrw) {
+    public record AuctionSlot(
+            String impId,
+            int width,
+            int height,
+            long floorCpmMilliKrw
+    ) {
 
         public AuctionSlot {
             if (impId == null || impId.isBlank()) {
                 throw new IllegalArgumentException("impId must not be blank");
+            }
+            if (width <= 0 || height <= 0) {
+                throw new IllegalArgumentException("width and height must be positive");
             }
             if (floorCpmMilliKrw < 0) {
                 throw new IllegalArgumentException("floorCpmMilliKrw must not be negative");

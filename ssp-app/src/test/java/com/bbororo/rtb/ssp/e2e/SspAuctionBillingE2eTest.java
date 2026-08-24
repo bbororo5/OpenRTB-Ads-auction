@@ -30,7 +30,7 @@ class SspAuctionBillingE2eTest {
                 "key-2026-01",
                 "request-1",
                 50,
-                List.of(new AuctionSlot("imp-1", 0))
+                List.of(new AuctionSlot("imp-1", 300, 250, 0))
         );
         AuctionResult result = ssp.auction(request);
         AuctionResult duplicate = ssp.auction(request);
