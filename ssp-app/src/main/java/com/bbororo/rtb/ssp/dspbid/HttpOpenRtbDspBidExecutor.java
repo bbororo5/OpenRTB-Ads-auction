@@ -53,7 +53,13 @@ public final class HttpOpenRtbDspBidExecutor implements DspBidExecutor {
     @Override
     public BidResponses requestBids(BidRequestBatch batch) {
         Objects.requireNonNull(batch);
-        byte[] requestBody = codec.encodeBidRequest(batch);
+        int advertisedTmaxMillis = advertisedTmaxMillis(batch);
+        if (advertisedTmaxMillis == 0) {
+            return new BidResponses(batch.dspIds().stream()
+                    .map(dspId -> outcome(dspId, DspCallOutcomeKind.TIMEOUT))
+                    .toList());
+        }
+        byte[] requestBody = codec.encodeBidRequest(batch, advertisedTmaxMillis);
         Map<String, PendingCall> calls = new LinkedHashMap<>();
         for (String dspId : batch.dspIds()) {
             calls.put(dspId, startCall(dspId, batch, requestBody));
@@ -136,6 +142,11 @@ public final class HttpOpenRtbDspBidExecutor implements DspBidExecutor {
     private Duration callBudget(BidRequestBatch batch) {
         Duration remaining = remainingBeforeAssembly(batch);
         return remaining.compareTo(bidTimeout) < 0 ? remaining : bidTimeout;
+    }
+
+    private int advertisedTmaxMillis(BidRequestBatch batch) {
+        long wholeMillis = callBudget(batch).toMillis();
+        return wholeMillis == 0 ? 0 : Math.toIntExact(wholeMillis);
     }
 
     private static Duration remainingBeforeAssembly(BidRequestBatch batch) {

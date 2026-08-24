@@ -27,6 +27,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +56,33 @@ class HttpOpenRtbDspBidExecutorTest {
             assertEquals(DspCallOutcomeKind.VALID_BID, responses.outcomes().get(0).kind());
             assertEquals(DspCallOutcomeKind.NO_BID, responses.outcomes().get(1).kind());
             assertTrue(received.get().contains("\"bidfloorcur\":\"KRW\""));
+            assertTrue(received.get().contains("\"tmax\":100"));
+        }
+    }
+
+    @Test
+    void advertisesOnlyTheDspCallBudgetRemainingInsideTheAuctionDeadline() throws Exception {
+        AtomicLong monotonicNanos = new AtomicLong();
+        AuctionDeadline deadline = AuctionDeadline.start(180, monotonicNanos::get);
+        monotonicNanos.set(Duration.ofMillis(50).toNanos());
+        AtomicReference<String> received = new AtomicReference<>();
+        try (TestServer server = new TestServer()) {
+            server.context("/bid", exchange -> {
+                received.set(readRequest(exchange));
+                respond(exchange, 200, "application/json", validBid());
+            });
+            server.start();
+
+            DspBidExecutor executor = executor(
+                    Map.of("dsp-a", server.uri("/bid")),
+                    Duration.ofMillis(180),
+                    64,
+                    64 * 1_024
+            );
+
+            executor.requestBids(batch(deadline, "dsp-a"));
+
+            assertTrue(received.get().contains("\"tmax\":129"));
         }
     }
 
@@ -211,6 +239,10 @@ class HttpOpenRtbDspBidExecutorTest {
     }
 
     private static BidRequestBatch batch(String... dspIds) {
+        return batch(AuctionDeadline.start(180, System::nanoTime), dspIds);
+    }
+
+    private static BidRequestBatch batch(AuctionDeadline deadline, String... dspIds) {
         return new BidRequestBatch(
                 "auction-1",
                 new AuctionRequest(
@@ -218,7 +250,7 @@ class HttpOpenRtbDspBidExecutorTest {
                         List.of(new AuctionSlot("imp-1", 1_000))
                 ),
                 List.of(dspIds),
-                AuctionDeadline.start(180, System::nanoTime)
+                deadline
         );
     }
 

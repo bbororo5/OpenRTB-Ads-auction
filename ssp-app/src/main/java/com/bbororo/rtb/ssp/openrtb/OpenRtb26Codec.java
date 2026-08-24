@@ -31,12 +31,15 @@ public final class OpenRtb26Codec {
         this.mapper = Objects.requireNonNull(mapper);
     }
 
-    public byte[] encodeBidRequest(BidRequestBatch batch) {
+    public byte[] encodeBidRequest(BidRequestBatch batch, int tmaxMillis) {
         Objects.requireNonNull(batch);
+        if (tmaxMillis <= 0 || tmaxMillis > batch.auction().tmaxMillis()) {
+            throw new IllegalArgumentException("tmaxMillis must fit within the auction deadline");
+        }
         var request = new BidRequestJson(
                 batch.auctionId(),
                 FIRST_PRICE_AUCTION,
-                batch.auction().tmaxMillis(),
+                tmaxMillis,
                 List.of(CURRENCY),
                 batch.auction().slots().stream()
                         .map(slot -> new ImpJson(

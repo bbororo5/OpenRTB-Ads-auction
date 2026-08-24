@@ -26,7 +26,7 @@ class OpenRtb26CodecTest {
                 ),
                 List.of("dsp-1"),
                 AuctionDeadline.start(50, System::nanoTime)
-        ));
+        ), 50);
         String text = new String(json, StandardCharsets.UTF_8);
 
         assertTrue(text.contains("\"id\":\"auction-1\""));
