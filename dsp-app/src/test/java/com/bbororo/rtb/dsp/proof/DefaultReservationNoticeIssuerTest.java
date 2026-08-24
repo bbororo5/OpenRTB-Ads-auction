@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationGranted;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationGranted;
 import com.bbororo.rtb.dsp.proof.NoticeIssuanceMessages.IssueReservationNotices;
 import com.bbororo.rtb.dsp.proof.NoticeIssuanceMessages.NoticeUrl;
 import com.bbororo.rtb.dsp.proof.NoticeIssuanceMessages.ReservationNoticeUrls;

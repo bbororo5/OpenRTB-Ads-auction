@@ -4,8 +4,8 @@ import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.REGIO
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.APPLIED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.InstallLease;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseSupplySnapshot;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.InstallLease;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;

@@ -4,7 +4,7 @@ import static com.bbororo.rtb.dsp.contract.ContractChecks.requireAfter;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationGranted;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationGranted;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeKind;
 import java.net.URI;
 import java.time.Instant;

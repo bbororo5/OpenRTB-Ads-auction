@@ -1,7 +1,7 @@
 package com.bbororo.rtb.dsp.outcome;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationExpiration;
-import com.bbororo.rtb.dsp.spending.ReservationExpirationSource;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationExpiration;
+import com.bbororo.rtb.dsp.spending.api.ReservationExpirationSource;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;

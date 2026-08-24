@@ -2,8 +2,8 @@ package com.bbororo.rtb.dsp.outcome;
 
 import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryEventKind.EXPIRY;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationExpiration;
-import com.bbororo.rtb.dsp.spending.LocalSpendingAuthority;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationExpiration;
+import com.bbororo.rtb.dsp.spending.api.ReservationFinalizer;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryNoticeEvent;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeConflict;
 import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeIgnored;
@@ -16,7 +16,7 @@ public final class ReservationExpirationService {
     private final ReservationOutcomeStore journal;
     private final ReservationOutcomeReplayer replayer;
 
-    public ReservationExpirationService(ReservationOutcomeStore journal, LocalSpendingAuthority localBudget) {
+    public ReservationExpirationService(ReservationOutcomeStore journal, ReservationFinalizer localBudget) {
         this.journal = Objects.requireNonNull(journal, "journal");
         this.replayer = new ReservationOutcomeReplayer(localBudget);
     }

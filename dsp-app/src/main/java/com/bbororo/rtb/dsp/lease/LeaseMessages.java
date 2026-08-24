@@ -5,8 +5,8 @@ import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonNegative;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.InstallLease;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseSupplySnapshot;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.InstallLease;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;

@@ -3,7 +3,7 @@ package com.bbororo.rtb.dsp.lease;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseSupplySnapshot;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;

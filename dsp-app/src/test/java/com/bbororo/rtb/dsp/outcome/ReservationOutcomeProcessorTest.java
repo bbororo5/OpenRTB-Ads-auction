@@ -1,24 +1,18 @@
 package com.bbororo.rtb.dsp.outcome;
 
-import static com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationFinalization.APPLIED;
+import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationFinalization.APPLIED;
 import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryEventKind.BILLING;
 import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.NoticeProcessingStatus.DUPLICATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.CommitReservation;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ExpireReservation;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.InstallLease;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseInstallResult;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseSupplySnapshot;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.PacingPosition;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReleaseReservation;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationExpiration;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationFinalization;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationReference;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationResult;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.TryReserve;
-import com.bbororo.rtb.dsp.spending.LocalSpendingAuthority;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.CommitReservation;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ExpireReservation;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReleaseReservation;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationExpiration;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationFinalization;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationReference;
+import com.bbororo.rtb.dsp.spending.api.ReservationFinalizer;
 import com.bbororo.rtb.dsp.proof.NoticeVerificationMessages.NoticeToken;
 import com.bbororo.rtb.dsp.proof.NoticeVerificationMessages.NoticeVerification;
 import com.bbororo.rtb.dsp.proof.NoticeVerificationMessages.VerifiedReservationNotice;
@@ -129,12 +123,11 @@ class ReservationOutcomeProcessorTest {
         return "2d981df7-40e4-453e-b708-c23a86efca68";
     }
 
-    private static final class CapturingLocalBudget implements LocalSpendingAuthority {
+    private static final class CapturingLocalBudget implements ReservationFinalizer {
         private CommitReservation committed;
         private ExpireReservation expired;
         private final CountDownLatch expiredLatch = new CountDownLatch(1);
 
-        @Override public ReservationResult tryReserve(TryReserve command) { throw new UnsupportedOperationException(); }
         @Override public ReservationFinalization release(ReleaseReservation command) { return APPLIED; }
         @Override public ReservationFinalization commit(CommitReservation command) { committed = command; return APPLIED; }
         @Override public ReservationFinalization expire(ExpireReservation command) {
@@ -142,8 +135,5 @@ class ReservationOutcomeProcessorTest {
             expiredLatch.countDown();
             return APPLIED;
         }
-        @Override public LeaseInstallResult install(InstallLease command, long requestStartedNanos) { throw new UnsupportedOperationException(); }
-        @Override public PacingPosition positionOf(String campaignId) { return new PacingPosition(false, 0); }
-        @Override public List<LeaseSupplySnapshot> supplySnapshots() { return List.of(); }
     }
 }

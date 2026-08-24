@@ -9,7 +9,7 @@ import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.CONF
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.STALE_CLAIM;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.TEMPORARILY_UNAVAILABLE;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.InstallLease;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.InstallLease;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;

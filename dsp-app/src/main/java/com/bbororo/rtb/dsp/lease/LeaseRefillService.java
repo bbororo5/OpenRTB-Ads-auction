@@ -1,10 +1,10 @@
 package com.bbororo.rtb.dsp.lease;
 
-import static com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseInstallResult.ALREADY_INSTALLED;
-import static com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseInstallResult.INSTALLED;
+import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.ALREADY_INSTALLED;
+import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.INSTALLED;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.LOCAL_INSTALL_REJECTED;
 
-import com.bbororo.rtb.dsp.spending.LocalSpendingAuthority;
+import com.bbororo.rtb.dsp.spending.api.LeaseInstaller;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
@@ -17,16 +17,16 @@ import java.util.function.LongSupplier;
 public final class LeaseRefillService implements LeaseRefill {
 
     private final RegionalBudgetLedger ledger;
-    private final LocalSpendingAuthority localBudget;
+    private final LeaseInstaller localBudget;
     private final LongSupplier monotonicNanos;
 
-    public LeaseRefillService(RegionalBudgetLedger ledger, LocalSpendingAuthority localBudget) {
+    public LeaseRefillService(RegionalBudgetLedger ledger, LeaseInstaller localBudget) {
         this(ledger, localBudget, System::nanoTime);
     }
 
     LeaseRefillService(
             RegionalBudgetLedger ledger,
-            LocalSpendingAuthority localBudget,
+            LeaseInstaller localBudget,
             LongSupplier monotonicNanos
     ) {
         this.ledger = Objects.requireNonNull(ledger, "ledger");

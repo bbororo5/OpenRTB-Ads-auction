@@ -7,7 +7,7 @@ import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.NoticeProce
 import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.NoticeProcessingStatus.DUPLICATE;
 import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.NoticeProcessingStatus.LATE_NO_EFFECT;
 
-import com.bbororo.rtb.dsp.spending.LocalSpendingAuthority;
+import com.bbororo.rtb.dsp.spending.api.ReservationFinalizer;
 import com.bbororo.rtb.dsp.proof.NoticeVerificationMessages.InvalidReservationNotice;
 import com.bbororo.rtb.dsp.proof.NoticeVerificationMessages.NoticeToken;
 import com.bbororo.rtb.dsp.proof.NoticeVerificationMessages.VerifiedReservationNotice;
@@ -37,7 +37,7 @@ public final class DefaultReservationOutcomeProcessor implements ReservationOutc
     public DefaultReservationOutcomeProcessor(
             ReservationNoticeVerifier verifier,
             ReservationOutcomeStore journal,
-            LocalSpendingAuthority localBudget
+            ReservationFinalizer localBudget
     ) {
         this.verifier = Objects.requireNonNull(verifier, "verifier");
         this.journal = Objects.requireNonNull(journal, "journal");

@@ -2,7 +2,7 @@ package com.bbororo.rtb.dsp.lease;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseSupplySnapshot;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;

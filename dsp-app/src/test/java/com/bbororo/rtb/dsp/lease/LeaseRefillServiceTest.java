@@ -1,21 +1,14 @@
 package com.bbororo.rtb.dsp.lease;
 
-import static com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseInstallResult.CAPACITY_EXCEEDED;
-import static com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseInstallResult.INSTALLED;
+import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.CAPACITY_EXCEEDED;
+import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.INSTALLED;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.LOCAL_INSTALL_REJECTED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.bbororo.rtb.dsp.spending.SpendingMessages.InstallLease;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseInstallResult;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseSupplySnapshot;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.PacingPosition;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationFinalization;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationResult;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.TryReserve;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ReleaseReservation;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.CommitReservation;
-import com.bbororo.rtb.dsp.spending.SpendingMessages.ExpireReservation;
-import com.bbororo.rtb.dsp.spending.LocalSpendingAuthority;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.InstallLease;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult;
+import com.bbororo.rtb.dsp.spending.api.LeaseInstaller;
+import com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
@@ -113,7 +106,7 @@ class LeaseRefillServiceTest {
         }
     }
 
-    private static final class StubLocalBudget implements LocalSpendingAuthority {
+    private static final class StubLocalBudget implements LeaseInstaller {
         private final LeaseInstallResult result;
         private InstallLease installed;
         private long requestStartedNanos;
@@ -121,13 +114,6 @@ class LeaseRefillServiceTest {
         private StubLocalBudget(LeaseInstallResult result) {
             this.result = result;
         }
-
-        @Override public ReservationResult tryReserve(TryReserve command) { throw new UnsupportedOperationException(); }
-        @Override public ReservationFinalization release(ReleaseReservation command) { throw new UnsupportedOperationException(); }
-        @Override public ReservationFinalization commit(CommitReservation command) { throw new UnsupportedOperationException(); }
-        @Override public ReservationFinalization expire(ExpireReservation command) { throw new UnsupportedOperationException(); }
-        @Override public PacingPosition positionOf(String campaignId) { throw new UnsupportedOperationException(); }
-        @Override public List<LeaseSupplySnapshot> supplySnapshots() { return List.of(); }
 
         @Override
         public LeaseInstallResult install(InstallLease command, long requestStartedNanos) {
