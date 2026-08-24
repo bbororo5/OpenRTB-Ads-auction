@@ -62,7 +62,7 @@ CampaignSnapshotRequested
 
 - 시작: SSP가 제한 시간이 있는 `BidRequest`를 보낸다.
 - 성공: DSP가 슬롯별 `Bid`를 포함한 `BidResponse`를 반환한다.
-- 정상 거절: 안전하게 입찰할 수 없는 슬롯은 입찰하지 않으며, 전체 응답이 비면 `NoBid`를 반환한다.
+- 정상 거절: 안전하게 입찰할 수 없는 슬롯은 입찰하지 않는다. 전체 무입찰은 사유를 알릴 때 HTTP 200 `BidResponse.nbr`, 사유가 없을 때 HTTP 204로 반환한다.
 
 ### 메시지 분해
 
@@ -77,7 +77,7 @@ sequenceDiagram
     Note over DSP: 슬롯별 적격 후보 조회
     Note over DSP: 후보 우선순위 결정
     Note over DSP: 후보 예산 예약 시도
-    DSP-->>SSP: BidResponse 또는 NoBid
+    DSP-->>SSP: HTTP 200 BidResponse 또는 HTTP 204
 ```
 
 | 순서 | 내부에서 필요한 메시지 | 묻는 내용 | 결과 |

@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalInt;
 
 /** 프로젝트 DSP가 소유하는 OpenRTB 2.6 하위 규격의 내부 표현이다. */
 public final class OpenRtbMessages {
@@ -65,29 +66,52 @@ public final class OpenRtbMessages {
         }
     }
 
-    public sealed interface BidResult permits BidResponse, NoBid {
+    /** HTTP 200 응답 본문 또는 HTTP 204 무본문을 나타내는 입찰 전송 결과다. */
+    public sealed interface BidHttpResult permits BidResponse, NoContent {
     }
 
-    public record BidResponse(String requestId, List<Bid> bids) implements BidResult {
+    /** 실제 입찰의 seatbid 또는 전체 무입찰 사유 nbr 중 정확히 하나를 담는다. */
+    public record BidResponse(
+            String id,
+            List<SeatBid> seatbid,
+            OptionalInt nbr
+    ) implements BidHttpResult {
+
         public BidResponse {
-            requestId = requireNonBlank(requestId, "requestId");
+            id = requireNonBlank(id, "id");
+            seatbid = immutableList(seatbid, "seatbid");
+            Objects.requireNonNull(nbr, "nbr");
+            if (nbr.isPresent() && nbr.getAsInt() < 0) {
+                throw new IllegalArgumentException("nbr must not be negative");
+            }
+            if (seatbid.isEmpty() == nbr.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "BidResponse must contain either seatbid or nbr, but not both"
+                );
+            }
+        }
+
+        public static BidResponse withBids(String id, List<SeatBid> seatbid) {
+            return new BidResponse(id, seatbid, OptionalInt.empty());
+        }
+
+        public static BidResponse noBid(String id, int nbr) {
+            return new BidResponse(id, List.of(), OptionalInt.of(nbr));
+        }
+    }
+
+    /** OpenRTB 응답 본문 없이 HTTP 204를 반환한다. */
+    public enum NoContent implements BidHttpResult {
+        INSTANCE
+    }
+
+    /** 한 구매 seat가 제출하는 하나 이상의 입찰 묶음이다. */
+    public record SeatBid(List<Bid> bids) {
+        public SeatBid {
             bids = immutableList(bids, "bids");
             if (bids.isEmpty()) {
                 throw new IllegalArgumentException("bids must not be empty");
             }
-            var impressionIds = new HashSet<String>();
-            for (Bid bid : bids) {
-                if (!impressionIds.add(bid.impressionId())) {
-                    throw new IllegalArgumentException("bids must not repeat an impressionId");
-                }
-            }
-        }
-    }
-
-    public record NoBid(String requestId, NoBidReason reason) implements BidResult {
-        public NoBid {
-            requestId = requireNonBlank(requestId, "requestId");
-            Objects.requireNonNull(reason, "reason");
         }
     }
 
@@ -130,15 +154,6 @@ public final class OpenRtbMessages {
         WIN,
         LOSS,
         BILLING
-    }
-
-    public enum NoBidReason {
-        NO_ELIGIBLE_CAMPAIGN,
-        NO_LOCAL_BUDGET,
-        DEADLINE_EXCEEDED,
-        DUPLICATE_CONFLICT,
-        OWNERSHIP_UNKNOWN,
-        NOT_READY
     }
 
     public enum NoticeHttpResult {
