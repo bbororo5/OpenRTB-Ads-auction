@@ -10,7 +10,7 @@ import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlement;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
@@ -67,7 +67,7 @@ class LeaseMaintenanceWorkerTest {
         AtomicInteger ids = new AtomicInteger();
         return new LeaseMaintenanceWorker(
                 "instance-1", "worker-1", () -> List.of(snapshot()), policy,
-                lifecycle, ledger, 10, Duration.ofSeconds(1),
+                lifecycle, lifecycle, ledger, 10, Duration.ofSeconds(1),
                 () -> "request-" + ids.incrementAndGet()
         );
     }
@@ -94,7 +94,7 @@ class LeaseMaintenanceWorkerTest {
         );
     }
 
-    private static final class RecordingLifecycle implements LeaseLifecycle {
+    private static final class RecordingLifecycle implements LeaseRefill, LeaseSettlement {
         private final List<RefillLease> refills = new ArrayList<>();
         private final List<SettlementWork> settlements = new ArrayList<>();
         private final List<LeaseRefillResult> refillResults = new ArrayList<>();
@@ -115,6 +115,11 @@ class LeaseMaintenanceWorkerTest {
     private static class EmptyLedger implements RegionalBudgetLedger {
         @Override public CompletionStage<LeaseRefillResult> issue(RefillLease command) { throw new UnsupportedOperationException(); }
         @Override public CompletionStage<List<SettlementWork>> claimDue(ClaimDueSettlements command) { return CompletableFuture.completedFuture(List.of()); }
-        @Override public CompletionStage<LeaseSettlementResult> apply(SettlementWork work, LeaseSettlement settlement) { throw new UnsupportedOperationException(); }
+        @Override public CompletionStage<LeaseSettlementResult> apply(
+                SettlementWork work,
+                LeaseSettlementAmounts settlement
+        ) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

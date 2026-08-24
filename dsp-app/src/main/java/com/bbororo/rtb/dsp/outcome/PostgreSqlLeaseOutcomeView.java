@@ -1,6 +1,6 @@
-package com.bbororo.rtb.dsp.lease;
+package com.bbororo.rtb.dsp.outcome;
 
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseUsageSummary;
+import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView.LeaseOutcomeSummary;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -15,7 +15,7 @@ import java.util.concurrent.Executor;
 import javax.sql.DataSource;
 
 /** 지역 금액 사건의 최초 결과와 충돌을 리스 액면 분류로 재생한다. */
-public final class PostgreSqlLeaseEventReader implements LeaseEventReader {
+public final class PostgreSqlLeaseOutcomeView implements LeaseOutcomeView {
 
     private static final String SUMMARIZE = """
             SELECT
@@ -42,13 +42,13 @@ public final class PostgreSqlLeaseEventReader implements LeaseEventReader {
     private final DataSource dataSource;
     private final Executor jdbcExecutor;
 
-    public PostgreSqlLeaseEventReader(DataSource dataSource, Executor jdbcExecutor) {
+    public PostgreSqlLeaseOutcomeView(DataSource dataSource, Executor jdbcExecutor) {
         this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
         this.jdbcExecutor = Objects.requireNonNull(jdbcExecutor, "jdbcExecutor");
     }
 
     @Override
-    public CompletionStage<LeaseUsageSummary> summarize(
+    public CompletionStage<LeaseOutcomeSummary> summarize(
             String leaseId,
             long faceValueMicros,
             Instant evaluatedAt
@@ -64,7 +64,7 @@ public final class PostgreSqlLeaseEventReader implements LeaseEventReader {
         );
     }
 
-    private LeaseUsageSummary summarizeBlocking(
+    private LeaseOutcomeSummary summarizeBlocking(
             String leaseId,
             long faceValueMicros,
             Instant evaluatedAt
@@ -86,17 +86,17 @@ public final class PostgreSqlLeaseEventReader implements LeaseEventReader {
                     quarantined = faceValueMicros;
                 }
                 long returned = faceValueMicros - committed - quarantined;
-                return new LeaseUsageSummary(
+                return new LeaseOutcomeSummary(
                         leaseId, faceValueMicros, committed, returned, quarantined, ready
                 );
             }
         } catch (SQLException | IllegalArgumentException failure) {
-            throw new LeaseEventReadException("failed to summarize lease events", failure);
+            throw new LeaseOutcomeReadException("failed to summarize lease outcomes", failure);
         }
     }
 
-    private static final class LeaseEventReadException extends RuntimeException {
-        private LeaseEventReadException(String message, Throwable cause) {
+    private static final class LeaseOutcomeReadException extends RuntimeException {
+        private LeaseOutcomeReadException(String message, Throwable cause) {
             super(message, cause);
         }
     }

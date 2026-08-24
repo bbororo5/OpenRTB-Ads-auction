@@ -6,9 +6,10 @@ import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.NOT_
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlement;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseUsageSummary;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
+import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView;
+import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView.LeaseOutcomeSummary;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -19,7 +20,9 @@ class LeaseSettlementServiceTest {
     @Test
     void waitsUntilAllReservationDeadlinesAreObservable() {
         var ledger = new CapturingLedger();
-        var service = service(ledger, new LeaseUsageSummary("lease-1", 1_000, 0, 1_000, 0, false));
+        var service = service(ledger, new LeaseOutcomeSummary(
+                "lease-1", 1_000, 0, 1_000, 0, false
+        ));
 
         assertEquals(NOT_READY, service.settle(work()).toCompletableFuture().join());
         assertNull(ledger.applied);
@@ -28,7 +31,9 @@ class LeaseSettlementServiceTest {
     @Test
     void rejectsEvidenceForAnotherLeaseOrFaceValue() {
         var ledger = new CapturingLedger();
-        var service = service(ledger, new LeaseUsageSummary("lease-2", 1_000, 0, 1_000, 0, true));
+        var service = service(ledger, new LeaseOutcomeSummary(
+                "lease-2", 1_000, 0, 1_000, 0, true
+        ));
 
         assertEquals(CONFLICT, service.settle(work()).toCompletableFuture().join());
         assertNull(ledger.applied);
@@ -37,14 +42,22 @@ class LeaseSettlementServiceTest {
     @Test
     void classifiesTheWholeFaceValueAndDelegatesIdempotentApplication() {
         var ledger = new CapturingLedger();
-        var service = service(ledger, new LeaseUsageSummary("lease-1", 1_000, 600, 300, 100, true));
+        var service = service(ledger, new LeaseOutcomeSummary(
+                "lease-1", 1_000, 600, 300, 100, true
+        ));
 
         assertEquals(APPLIED, service.settle(work()).toCompletableFuture().join());
-        assertEquals(new LeaseSettlement("lease-1", 1, 1_000, 600, 300, 100), ledger.applied);
+        assertEquals(
+                new LeaseSettlementAmounts("lease-1", 1, 1_000, 600, 300, 100),
+                ledger.applied
+        );
     }
 
-    private static LeaseSettlementService service(CapturingLedger ledger, LeaseUsageSummary summary) {
-        LeaseEventReader reader = (leaseId, faceValueMicros, evaluatedAt) ->
+    private static LeaseSettlementService service(
+            CapturingLedger ledger,
+            LeaseOutcomeSummary summary
+    ) {
+        LeaseOutcomeView reader = (leaseId, faceValueMicros, evaluatedAt) ->
                 CompletableFuture.completedFuture(summary);
         return new LeaseSettlementService(ledger, reader);
     }
@@ -58,7 +71,7 @@ class LeaseSettlementServiceTest {
     }
 
     private static final class CapturingLedger implements RegionalBudgetLedger {
-        private LeaseSettlement applied;
+        private LeaseSettlementAmounts applied;
 
         @Override
         public java.util.concurrent.CompletionStage<LeaseMessages.LeaseRefillResult> issue(LeaseMessages.RefillLease command) {
@@ -71,7 +84,10 @@ class LeaseSettlementServiceTest {
         }
 
         @Override
-        public java.util.concurrent.CompletionStage<LeaseMessages.LeaseSettlementResult> apply(SettlementWork work, LeaseSettlement settlement) {
+        public java.util.concurrent.CompletionStage<LeaseMessages.LeaseSettlementResult> apply(
+                SettlementWork work,
+                LeaseSettlementAmounts settlement
+        ) {
             applied = settlement;
             return CompletableFuture.completedFuture(APPLIED);
         }

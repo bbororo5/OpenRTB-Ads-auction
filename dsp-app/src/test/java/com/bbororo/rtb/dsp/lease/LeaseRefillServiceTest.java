@@ -105,7 +105,10 @@ class LeaseRefillServiceTest {
         }
 
         @Override
-        public java.util.concurrent.CompletionStage<LeaseMessages.LeaseSettlementResult> apply(LeaseMessages.SettlementWork work, LeaseMessages.LeaseSettlement settlement) {
+        public java.util.concurrent.CompletionStage<LeaseMessages.LeaseSettlementResult> apply(
+                LeaseMessages.SettlementWork work,
+                LeaseMessages.LeaseSettlementAmounts settlement
+        ) {
             throw new UnsupportedOperationException();
         }
     }

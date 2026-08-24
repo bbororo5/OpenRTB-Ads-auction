@@ -3,28 +3,30 @@ package com.bbororo.rtb.dsp.lease;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.CONFLICT;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.NOT_READY;
 
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlement;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseUsageSummary;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
+import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView;
+import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView.LeaseOutcomeSummary;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /** 만료 리스의 내구 사건을 집계해 같은 정산 세대로 원장에 한 번 반영한다. */
-public final class LeaseSettlementService {
+public final class LeaseSettlementService implements LeaseSettlement {
 
     private final RegionalBudgetLedger ledger;
-    private final LeaseEventReader eventReader;
+    private final LeaseOutcomeView outcomeView;
 
-    public LeaseSettlementService(RegionalBudgetLedger ledger, LeaseEventReader eventReader) {
+    public LeaseSettlementService(RegionalBudgetLedger ledger, LeaseOutcomeView outcomeView) {
         this.ledger = Objects.requireNonNull(ledger, "ledger");
-        this.eventReader = Objects.requireNonNull(eventReader, "eventReader");
+        this.outcomeView = Objects.requireNonNull(outcomeView, "outcomeView");
     }
 
+    @Override
     public CompletionStage<LeaseSettlementResult> settle(SettlementWork work) {
         Objects.requireNonNull(work, "work");
-        return eventReader.summarize(
+        return outcomeView.summarize(
                         work.leaseId(), work.faceValueMicros(), work.safeRecoveryAt()
                 )
                 .thenCompose(summary -> apply(work, summary));
@@ -32,16 +34,16 @@ public final class LeaseSettlementService {
 
     private CompletionStage<LeaseSettlementResult> apply(
             SettlementWork work,
-            LeaseUsageSummary summary
+            LeaseOutcomeSummary summary
     ) {
-        if (!summary.allReservationDeadlinesPassed()) {
+        if (!summary.safeRecoveryReached()) {
             return CompletableFuture.completedFuture(NOT_READY);
         }
         if (!summary.leaseId().equals(work.leaseId())
                 || summary.faceValueMicros() != work.faceValueMicros()) {
             return CompletableFuture.completedFuture(CONFLICT);
         }
-        var settlement = new LeaseSettlement(
+        var settlement = new LeaseSettlementAmounts(
                 work.leaseId(),
                 work.settlementGeneration(),
                 summary.faceValueMicros(),

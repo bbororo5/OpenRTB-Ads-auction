@@ -31,7 +31,8 @@ public final class LeaseMaintenanceWorker {
     private final String workerId;
     private final LocalLeaseSupplyView supplyView;
     private final AdaptiveLeaseDemandPolicy demandPolicy;
-    private final LeaseLifecycle lifecycle;
+    private final LeaseRefill refill;
+    private final LeaseSettlement settlement;
     private final RegionalBudgetLedger ledger;
     private final int settlementBatchSize;
     private final Duration settlementClaimDuration;
@@ -45,13 +46,14 @@ public final class LeaseMaintenanceWorker {
             String workerId,
             LocalLeaseSupplyView supplyView,
             AdaptiveLeaseDemandPolicy demandPolicy,
-            LeaseLifecycle lifecycle,
+            LeaseRefill refill,
+            LeaseSettlement settlement,
             RegionalBudgetLedger ledger,
             int settlementBatchSize,
             Duration settlementClaimDuration
     ) {
         this(
-                instanceId, workerId, supplyView, demandPolicy, lifecycle, ledger,
+                instanceId, workerId, supplyView, demandPolicy, refill, settlement, ledger,
                 settlementBatchSize, settlementClaimDuration,
                 () -> UUID.randomUUID().toString()
         );
@@ -62,7 +64,8 @@ public final class LeaseMaintenanceWorker {
             String workerId,
             LocalLeaseSupplyView supplyView,
             AdaptiveLeaseDemandPolicy demandPolicy,
-            LeaseLifecycle lifecycle,
+            LeaseRefill refill,
+            LeaseSettlement settlement,
             RegionalBudgetLedger ledger,
             int settlementBatchSize,
             Duration settlementClaimDuration,
@@ -72,7 +75,8 @@ public final class LeaseMaintenanceWorker {
         this.workerId = requireNonBlank(workerId, "workerId");
         this.supplyView = Objects.requireNonNull(supplyView, "supplyView");
         this.demandPolicy = Objects.requireNonNull(demandPolicy, "demandPolicy");
-        this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.refill = Objects.requireNonNull(refill, "refill");
+        this.settlement = Objects.requireNonNull(settlement, "settlement");
         this.ledger = Objects.requireNonNull(ledger, "ledger");
         if (settlementBatchSize <= 0) {
             throw new IllegalArgumentException("settlementBatchSize must be positive");
@@ -121,7 +125,7 @@ public final class LeaseMaintenanceWorker {
                     ? new RefillLease(requestIds.get(), instanceId, snapshot, requested)
                     : pending;
             pendingRefills.put(snapshot.campaignId(), command);
-            stage = stage.thenCompose(count -> lifecycle.refill(command).thenApply(result -> {
+            stage = stage.thenCompose(count -> refill.refill(command).thenApply(result -> {
                 boolean succeeded = result instanceof LeaseRefilled;
                 if (succeeded || !isRetryable(result)) {
                     pendingRefills.remove(snapshot.campaignId());
@@ -138,7 +142,7 @@ public final class LeaseMaintenanceWorker {
     ) {
         CompletionStage<Integer> applied = CompletableFuture.completedFuture(0);
         for (SettlementWork item : work) {
-            applied = applied.thenCompose(count -> lifecycle.settle(item).thenApply(result ->
+            applied = applied.thenCompose(count -> settlement.settle(item).thenApply(result ->
                     count + ((result == APPLIED || result == ALREADY_APPLIED) ? 1 : 0)
             ));
         }

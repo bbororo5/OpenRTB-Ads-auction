@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlement;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseUsageSummary;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
+import com.bbororo.rtb.dsp.outcome.LeaseOutcomeView.LeaseOutcomeSummary;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -17,16 +17,20 @@ class LeaseMessagesTest {
 
     @Test
     void usageAndSettlementBothPreserveLeaseFaceValue() {
-        assertDoesNotThrow(() -> new LeaseUsageSummary("lease-1", 1_000, 600, 300, 100, true));
-        assertDoesNotThrow(() -> new LeaseSettlement("lease-1", 1, 1_000, 600, 300, 100));
+        assertDoesNotThrow(() -> new LeaseOutcomeSummary(
+                "lease-1", 1_000, 600, 300, 100, true
+        ));
+        assertDoesNotThrow(() -> new LeaseSettlementAmounts(
+                "lease-1", 1, 1_000, 600, 300, 100
+        ));
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new LeaseUsageSummary("lease-1", 1_000, 600, 300, 99, true)
+                () -> new LeaseOutcomeSummary("lease-1", 1_000, 600, 300, 99, true)
         );
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new LeaseSettlement("lease-1", 1, 1_000, 600, 300, 99)
+                () -> new LeaseSettlementAmounts("lease-1", 1, 1_000, 600, 300, 99)
         );
     }
 

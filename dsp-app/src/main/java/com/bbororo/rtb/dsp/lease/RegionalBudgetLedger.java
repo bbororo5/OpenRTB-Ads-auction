@@ -2,7 +2,7 @@ package com.bbororo.rtb.dsp.lease;
 
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlement;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
@@ -18,6 +18,6 @@ public interface RegionalBudgetLedger {
 
     CompletionStage<LeaseSettlementResult> apply(
             SettlementWork work,
-            LeaseSettlement settlement
+            LeaseSettlementAmounts settlement
     );
 }

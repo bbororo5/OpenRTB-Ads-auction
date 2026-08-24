@@ -88,25 +88,7 @@ public final class LeaseMessages {
         }
     }
 
-    public record LeaseUsageSummary(
-            String leaseId,
-            long faceValueMicros,
-            long committedMicros,
-            long returnableMicros,
-            long quarantinedMicros,
-            boolean allReservationDeadlinesPassed
-    ) {
-        public LeaseUsageSummary {
-            leaseId = requireNonBlank(leaseId, "leaseId");
-            requireNonNegative(faceValueMicros, "faceValueMicros");
-            requireNonNegative(committedMicros, "committedMicros");
-            requireNonNegative(returnableMicros, "returnableMicros");
-            requireNonNegative(quarantinedMicros, "quarantinedMicros");
-            requireFaceValue(faceValueMicros, committedMicros, returnableMicros, quarantinedMicros);
-        }
-    }
-
-    public record LeaseSettlement(
+    public record LeaseSettlementAmounts(
             String leaseId,
             long settlementGeneration,
             long faceValueMicros,
@@ -114,7 +96,7 @@ public final class LeaseMessages {
             long returnedMicros,
             long quarantinedMicros
     ) {
-        public LeaseSettlement {
+        public LeaseSettlementAmounts {
             leaseId = requireNonBlank(leaseId, "leaseId");
             requirePositive(settlementGeneration, "settlementGeneration");
             requireNonNegative(faceValueMicros, "faceValueMicros");

@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlement;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -112,7 +112,7 @@ class PostgreSqlRegionalBudgetLedgerIntegrationTest {
         var work = ledger.claimDue(new ClaimDueSettlements(
                 "worker-1", 10, Duration.ofSeconds(2)
         )).toCompletableFuture().join().getFirst();
-        var settlement = new LeaseSettlement(
+        var settlement = new LeaseSettlementAmounts(
                 work.leaseId(), work.settlementGeneration(), work.faceValueMicros(),
                 10_000, work.faceValueMicros() - 10_000, 0
         );

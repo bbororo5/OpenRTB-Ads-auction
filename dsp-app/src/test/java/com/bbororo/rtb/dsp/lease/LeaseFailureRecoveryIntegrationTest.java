@@ -12,6 +12,7 @@ import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
 import com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryNoticeEvent;
 import com.bbororo.rtb.dsp.outcome.PostgreSqlMoneyEventJournal;
+import com.bbororo.rtb.dsp.outcome.PostgreSqlLeaseOutcomeView;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
@@ -77,7 +78,7 @@ class LeaseFailureRecoveryIntegrationTest {
         );
         journal = new PostgreSqlMoneyEventJournal(moneyDataSource, jdbcExecutor);
         settlementService = new LeaseSettlementService(
-                ledger, new PostgreSqlLeaseEventReader(moneyDataSource, jdbcExecutor)
+                ledger, new PostgreSqlLeaseOutcomeView(moneyDataSource, jdbcExecutor)
         );
     }
 

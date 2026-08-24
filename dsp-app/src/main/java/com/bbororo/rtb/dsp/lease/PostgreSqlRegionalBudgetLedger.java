@@ -14,7 +14,7 @@ import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillResult;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
-import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlement;
+import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementAmounts;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.SettlementWork;
@@ -141,7 +141,7 @@ public final class PostgreSqlRegionalBudgetLedger implements RegionalBudgetLedge
     @Override
     public CompletionStage<LeaseSettlementResult> apply(
             SettlementWork work,
-            LeaseSettlement settlement
+            LeaseSettlementAmounts settlement
     ) {
         Objects.requireNonNull(work, "work");
         Objects.requireNonNull(settlement, "settlement");
@@ -218,7 +218,10 @@ public final class PostgreSqlRegionalBudgetLedger implements RegionalBudgetLedge
         }
     }
 
-    private LeaseSettlementResult applyBlocking(SettlementWork work, LeaseSettlement settlement) {
+    private LeaseSettlementResult applyBlocking(
+            SettlementWork work,
+            LeaseSettlementAmounts settlement
+    ) {
         if (!work.leaseId().equals(settlement.leaseId())
                 || work.faceValueMicros() != settlement.faceValueMicros()
                 || work.settlementGeneration() != settlement.settlementGeneration()) {
@@ -368,7 +371,7 @@ public final class PostgreSqlRegionalBudgetLedger implements RegionalBudgetLedge
 
     private LeaseSettlementResult settlementPrecondition(
             SettlementWork work,
-            LeaseSettlement settlement,
+            LeaseSettlementAmounts settlement,
             SettlementRow row
     ) {
         if (row == null
@@ -388,7 +391,10 @@ public final class PostgreSqlRegionalBudgetLedger implements RegionalBudgetLedge
         return null;
     }
 
-    private void settleLease(Connection connection, LeaseSettlement settlement) throws SQLException {
+    private void settleLease(
+            Connection connection,
+            LeaseSettlementAmounts settlement
+    ) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(SETTLE_LEASE)) {
             statement.setLong(1, settlement.committedMicros());
             statement.setLong(2, settlement.returnedMicros());
@@ -401,7 +407,7 @@ public final class PostgreSqlRegionalBudgetLedger implements RegionalBudgetLedge
     private boolean settleCampaign(
             Connection connection,
             String campaignId,
-            LeaseSettlement settlement
+            LeaseSettlementAmounts settlement
     ) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(SETTLE_CAMPAIGN)) {
             statement.setLong(1, settlement.returnedMicros());
@@ -527,7 +533,7 @@ public final class PostgreSqlRegionalBudgetLedger implements RegionalBudgetLedge
             Long quarantinedMicros,
             Instant ledgerNow
     ) {
-        boolean matches(LeaseSettlement settlement) {
+        boolean matches(LeaseSettlementAmounts settlement) {
             return Objects.equals(committedMicros, settlement.committedMicros())
                     && Objects.equals(returnedMicros, settlement.returnedMicros())
                     && Objects.equals(quarantinedMicros, settlement.quarantinedMicros());

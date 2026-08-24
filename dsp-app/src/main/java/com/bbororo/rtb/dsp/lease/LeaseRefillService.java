@@ -14,7 +14,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.LongSupplier;
 
 /** 원장에 멱등 발급된 리스를 같은 DSP 인스턴스의 로컬 권한에 설치한다. */
-public final class LeaseRefillService {
+public final class LeaseRefillService implements LeaseRefill {
 
     private final RegionalBudgetLedger ledger;
     private final LocalBudgetAuthority localBudget;
@@ -34,6 +34,7 @@ public final class LeaseRefillService {
         this.monotonicNanos = Objects.requireNonNull(monotonicNanos, "monotonicNanos");
     }
 
+    @Override
     public CompletionStage<LeaseRefillResult> refill(RefillLease command) {
         Objects.requireNonNull(command, "command");
         long requestStartedNanos = monotonicNanos.getAsLong();

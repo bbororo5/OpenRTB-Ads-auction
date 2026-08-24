@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.bbororo.rtb.dsp.lease.PostgreSqlLeaseEventReader;
 import com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryEventKind;
 import com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryNoticeEvent;
 import com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.OutcomeChosen;
@@ -33,7 +32,7 @@ class PostgreSqlMoneyEventStoreIntegrationTest {
     private static HikariDataSource dataSource;
     private static ExecutorService jdbcExecutor;
     private PostgreSqlMoneyEventJournal journal;
-    private PostgreSqlLeaseEventReader reader;
+    private PostgreSqlLeaseOutcomeView reader;
 
     @BeforeAll
     static void connect() {
@@ -61,7 +60,7 @@ class PostgreSqlMoneyEventStoreIntegrationTest {
             statement.executeUpdate();
         }
         journal = new PostgreSqlMoneyEventJournal(dataSource, jdbcExecutor);
-        reader = new PostgreSqlLeaseEventReader(dataSource, jdbcExecutor);
+        reader = new PostgreSqlLeaseOutcomeView(dataSource, jdbcExecutor);
     }
 
     @Test
@@ -84,7 +83,7 @@ class PostgreSqlMoneyEventStoreIntegrationTest {
         assertEquals(0, summary.committedMicros());
         assertEquals(700, summary.returnableMicros());
         assertEquals(300, summary.quarantinedMicros());
-        assertTrue(summary.allReservationDeadlinesPassed());
+        assertTrue(summary.safeRecoveryReached());
     }
 
     @Test
