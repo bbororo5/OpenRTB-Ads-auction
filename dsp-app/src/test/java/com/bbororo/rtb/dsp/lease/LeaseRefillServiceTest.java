@@ -1,21 +1,21 @@
 package com.bbororo.rtb.dsp.lease;
 
-import static com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseInstallResult.CAPACITY_EXCEEDED;
-import static com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseInstallResult.INSTALLED;
+import static com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseInstallResult.CAPACITY_EXCEEDED;
+import static com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseInstallResult.INSTALLED;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.LOCAL_INSTALL_REJECTED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.bbororo.rtb.dsp.budget.BudgetMessages.InstallLease;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseInstallResult;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.PacingPosition;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationFinalization;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationResult;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.TryReserve;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.ReleaseReservation;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.CommitReservation;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.ExpireReservation;
-import com.bbororo.rtb.dsp.budget.LocalBudgetAuthority;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.InstallLease;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseInstallResult;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseSupplySnapshot;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.PacingPosition;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationFinalization;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationResult;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.TryReserve;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.ReleaseReservation;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.CommitReservation;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.ExpireReservation;
+import com.bbororo.rtb.dsp.spending.LocalSpendingAuthority;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
@@ -113,7 +113,7 @@ class LeaseRefillServiceTest {
         }
     }
 
-    private static final class StubLocalBudget implements LocalBudgetAuthority {
+    private static final class StubLocalBudget implements LocalSpendingAuthority {
         private final LeaseInstallResult result;
         private InstallLease installed;
         private long requestStartedNanos;

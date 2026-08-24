@@ -2,16 +2,16 @@ package com.bbororo.rtb.dsp.lease;
 
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.APPLIED;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.STALE_CLAIM;
-import static com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryEventKind.BILLING;
+import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryEventKind.BILLING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseSupplySnapshot;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.RefillLease;
-import com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryNoticeEvent;
-import com.bbororo.rtb.dsp.outcome.PostgreSqlMoneyEventJournal;
+import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryNoticeEvent;
+import com.bbororo.rtb.dsp.outcome.PostgreSqlReservationOutcomeStore;
 import com.bbororo.rtb.dsp.outcome.PostgreSqlLeaseOutcomeView;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -36,7 +36,7 @@ class LeaseFailureRecoveryIntegrationTest {
     private static HikariDataSource moneyDataSource;
     private static ExecutorService jdbcExecutor;
     private PostgreSqlRegionalBudgetLedger ledger;
-    private PostgreSqlMoneyEventJournal journal;
+    private PostgreSqlReservationOutcomeStore journal;
     private LeaseSettlementService settlementService;
 
     @BeforeAll
@@ -76,7 +76,7 @@ class LeaseFailureRecoveryIntegrationTest {
                         Duration.ofSeconds(2), Duration.ofMillis(100), 1_000, 100_000
                 )
         );
-        journal = new PostgreSqlMoneyEventJournal(moneyDataSource, jdbcExecutor);
+        journal = new PostgreSqlReservationOutcomeStore(moneyDataSource, jdbcExecutor);
         settlementService = new LeaseSettlementService(
                 ledger, new PostgreSqlLeaseOutcomeView(moneyDataSource, jdbcExecutor)
         );

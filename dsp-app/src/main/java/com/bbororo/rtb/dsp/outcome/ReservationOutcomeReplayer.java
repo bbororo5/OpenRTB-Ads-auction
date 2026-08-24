@@ -1,22 +1,22 @@
 package com.bbororo.rtb.dsp.outcome;
 
-import static com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryEventKind.BILLING;
-import static com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryEventKind.EXPIRY;
+import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryEventKind.BILLING;
+import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryEventKind.EXPIRY;
 
-import com.bbororo.rtb.dsp.budget.BudgetMessages.CommitReservation;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.ExpireReservation;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.ReleaseReservation;
-import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationReference;
-import com.bbororo.rtb.dsp.budget.LocalBudgetAuthority;
-import com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryNoticeEvent;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.CommitReservation;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.ExpireReservation;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.ReleaseReservation;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationReference;
+import com.bbororo.rtb.dsp.spending.LocalSpendingAuthority;
+import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryNoticeEvent;
 import java.util.Objects;
 
 /** 내구적으로 선택된 결과만 로컬 예약 상태에 멱등 재생한다. */
 final class ReservationOutcomeReplayer {
 
-    private final LocalBudgetAuthority localBudget;
+    private final LocalSpendingAuthority localBudget;
 
-    ReservationOutcomeReplayer(LocalBudgetAuthority localBudget) {
+    ReservationOutcomeReplayer(LocalSpendingAuthority localBudget) {
         this.localBudget = Objects.requireNonNull(localBudget, "localBudget");
     }
 

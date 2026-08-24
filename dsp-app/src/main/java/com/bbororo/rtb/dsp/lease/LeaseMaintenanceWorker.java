@@ -5,8 +5,8 @@ import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejection.REGIO
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.ALREADY_APPLIED;
 import static com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseSettlementResult.APPLIED;
 
-import com.bbororo.rtb.dsp.budget.BudgetMessages.LeaseSupplySnapshot;
-import com.bbororo.rtb.dsp.budget.LocalLeaseSupplyView;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.LeaseSupplySnapshot;
+import com.bbororo.rtb.dsp.spending.LocalLeaseSupplyView;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.ClaimDueSettlements;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefillRejected;
 import com.bbororo.rtb.dsp.lease.LeaseMessages.LeaseRefilled;

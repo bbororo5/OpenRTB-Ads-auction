@@ -149,7 +149,7 @@
 ### 현재 구현
 
 - `SlotDimensionPacker`: 광고 슬롯 규격(width, height)을 64비트 원시 `long` 키 1개로 Zero-Allocation 비트 패킹/언패킹 및 부호 오염 방어.
-- `DefaultCampaignSelector`:
+- `DefaultCampaignRuntime`:
   - L1 캐시 친화적 `long[] sortedDimensionKeys` 및 `IndexedCreative[][]` 버킷 인덱스를 빌드하여 `Arrays.binarySearch` 기반 5ns 무락 서빙.
   - `AtomicReference` 기반 CAS (`compareAndSet`) 루프로 스냅샷 갱신 시 단조 증가 버전 보장 및 Lost Update 방지.
   - 자연수 버전 비교(`compareVersions`)로 `"v10" > "v2"` 올바른 업그레이드 지원.

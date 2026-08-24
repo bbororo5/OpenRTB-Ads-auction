@@ -1,21 +1,21 @@
 package com.bbororo.rtb.dsp.outcome;
 
-import static com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryEventKind.EXPIRY;
+import static com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryEventKind.EXPIRY;
 
-import com.bbororo.rtb.dsp.budget.BudgetMessages.ReservationExpiration;
-import com.bbororo.rtb.dsp.budget.LocalBudgetAuthority;
-import com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.MonetaryNoticeEvent;
-import com.bbororo.rtb.dsp.outcome.NoticeProcessingMessages.OutcomeConflict;
+import com.bbororo.rtb.dsp.spending.SpendingMessages.ReservationExpiration;
+import com.bbororo.rtb.dsp.spending.LocalSpendingAuthority;
+import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.MonetaryNoticeEvent;
+import com.bbororo.rtb.dsp.outcome.ReservationOutcomeMessages.OutcomeConflict;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 
 /** 예약 만료를 먼저 내구 종결 사건으로 기록하고 로컬 권한에 재생한다. */
 public final class ReservationExpirationService {
 
-    private final MoneyEventJournal journal;
+    private final ReservationOutcomeStore journal;
     private final ReservationOutcomeReplayer replayer;
 
-    public ReservationExpirationService(MoneyEventJournal journal, LocalBudgetAuthority localBudget) {
+    public ReservationExpirationService(ReservationOutcomeStore journal, LocalSpendingAuthority localBudget) {
         this.journal = Objects.requireNonNull(journal, "journal");
         this.replayer = new ReservationOutcomeReplayer(localBudget);
     }
@@ -24,7 +24,7 @@ public final class ReservationExpirationService {
         Objects.requireNonNull(expiration, "expiration");
         var reference = expiration.reservation();
         var event = new MonetaryNoticeEvent(
-                DefaultAuctionNoticeProcessor.eventId(reference.reservationId(), EXPIRY),
+                DefaultReservationOutcomeProcessor.eventId(reference.reservationId(), EXPIRY),
                 EXPIRY,
                 reference.reservationId(),
                 reference.leaseId(),
