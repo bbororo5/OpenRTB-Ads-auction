@@ -18,6 +18,8 @@ class DspRuntimeSettingsTest {
         assertEquals(8081, settings.server().port());
         assertEquals("/openrtb/2.6/bid", settings.server().bidPath());
         assertEquals(Duration.ofMillis(180), settings.server().requestTimeout());
+        assertEquals("/notices/billing", settings.notices().billingPath());
+        assertEquals(4, settings.notices().noticeWorkers());
         assertEquals("ap-northeast-2", settings.regionId());
         assertEquals(100_000, settings.executionMaximumEntries());
     }

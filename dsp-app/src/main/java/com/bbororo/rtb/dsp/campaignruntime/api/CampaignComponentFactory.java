@@ -22,9 +22,27 @@ public final class CampaignComponentFactory {
             String expectedSha256,
             ToLongBiFunction<String, Instant> pacingLagPpm
     ) {
+        return create(
+                loadJsonFile(path, requiredVersion, expectedSha256),
+                pacingLagPpm
+        );
+    }
+
+    public static CampaignRuntimeMessages.CampaignSnapshot loadJsonFile(
+            Path path,
+            String requiredVersion,
+            String expectedSha256
+    ) {
+        return load(path, requiredVersion, expectedSha256);
+    }
+
+    public static Components create(
+            CampaignRuntimeMessages.CampaignSnapshot snapshot,
+            ToLongBiFunction<String, Instant> pacingLagPpm
+    ) {
+        Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(pacingLagPpm, "pacingLagPpm");
         var runtime = new DefaultCampaignRuntime(pacingLagPpm::applyAsLong);
-        var snapshot = load(path, requiredVersion, expectedSha256);
         install(runtime, snapshot);
         List<String> activeCampaignIds = snapshot.campaigns().stream()
                 .filter(CampaignRuntimeMessages.Campaign::active)
