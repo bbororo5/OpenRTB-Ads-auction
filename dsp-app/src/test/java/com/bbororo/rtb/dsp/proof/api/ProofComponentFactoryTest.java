@@ -22,7 +22,9 @@ class ProofComponentFactoryTest {
         var proof = ProofComponentFactory.create(
                 "key-2",
                 Map.of("key-1", filled(1), "key-2", filled(2)),
-                URI.create("https://dsp.example/"));
+                URI.create("https://dsp.example/"),
+                new ProofComponentFactory.NoticePaths(
+                        "/callbacks/win", "/callbacks/loss", "/callbacks/billing"));
         Instant reservedAt = Instant.parse("2026-08-25T00:00:00Z");
         Instant expiresAt = reservedAt.plusSeconds(2);
         var issued = assertInstanceOf(NoticesIssued.class, proof.issuer().issue(
@@ -44,6 +46,7 @@ class ProofComponentFactoryTest {
         String token = URLDecoder.decode(
                 issued.urls().billingNoticeUrl().getRawQuery().substring("token=".length()),
                 StandardCharsets.UTF_8);
+        assertEquals("/callbacks/billing", issued.urls().billingNoticeUrl().getPath());
         var verified = assertInstanceOf(VerifiedReservationNotice.class, proof.verifier().verify(
                 new NoticeToken(
                         "ssp-1", ReservationNoticeKind.BILLING, token,

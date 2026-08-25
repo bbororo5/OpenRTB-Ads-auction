@@ -19,15 +19,30 @@ public final class DefaultNoticeUrlFactory implements NoticeUrlFactory {
     );
 
     private final String publicBaseUrl;
+    private final Map<ReservationNoticeKind, String> paths;
 
     public DefaultNoticeUrlFactory(URI publicBaseUri) {
+        this(publicBaseUri, PATHS);
+    }
+
+    public DefaultNoticeUrlFactory(
+            URI publicBaseUri,
+            Map<ReservationNoticeKind, String> paths
+    ) {
         this.publicBaseUrl = normalizeBaseUri(publicBaseUri);
+        Objects.requireNonNull(paths, "paths");
+        var normalized = new java.util.EnumMap<ReservationNoticeKind, String>(
+                ReservationNoticeKind.class);
+        for (ReservationNoticeKind kind : ReservationNoticeKind.values()) {
+            normalized.put(kind, normalizePath(paths.get(kind), kind));
+        }
+        this.paths = Map.copyOf(normalized);
     }
 
     @Override
     public NoticeUrl create(SealedReservationNotice notice) {
         Objects.requireNonNull(notice, "notice");
-        String path = PATHS.get(notice.kind());
+        String path = paths.get(notice.kind());
         if (path == null) {
             throw new NoticeIssuanceException("unsupported notice kind: " + notice.kind());
         }
@@ -36,6 +51,17 @@ public final class DefaultNoticeUrlFactory implements NoticeUrlFactory {
                 notice.kind(),
                 URI.create(publicBaseUrl + path + "?token=" + token)
         );
+    }
+
+    private static String normalizePath(String path, ReservationNoticeKind kind) {
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("missing notice path for " + kind);
+        }
+        String normalized = path.startsWith("/") ? path.substring(1) : path;
+        if (normalized.isBlank() || normalized.contains("?") || normalized.contains("#")) {
+            throw new IllegalArgumentException("invalid notice path for " + kind);
+        }
+        return normalized;
     }
 
     private static String normalizeBaseUri(URI uri) {

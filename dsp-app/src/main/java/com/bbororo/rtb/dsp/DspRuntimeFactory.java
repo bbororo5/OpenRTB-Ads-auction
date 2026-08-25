@@ -102,7 +102,12 @@ public final class DspRuntimeFactory {
         var proof = ProofComponentFactory.create(
                 operations.proofKeys().activeKeyId(),
                 operations.proofKeys().keyRing(),
-                operations.publicBaseUri()
+                operations.publicBaseUri(),
+                new ProofComponentFactory.NoticePaths(
+                        settings.notices().winPath(),
+                        settings.notices().lossPath(),
+                        settings.notices().billingPath()
+                )
         );
 
         DspDataSources stores = null;
