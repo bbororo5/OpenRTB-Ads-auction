@@ -102,6 +102,27 @@ public final class NoticeIssuanceMessages {
         }
     }
 
+    /** Bidding이 내부 구현 예외에 의존하지 않고 발급 성공과 실패를 완전하게 처리하는 결과다. */
+    public sealed interface NoticeIssuanceResult permits NoticesIssued, NoticeIssuanceFailed {
+    }
+
+    public record NoticesIssued(ReservationNoticeUrls urls) implements NoticeIssuanceResult {
+        public NoticesIssued {
+            Objects.requireNonNull(urls, "urls");
+        }
+    }
+
+    public record NoticeIssuanceFailed(NoticeIssuanceFailure reason)
+            implements NoticeIssuanceResult {
+        public NoticeIssuanceFailed {
+            Objects.requireNonNull(reason, "reason");
+        }
+    }
+
+    public enum NoticeIssuanceFailure {
+        TECHNICAL_FAILURE
+    }
+
     private static URI requireHttpUrl(URI uri, String name) {
         Objects.requireNonNull(uri, name);
         if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))

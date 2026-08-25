@@ -1,12 +1,14 @@
 package com.bbororo.rtb.dsp.proof.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationGranted;
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.IssueReservationNotices;
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.NoticeUrl;
+import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.NoticeIssuanceFailed;
+import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.NoticesIssued;
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.ReservationNoticeUrls;
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.SealReservationNotice;
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.SealedReservationNotice;
@@ -60,7 +62,8 @@ class DefaultReservationNoticeIssuerTest {
                 )
         );
 
-        ReservationNoticeUrls urls = issuer.issue(command);
+        ReservationNoticeUrls urls = assertInstanceOf(
+                NoticesIssued.class, issuer.issue(command)).urls();
 
         assertNotNull(urls.winNoticeUrl());
         assertNotNull(urls.lossNoticeUrl());
@@ -82,7 +85,7 @@ class DefaultReservationNoticeIssuerTest {
 
     @Test
     @DisplayName("종류 치환 방어: Sealer가 요청과 다른 ReservationNoticeKind(WIN 요청에 LOSS 반환 등)를 반환하면 즉시 예외를 던진다")
-    void sealerReturningDifferentKindThrowsNoticeIssuanceException() {
+    void sealerReturningDifferentKindReturnsTypedFailure() {
         ReservationNoticeSealer buggySealer = command -> new SealedReservationNotice(
                 ReservationNoticeKind.LOSS, // always returns LOSS even when requested WIN
                 "corrupted-token"
@@ -90,12 +93,12 @@ class DefaultReservationNoticeIssuerTest {
         var issuer = new DefaultReservationNoticeIssuer(claimsFactory, buggySealer, urlFactory);
         var command = sampleCommand();
 
-        assertThrows(NoticeIssuanceException.class, () -> issuer.issue(command));
+        assertInstanceOf(NoticeIssuanceFailed.class, issuer.issue(command));
     }
 
     @Test
     @DisplayName("종류 치환 방어: UrlFactory가 요청과 다른 ReservationNoticeKind를 반환하면 즉시 예외를 던진다")
-    void urlFactoryReturningDifferentKindThrowsNoticeIssuanceException() {
+    void urlFactoryReturningDifferentKindReturnsTypedFailure() {
         NoticeUrlFactory buggyUrlFactory = sealed -> new NoticeUrl(
                 ReservationNoticeKind.BILLING, // always returns BILLING
                 URI.create("https://dsp.example.com/notices/billing?token=foo")
@@ -103,7 +106,7 @@ class DefaultReservationNoticeIssuerTest {
         var issuer = new DefaultReservationNoticeIssuer(claimsFactory, sealer, buggyUrlFactory);
         var command = sampleCommand();
 
-        assertThrows(NoticeIssuanceException.class, () -> issuer.issue(command));
+        assertInstanceOf(NoticeIssuanceFailed.class, issuer.issue(command));
     }
 
     private static IssueReservationNotices sampleCommand() {

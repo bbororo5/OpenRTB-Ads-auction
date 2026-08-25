@@ -1,8 +1,13 @@
 package com.bbororo.rtb.dsp.proof.internal;
 
+import static com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.NoticeIssuanceFailure.TECHNICAL_FAILURE;
+
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.ComposeReservationNoticeClaims;
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.IssueReservationNotices;
+import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.NoticeIssuanceFailed;
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.NoticeUrl;
+import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.NoticeIssuanceResult;
+import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.NoticesIssued;
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.ReservationNoticeUrls;
 import com.bbororo.rtb.dsp.proof.api.NoticeIssuanceMessages.SealReservationNotice;
 import com.bbororo.rtb.dsp.proof.api.ReservationNoticeIssuer;
@@ -36,35 +41,39 @@ public final class DefaultReservationNoticeIssuer implements ReservationNoticeIs
     }
 
     @Override
-    public ReservationNoticeUrls issue(IssueReservationNotices command) {
+    public NoticeIssuanceResult issue(IssueReservationNotices command) {
         Objects.requireNonNull(command, "command");
-        var claims = claimsFactory.compose(new ComposeReservationNoticeClaims(
-                command.authenticatedSspId(),
-                command.regionId(),
-                command.reservation()
-        ));
+        try {
+            var claims = claimsFactory.compose(new ComposeReservationNoticeClaims(
+                    command.authenticatedSspId(),
+                    command.regionId(),
+                    command.reservation()
+            ));
 
-        var urls = new EnumMap<ReservationNoticeKind, URI>(ReservationNoticeKind.class);
-        for (ReservationNoticeKind kind : REQUIRED_KINDS) {
-            var sealed = Objects.requireNonNull(
-                    sealer.seal(new SealReservationNotice(kind, claims)),
-                    "sealer result"
-            );
-            requireKind(kind, sealed.kind(), "sealer");
+            var urls = new EnumMap<ReservationNoticeKind, URI>(ReservationNoticeKind.class);
+            for (ReservationNoticeKind kind : REQUIRED_KINDS) {
+                var sealed = Objects.requireNonNull(
+                        sealer.seal(new SealReservationNotice(kind, claims)),
+                        "sealer result"
+                );
+                requireKind(kind, sealed.kind(), "sealer");
 
-            NoticeUrl url = Objects.requireNonNull(
-                    urlFactory.create(sealed),
-                    "urlFactory result"
-            );
-            requireKind(kind, url.kind(), "urlFactory");
-            urls.put(kind, url.value());
+                NoticeUrl url = Objects.requireNonNull(
+                        urlFactory.create(sealed),
+                        "urlFactory result"
+                );
+                requireKind(kind, url.kind(), "urlFactory");
+                urls.put(kind, url.value());
+            }
+
+            return new NoticesIssued(new ReservationNoticeUrls(
+                    urls.get(ReservationNoticeKind.WIN),
+                    urls.get(ReservationNoticeKind.LOSS),
+                    urls.get(ReservationNoticeKind.BILLING)
+            ));
+        } catch (NoticeIssuanceException failure) {
+            return new NoticeIssuanceFailed(TECHNICAL_FAILURE);
         }
-
-        return new ReservationNoticeUrls(
-                urls.get(ReservationNoticeKind.WIN),
-                urls.get(ReservationNoticeKind.LOSS),
-                urls.get(ReservationNoticeKind.BILLING)
-        );
     }
 
     private static void requireKind(ReservationNoticeKind requested, ReservationNoticeKind returned, String collaborator) {
