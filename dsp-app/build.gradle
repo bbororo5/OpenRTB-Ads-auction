@@ -18,7 +18,28 @@ tasks.named('test') {
         excludeTags 'dsp-regional-ledger'
         excludeTags 'dsp-money-event-store'
         excludeTags 'dsp-lease-recovery'
+        excludeTags 'dsp-operational-runtime'
     }
+}
+
+tasks.register('operationalRuntimeIntegrationTest', Test) {
+    description = 'Runs the assembled DSP runtime through bid and billing HTTP against PostgreSQL.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'dsp-operational-runtime'
+    }
+
+    systemProperty 'dsp.ledger.jdbc-url',
+            providers.gradleProperty('dspLedgerJdbcUrl').getOrElse('jdbc:postgresql://localhost:35432/rtb')
+    systemProperty 'dsp.money.jdbc-url',
+            providers.gradleProperty('dspMoneyJdbcUrl').getOrElse('jdbc:postgresql://localhost:35532/rtb')
+    systemProperty 'dsp.store.username',
+            providers.gradleProperty('dspStoreUsername').getOrElse('postgres')
+    systemProperty 'dsp.store.password',
+            providers.gradleProperty('dspStorePassword').getOrElse('local-dev-postgres-password')
 }
 
 tasks.register('leaseRecoveryIntegrationTest', Test) {
