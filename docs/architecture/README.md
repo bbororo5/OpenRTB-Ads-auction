@@ -23,6 +23,8 @@
 | Technology | [DSP 기술 결정 경계](technology/dsp.md) | 확정한 리전 원장·로컬 자료구조와 검증 순서 |
 | Implementation | [SSP 얇은 수직 흐름 구현 계획](implementation/ssp-thin-vertical-slice.md) | E2E를 녹색으로 만드는 컴포넌트·인터페이스 순서 |
 | Implementation | [DSP 상세 설계 로드맵](implementation/dsp-design-roadmap.md) | 컴포넌트별 남은 결정·검증과 권장 순서 |
+| Implementation | [DSP 입찰 조정 인프로세스 인수 검증](implementation/dsp-bid-coordination-acceptance.md) | 실제 캠페인·예약·증표 조합의 7B 완료 증거 |
+| Implementation | [DSP 런타임 8A 조립](implementation/dsp-runtime-assembly.md) | 입찰 실행권·조정·OpenRTB HTTP 수직 흐름과 남은 운영 어댑터 |
 
 C4 Level 3은 내부 책임을 설명할 가치가 있는 실행 컨테이너에만 작성한다. SSP와 DSP 애플리케이션은 협력 메시지, 상태 소유권과 변경 이유를 기준으로 책임 경계를 나눴다. Level 4는 구현 구조가 생긴 뒤 필요할 때 코드에서 생성한다.
 
