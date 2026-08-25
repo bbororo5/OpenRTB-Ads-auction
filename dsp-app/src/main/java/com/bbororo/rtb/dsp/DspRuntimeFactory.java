@@ -31,6 +31,14 @@ public final class DspRuntimeFactory {
     private DspRuntimeFactory() {
     }
 
+    public static DspRuntime createFromEnvironment() {
+        var environment = System.getenv();
+        return createOperational(
+                DspRuntimeSettings.fromEnvironment(environment),
+                DspOperationalSettings.fromEnvironment(environment)
+        );
+    }
+
     public static DspRuntime createFromEnvironment(Components components) {
         return create(
                 DspRuntimeSettings.fromEnvironment(System.getenv()),
