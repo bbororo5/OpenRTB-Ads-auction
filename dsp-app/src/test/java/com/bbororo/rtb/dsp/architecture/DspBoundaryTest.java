@@ -56,7 +56,15 @@ class DspBoundaryTest {
         assertDependencies("openrtb", "contract", "openrtb");
         assertDependencies("spending", "contract", "spending");
         assertDependencies("campaignruntime", "campaignruntime", "contract", "openrtb");
-        assertDependencies("bidding", "bidding", "contract", "openrtb", "proof");
+        assertDependencies(
+                "bidding",
+                "bidding",
+                "campaignruntime",
+                "contract",
+                "openrtb",
+                "proof",
+                "spending"
+        );
         assertDependencies("proof", "contract", "proof", "spending");
         assertDependencies("outcome", "contract", "outcome", "proof", "spending");
         assertDependencies("lease", "contract", "lease", "outcome", "spending");
