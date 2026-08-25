@@ -1,6 +1,6 @@
 # DSP 상세 설계 로드맵
 
-상태: 금액·리스·통지·캠페인 선택·로컬 입찰 실행권·입찰 조정 7A·7B 완료 · 8A 입찰 런타임 조립 기준선 완료 · 8B 운영 어댑터 조립 준비 중
+상태: 금액·리스·통지·캠페인 선택·로컬 입찰 실행권·입찰 조정 7A·7B 완료 · 8A 입찰 런타임·8B 운영 조립 완료 · 8C 운영 검증 준비 중
 
 근거: [DSP 컴포넌트](../views/dsp-components.md), [DSP 기술 결정 경계](../technology/dsp.md)
 
@@ -18,9 +18,8 @@
 → 로컬 입찰 실행권                  완료
 → 입찰 조정 구현·인수 검증            완료
 → 외부 입찰 API·런타임 8A       완료
-→ 통지 전송·운영 어댑터 8B       ← 현재
-→ SSP 왕복·부하·장애 검증
-→ 부하·장애 측정
+→ 통지 전송·운영 어댑터 8B       완료
+→ SSP 왕복·부하·장애 검증 8C      ← 현재
 ```
 
 ## 현재 시작점
@@ -32,7 +31,7 @@
 5. `캠페인 선택`은 슬롯 규격 원시 키, 불변 스냅숏 원자 교체, 실시간 적격성 필터와 결정적 페이싱 순위를 구현했다.
 6. `입찰 실행권`은 슬롯 경매 정체성, 요청 의미 지문, 최초 실행권 선점, 중복 즉시 거절과 제한된 기억 수명을 구현했다.
 7. `입찰 조정`은 요청·슬롯·후보 워크플로우를 분리하고, sealed 결과 타입과 시간·계속 진행 정책으로 순차 후보 탐색, 슬롯 부분 성공과 요청 중단을 구현했다. 예약 뒤 증표 발급 실패나 응답 여유 소진으로 공개하지 못한 예약은 직접 해제하지 않고 기존 만료 경로로 수렴한다.
-8. `OpenRTB 계약`은 메시지·JSON 코덱·입찰 HTTP 어댑터와 Armeria 입찰 전송 기준선을 구현했다. 8A에서 `DefaultDspOpenRtbApi`, `BiddingComponentFactory`, `DspRuntimeSettings`, `DspRuntimeFactory`를 추가해 실행권·입찰 조정·OpenRTB HTTP를 조립했고, 요청 수신 시점부터 `tmax`를 차감하는 실제 HTTP E2E를 통과했다. 다음 8B는 통지 HTTP 경로와 캠페인·리스·키·Outcome 저장소의 운영 어댑터를 붙여 독립 `main`을 만드는 일이다.
+8. `OpenRTB 계약`은 메시지·JSON 코덱·입찰 HTTP 어댑터와 Armeria 입찰 전송 기준선을 구현했다. 8A에서 실행권·입찰 조정·OpenRTB HTTP를 조립했고, 8B에서 분리된 통지 작업자, JSON 캠페인 스냅숏 SHA-256 검증, Proof 키 링, 두 PostgreSQL 커넥션 풀과 스키마 준비 검사, 초기 리스 보충·정산과 예약 만료 작업자를 연결했다. `DspApplication.main`은 조립·시작·종료만 소유한다.
 
 리전 예산 원장 선택은 [ADR-010](../decisions/ADR-010-regional-budget-ledger-store.md)에 기록했다.
 
@@ -229,10 +228,10 @@
 | 세부 단계 | 책임 | 상태 |
 |---|---|---|
 | 8A 입찰 런타임 조립 | Bidding 실행 파사드, OpenRTB 애플리케이션 서비스, 검증된 실행 설정, HTTP 수직 E2E | 완료 |
-| 8B 운영 어댑터 조립 | 통지 HTTP 라우트, 캠페인 스냅숏·리스 공급·키 소스·Outcome DB 생성, 배경 작업자, `DspApplication.main` | 다음 |
-| 8C 운영 검증 | SSP 코덱 실제 왕복, p99 부하, 포화·DB 장애·종료 검증 | 대기 |
+| 8B 운영 어댑터 조립 | 통지 HTTP 라우트, 캠페인 스냅숏·리스 공급·키 소스·Outcome DB 생성, 배경 작업자, `DspApplication.main` | 완료 |
+| 8C 운영 검증 | SSP 코덱 실제 왕복, p99 부하, 포화·DB 장애·종료 검증 | 현재 |
 
-8A의 `DspRuntimeFactory.Components`는 캠페인 선택·로컬 예산·Proof·Outcome의 공개 포트만 받는다. 이 경계로 Bidding의 `internal` 타입이 조립 루트로 누출되지 않고, 아직 없는 운영 공급자를 빈 구현으로 위장하지 않는다. 상세 근거는 [DSP 런타임 8A 조립](dsp-runtime-assembly.md)에 기록한다.
+`DspRuntimeFactory.createFromEnvironment()`는 컴포넌트별 공개 팩토리만 호출한다. 시작은 Outcome 만료 작업자 → 초기 리스 공급·유지관리 → HTTP 순서고, 종료는 HTTP → 리스 → Outcome → JDBC 실행자 → DB 풀 역순이다. 실제 PostgreSQL 인수 시험은 초기 리스부터 HTTP `burl`과 Outcome 기록까지 확인한다. 상세 근거는 [DSP 런타임 8A·8B 조립](dsp-runtime-assembly.md)에 기록한다.
 
 ### 반드시 결정
 
