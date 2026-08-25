@@ -21,4 +21,12 @@ class AuctionDeadlineTest {
         nanos.addAndGet(Duration.ofMillis(1).toNanos());
         assertTrue(deadline.isExpired());
     }
+
+    @Test
+    void includesTimeAlreadySpentSinceHttpReceipt() {
+        var nanos = new AtomicLong(Duration.ofMillis(12).toNanos());
+        var deadline = AuctionDeadline.startAt(50, 0, nanos::get);
+
+        assertEquals(Duration.ofMillis(38), deadline.remaining());
+    }
 }

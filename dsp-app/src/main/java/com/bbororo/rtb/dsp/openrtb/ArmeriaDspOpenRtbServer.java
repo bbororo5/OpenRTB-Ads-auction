@@ -18,6 +18,7 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
 /** Armeria를 OpenRTB HTTP 어댑터 바깥에만 두는 DSP 전송 서버다. */
 public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
@@ -33,9 +34,19 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
             DspOpenRtbHttpAdapter adapter,
             Clock clock
     ) {
+        this(settings, adapter, clock, System::nanoTime);
+    }
+
+    public ArmeriaDspOpenRtbServer(
+            Settings settings,
+            DspOpenRtbHttpAdapter adapter,
+            Clock clock,
+            LongSupplier monotonicNanos
+    ) {
         Objects.requireNonNull(settings, "settings");
         Objects.requireNonNull(adapter, "adapter");
         Objects.requireNonNull(clock, "clock");
+        Objects.requireNonNull(monotonicNanos, "monotonicNanos");
 
         bidExecutor = new ThreadPoolExecutor(
                 settings.bidWorkers(),
@@ -57,7 +68,7 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
                         settings.gracefulTimeout()
                 )
                 .service(settings.bidPath(), (ctx, request) -> serve(
-                        ctx, request, adapter, clock))
+                        ctx, request, adapter, clock, monotonicNanos))
                 .build();
     }
 
@@ -73,9 +84,11 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
             ServiceRequestContext context,
             HttpRequest request,
             DspOpenRtbHttpAdapter adapter,
-            Clock clock
+            Clock clock,
+            LongSupplier monotonicNanos
     ) {
         Instant receivedAt = clock.instant();
+        long receivedNanos = monotonicNanos.getAsLong();
         String authenticatedSspId = request.headers().get(AUTHENTICATED_SSP_HEADER);
         if (authenticatedSspId == null || authenticatedSspId.isBlank()) {
             return toArmeriaResponse(DspOpenRtbHttpAdapter.Response.noContent(401));
@@ -88,6 +101,7 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
                     request.headers().get(DspOpenRtbHttpAdapter.VERSION_HEADER),
                     authenticatedSspId,
                     receivedAt,
+                    receivedNanos,
                     aggregated.content().array()
             );
             try {

@@ -3,10 +3,12 @@ package com.bbororo.rtb.dsp.openrtb;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.BidResponse;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoContent;
+import com.bbororo.rtb.dsp.contract.AuctionDeadline;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.LongSupplier;
 
 /** 인증 게이트웨이 뒤에서 OpenRTB 입찰 HTTP 의미를 DSP 컴포넌트 호출로 변환한다. */
 public final class DspOpenRtbHttpAdapter {
@@ -17,14 +19,31 @@ public final class DspOpenRtbHttpAdapter {
 
     private final DspOpenRtbApi api;
     private final DspOpenRtb26JsonCodec codec;
+    private final LongSupplier monotonicNanos;
 
     public DspOpenRtbHttpAdapter(DspOpenRtbApi api) {
-        this(api, new DspOpenRtb26JsonCodec());
+        this(api, new DspOpenRtb26JsonCodec(), System::nanoTime);
     }
 
-    DspOpenRtbHttpAdapter(DspOpenRtbApi api, DspOpenRtb26JsonCodec codec) {
+    public DspOpenRtbHttpAdapter(DspOpenRtbApi api, LongSupplier monotonicNanos) {
+        this(api, new DspOpenRtb26JsonCodec(), monotonicNanos);
+    }
+
+    DspOpenRtbHttpAdapter(
+            DspOpenRtbApi api,
+            DspOpenRtb26JsonCodec codec
+    ) {
+        this(api, codec, System::nanoTime);
+    }
+
+    DspOpenRtbHttpAdapter(
+            DspOpenRtbApi api,
+            DspOpenRtb26JsonCodec codec,
+            LongSupplier monotonicNanos
+    ) {
         this.api = Objects.requireNonNull(api);
         this.codec = Objects.requireNonNull(codec);
+        this.monotonicNanos = Objects.requireNonNull(monotonicNanos);
     }
 
     public Response handleBid(Request request) {
@@ -43,7 +62,14 @@ public final class DspOpenRtbHttpAdapter {
         }
         try {
             var result = Objects.requireNonNull(api.handleBid(new AuthenticatedBidRequest(
-                    request.authenticatedSspId(), bidRequest, request.receivedAt()
+                    request.authenticatedSspId(),
+                    bidRequest,
+                    request.receivedAt(),
+                    AuctionDeadline.startAt(
+                            bidRequest.tmaxMillis(),
+                            request.receivedNanos(),
+                            monotonicNanos
+                    )
             )), "DspOpenRtbApi returned null");
             if (result == NoContent.INSTANCE) {
                 return Response.noContent(204);
@@ -70,8 +96,28 @@ public final class DspOpenRtbHttpAdapter {
             String openRtbVersion,
             String authenticatedSspId,
             Instant receivedAt,
+            long receivedNanos,
             byte[] body
     ) {
+        public Request(
+                String method,
+                String contentType,
+                String openRtbVersion,
+                String authenticatedSspId,
+                Instant receivedAt,
+                byte[] body
+        ) {
+            this(
+                    method,
+                    contentType,
+                    openRtbVersion,
+                    authenticatedSspId,
+                    receivedAt,
+                    System.nanoTime(),
+                    body
+            );
+        }
+
         public Request {
             if (method == null || method.isBlank()) {
                 throw new IllegalArgumentException("method must not be blank");

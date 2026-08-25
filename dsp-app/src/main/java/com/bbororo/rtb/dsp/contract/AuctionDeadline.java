@@ -16,12 +16,24 @@ public final class AuctionDeadline {
     }
 
     public static AuctionDeadline start(int tmaxMillis, LongSupplier monotonicNanos) {
+        Objects.requireNonNull(monotonicNanos, "monotonicNanos");
+        return startAt(tmaxMillis, monotonicNanos.getAsLong(), monotonicNanos);
+    }
+
+    /** HTTP 요청을 처음 받은 시점부터 tmax를 차감한다. */
+    public static AuctionDeadline startAt(
+            int tmaxMillis,
+            long receivedNanos,
+            LongSupplier monotonicNanos
+    ) {
         if (tmaxMillis <= 0 || tmaxMillis > 180) {
             throw new IllegalArgumentException("tmaxMillis must be between 1 and 180");
         }
         Objects.requireNonNull(monotonicNanos, "monotonicNanos");
-        long now = monotonicNanos.getAsLong();
-        return new AuctionDeadline(Math.addExact(now, Duration.ofMillis(tmaxMillis).toNanos()), monotonicNanos);
+        return new AuctionDeadline(
+                Math.addExact(receivedNanos, Duration.ofMillis(tmaxMillis).toNanos()),
+                monotonicNanos
+        );
     }
 
     public boolean isExpired() {

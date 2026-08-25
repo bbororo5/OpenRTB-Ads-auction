@@ -5,6 +5,7 @@ import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonBlank;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requireNonNegative;
 import static com.bbororo.rtb.dsp.contract.ContractChecks.requirePositive;
 
+import com.bbororo.rtb.dsp.contract.AuctionDeadline;
 import java.net.URI;
 import java.time.Instant;
 import java.util.HashSet;
@@ -21,11 +22,26 @@ public final class OpenRtbMessages {
     private OpenRtbMessages() {
     }
 
-    public record AuthenticatedBidRequest(String sspId, BidRequest request, Instant receivedAt) {
+    public record AuthenticatedBidRequest(
+            String sspId,
+            BidRequest request,
+            Instant receivedAt,
+            AuctionDeadline deadline
+    ) {
+        public AuthenticatedBidRequest(String sspId, BidRequest request, Instant receivedAt) {
+            this(
+                    sspId,
+                    request,
+                    receivedAt,
+                    AuctionDeadline.start(request.tmaxMillis(), System::nanoTime)
+            );
+        }
+
         public AuthenticatedBidRequest {
             sspId = requireNonBlank(sspId, "sspId");
             Objects.requireNonNull(request, "request");
             Objects.requireNonNull(receivedAt, "receivedAt");
+            Objects.requireNonNull(deadline, "deadline");
         }
     }
 

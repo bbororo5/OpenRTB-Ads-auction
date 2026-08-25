@@ -15,11 +15,13 @@ import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.SeatBid;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class DspOpenRtbHttpAdapterTest {
@@ -65,6 +67,24 @@ class DspOpenRtbHttpAdapterTest {
         assertEquals(204, response.statusCode());
         assertEquals(0, response.body().length);
         assertEquals("2.6", response.headers().get("x-openrtb-version"));
+    }
+
+    @Test
+    void deadlineIncludesTimeSpentBeforeJsonDecodingCompletes() {
+        var nanos = new AtomicLong(Duration.ofMillis(12).toNanos());
+        var remaining = new AtomicReference<Duration>();
+        var adapter = new DspOpenRtbHttpAdapter(api(request -> {
+            remaining.set(request.deadline().remaining());
+            return NoContent.INSTANCE;
+        }), nanos::get);
+        var request = new Request(
+                "POST", "application/json", "2.6", "ssp-1", RECEIVED_AT, 0,
+                validRequest().getBytes(StandardCharsets.UTF_8)
+        );
+
+        adapter.handleBid(request);
+
+        assertEquals(Duration.ofMillis(37), remaining.get());
     }
 
     @Test
