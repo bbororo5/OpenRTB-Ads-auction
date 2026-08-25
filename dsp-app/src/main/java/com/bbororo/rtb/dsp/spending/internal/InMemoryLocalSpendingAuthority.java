@@ -170,17 +170,29 @@ public final class InMemoryLocalSpendingAuthority implements
     @Override
     public LeaseInstallResult install(InstallLease command, long requestStartedNanos) {
         Objects.requireNonNull(command, "command");
-        CampaignSpendingAccount account = accounts.computeIfAbsent(
-                command.campaignId(),
-                campaignId -> new CampaignSpendingAccount(
-                        campaignId,
+        CampaignSpendingAccount account = accountFor(command.campaignId());
+        return account.install(command, requestStartedNanos);
+    }
+
+    public void initializeCampaign(String campaignId) {
+        Objects.requireNonNull(campaignId, "campaignId");
+        if (campaignId.isBlank()) {
+            throw new IllegalArgumentException("campaignId must not be blank");
+        }
+        accountFor(campaignId);
+    }
+
+    private CampaignSpendingAccount accountFor(String campaignId) {
+        return accounts.computeIfAbsent(
+                campaignId,
+                id -> new CampaignSpendingAccount(
+                        id,
                         campaignCapacity,
                         leaseCapacity,
                         monotonicNanos,
                         leaseSafetyMargin
                 )
         );
-        return account.install(command, requestStartedNanos);
     }
 
     @Override

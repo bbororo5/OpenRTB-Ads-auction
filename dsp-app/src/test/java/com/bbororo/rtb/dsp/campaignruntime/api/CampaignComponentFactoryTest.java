@@ -36,6 +36,7 @@ class CampaignComponentFactoryTest {
         assertEquals(1, candidates.size());
         assertEquals("campaign-1", candidates.getFirst().campaignId());
         assertEquals(17L, candidates.getFirst().pacingLagPpm());
+        assertEquals(java.util.List.of("campaign-1"), components.activeCampaignIds());
     }
 
     @Test
