@@ -8,6 +8,7 @@ import java.util.Objects;
 /** 배포 환경의 문자열 설정을 검증된 DSP 실행 정책으로 바꾼다. */
 public record DspRuntimeSettings(
         ArmeriaDspOpenRtbServer.Settings server,
+        ArmeriaDspOpenRtbServer.NoticeSettings notices,
         String regionId,
         Duration reservationLifetime,
         Duration candidateAttemptCost,
@@ -16,8 +17,30 @@ public record DspRuntimeSettings(
         int executionMaximumEntries
 ) {
 
+    public DspRuntimeSettings(
+            ArmeriaDspOpenRtbServer.Settings server,
+            String regionId,
+            Duration reservationLifetime,
+            Duration candidateAttemptCost,
+            Duration publicationReserve,
+            Duration executionRetention,
+            int executionMaximumEntries
+    ) {
+        this(
+                server,
+                ArmeriaDspOpenRtbServer.NoticeSettings.defaults(),
+                regionId,
+                reservationLifetime,
+                candidateAttemptCost,
+                publicationReserve,
+                executionRetention,
+                executionMaximumEntries
+        );
+    }
+
     public DspRuntimeSettings {
         Objects.requireNonNull(server, "server");
+        Objects.requireNonNull(notices, "notices");
         if (regionId == null || regionId.isBlank()) {
             throw new IllegalArgumentException("regionId must not be blank");
         }
@@ -51,8 +74,15 @@ public record DspRuntimeSettings(
                 millis(environment, "DSP_GRACEFUL_TIMEOUT_MS", 1_000),
                 integer(environment, "DSP_BID_WORKERS", 8)
         );
+        var notices = new ArmeriaDspOpenRtbServer.NoticeSettings(
+                environment.getOrDefault("DSP_WIN_NOTICE_PATH", "/notices/win"),
+                environment.getOrDefault("DSP_LOSS_NOTICE_PATH", "/notices/loss"),
+                environment.getOrDefault("DSP_BILLING_NOTICE_PATH", "/notices/billing"),
+                integer(environment, "DSP_NOTICE_WORKERS", 4)
+        );
         return new DspRuntimeSettings(
                 server,
+                notices,
                 required(environment, "DSP_REGION_ID"),
                 millis(environment, "DSP_RESERVATION_LIFETIME_MS", 2_000),
                 millisAllowZero(environment, "DSP_CANDIDATE_ATTEMPT_COST_MS", 2),

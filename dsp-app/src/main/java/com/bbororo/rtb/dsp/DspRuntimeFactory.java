@@ -66,7 +66,7 @@ public final class DspRuntimeFactory {
         var api = new DefaultDspOpenRtbApi(bidRequests, components.outcomes());
         var adapter = new DspOpenRtbHttpAdapter(api, monotonicNanos);
         var server = new ArmeriaDspOpenRtbServer(
-                settings.server(), adapter, clock, monotonicNanos);
+                settings.server(), settings.notices(), adapter, clock, monotonicNanos);
         return new DspRuntime(server);
     }
 

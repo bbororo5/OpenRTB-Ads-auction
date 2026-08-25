@@ -115,8 +115,10 @@ class DspBoundaryTest {
         var allowed = new ArrayList<String>();
         allowed.add("java..");
         allowed.add("javax..");
-        if ("openrtb".equals(component)) {
+        if ("openrtb".equals(component) || "campaignruntime".equals(component)) {
             allowed.add("com.fasterxml.jackson..");
+        }
+        if ("openrtb".equals(component)) {
             allowed.add("com.linecorp.armeria..");
         }
         for (String dspDependency : dspDependencies) {
