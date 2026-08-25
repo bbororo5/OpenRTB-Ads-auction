@@ -100,6 +100,38 @@ class ArmeriaDspOpenRtbServerTest {
         }
     }
 
+    @Test
+    void servesAuthenticatedNoticesOnASeparatedWorker() throws Exception {
+        AtomicReference<String> noticeThread = new AtomicReference<>();
+        AtomicReference<AuctionNotice> captured = new AtomicReference<>();
+        var api = api(
+                ignored -> NoContent.INSTANCE,
+                notice -> {
+                    noticeThread.set(Thread.currentThread().getName());
+                    captured.set(notice);
+                    return CompletableFuture.completedFuture(NoticeHttpResult.ACCEPTED);
+                }
+        );
+        try (var server = server(api, 1)) {
+            server.start();
+
+            HttpResponse<byte[]> response = client().send(
+                    HttpRequest.newBuilder(URI.create(
+                                    "http://127.0.0.1:" + server.activePort()
+                                            + "/notices/billing?token=opaque-token"))
+                            .header(ArmeriaDspOpenRtbServer.AUTHENTICATED_SSP_HEADER, "ssp-1")
+                            .GET()
+                            .build(),
+                    HttpResponse.BodyHandlers.ofByteArray()
+            );
+
+            assertEquals(204, response.statusCode());
+            assertTrue(noticeThread.get().startsWith("dsp-notice-worker-"));
+            assertEquals(OpenRtbMessages.NoticeKind.BILLING, captured.get().kind());
+            assertEquals("opaque-token", captured.get().opaqueToken());
+        }
+    }
+
     private static ArmeriaDspOpenRtbServer server(DspOpenRtbApi api, int bidWorkers) {
         return server(api, bidWorkers, 64 * 1_024);
     }
@@ -179,6 +211,13 @@ class ArmeriaDspOpenRtbServerTest {
     }
 
     private static DspOpenRtbApi api(BidHandler handler) {
+        return api(
+                handler,
+                ignored -> CompletableFuture.completedFuture(NoticeHttpResult.ACCEPTED)
+        );
+    }
+
+    private static DspOpenRtbApi api(BidHandler handler, NoticeHandler noticeHandler) {
         return new DspOpenRtbApi() {
             @Override
             public BidHttpResult handleBid(AuthenticatedBidRequest request) {
@@ -187,7 +226,7 @@ class ArmeriaDspOpenRtbServerTest {
 
             @Override
             public CompletionStage<NoticeHttpResult> handleNotice(AuctionNotice notice) {
-                return CompletableFuture.completedFuture(NoticeHttpResult.ACCEPTED);
+                return noticeHandler.handle(notice);
             }
         };
     }
@@ -203,5 +242,10 @@ class ArmeriaDspOpenRtbServerTest {
     @FunctionalInterface
     private interface BidHandler {
         BidHttpResult handle(AuthenticatedBidRequest request);
+    }
+
+    @FunctionalInterface
+    private interface NoticeHandler {
+        CompletionStage<NoticeHttpResult> handle(AuctionNotice notice);
     }
 }

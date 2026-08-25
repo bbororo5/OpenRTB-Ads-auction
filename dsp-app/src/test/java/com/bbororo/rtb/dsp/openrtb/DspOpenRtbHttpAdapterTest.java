@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.bbororo.rtb.dsp.openrtb.DspOpenRtbHttpAdapter.Request;
+import com.bbororo.rtb.dsp.openrtb.DspOpenRtbHttpAdapter.NoticeRequest;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuctionNotice;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.Bid;
@@ -127,6 +128,36 @@ class DspOpenRtbHttpAdapterTest {
         assertEquals(0, calls.get());
     }
 
+    @Test
+    void mapsNoticeProcessingResultsToRetrySafeHttpStatuses() {
+        AtomicReference<AuctionNotice> captured = new AtomicReference<>();
+        var accepted = new DspOpenRtbHttpAdapter(api(
+                ignored -> NoContent.INSTANCE,
+                notice -> {
+                    captured.set(notice);
+                    return CompletableFuture.completedFuture(NoticeHttpResult.ACCEPTED);
+                }
+        ));
+        var invalid = new DspOpenRtbHttpAdapter(api(
+                ignored -> NoContent.INSTANCE,
+                ignored -> CompletableFuture.completedFuture(NoticeHttpResult.INVALID)
+        ));
+        var unavailable = new DspOpenRtbHttpAdapter(api(
+                ignored -> NoContent.INSTANCE,
+                ignored -> CompletableFuture.completedFuture(
+                        NoticeHttpResult.TEMPORARILY_UNAVAILABLE)
+        ));
+        var request = new NoticeRequest(
+                "GET", "ssp-1", OpenRtbMessages.NoticeKind.BILLING,
+                "opaque-token", RECEIVED_AT);
+
+        assertEquals(204, accepted.handleNotice(request).toCompletableFuture().join().statusCode());
+        assertEquals(400, invalid.handleNotice(request).toCompletableFuture().join().statusCode());
+        assertEquals(503, unavailable.handleNotice(request).toCompletableFuture().join().statusCode());
+        assertEquals("ssp-1", captured.get().sspId());
+        assertEquals("opaque-token", captured.get().opaqueToken());
+    }
+
     private static Request request(String contentType, String body) {
         return request(contentType, body.getBytes(StandardCharsets.UTF_8));
     }
@@ -159,6 +190,13 @@ class DspOpenRtbHttpAdapterTest {
     }
 
     private static DspOpenRtbApi api(BidHandler handler) {
+        return api(
+                handler,
+                ignored -> CompletableFuture.completedFuture(NoticeHttpResult.ACCEPTED)
+        );
+    }
+
+    private static DspOpenRtbApi api(BidHandler handler, NoticeHandler noticeHandler) {
         return new DspOpenRtbApi() {
             @Override
             public BidHttpResult handleBid(AuthenticatedBidRequest request) {
@@ -167,7 +205,7 @@ class DspOpenRtbHttpAdapterTest {
 
             @Override
             public CompletionStage<NoticeHttpResult> handleNotice(AuctionNotice notice) {
-                return CompletableFuture.completedFuture(NoticeHttpResult.ACCEPTED);
+                return noticeHandler.handle(notice);
             }
         };
     }
@@ -175,5 +213,10 @@ class DspOpenRtbHttpAdapterTest {
     @FunctionalInterface
     private interface BidHandler {
         BidHttpResult handle(AuthenticatedBidRequest request);
+    }
+
+    @FunctionalInterface
+    private interface NoticeHandler {
+        CompletionStage<NoticeHttpResult> handle(AuctionNotice notice);
     }
 }

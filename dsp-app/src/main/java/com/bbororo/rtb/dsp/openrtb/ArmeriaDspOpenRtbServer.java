@@ -8,6 +8,7 @@ import com.linecorp.armeria.common.HttpStatus;
 import com.linecorp.armeria.common.ResponseHeaders;
 import com.linecorp.armeria.server.Server;
 import com.linecorp.armeria.server.ServiceRequestContext;
+import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeKind;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,13 +29,14 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
 
     private final Server server;
     private final ThreadPoolExecutor bidExecutor;
+    private final ThreadPoolExecutor noticeExecutor;
 
     public ArmeriaDspOpenRtbServer(
             Settings settings,
             DspOpenRtbHttpAdapter adapter,
             Clock clock
     ) {
-        this(settings, adapter, clock, System::nanoTime);
+        this(settings, NoticeSettings.defaults(), adapter, clock, System::nanoTime);
     }
 
     public ArmeriaDspOpenRtbServer(
@@ -43,7 +45,18 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
             Clock clock,
             LongSupplier monotonicNanos
     ) {
+        this(settings, NoticeSettings.defaults(), adapter, clock, monotonicNanos);
+    }
+
+    public ArmeriaDspOpenRtbServer(
+            Settings settings,
+            NoticeSettings noticeSettings,
+            DspOpenRtbHttpAdapter adapter,
+            Clock clock,
+            LongSupplier monotonicNanos
+    ) {
         Objects.requireNonNull(settings, "settings");
+        Objects.requireNonNull(noticeSettings, "noticeSettings");
         Objects.requireNonNull(adapter, "adapter");
         Objects.requireNonNull(clock, "clock");
         Objects.requireNonNull(monotonicNanos, "monotonicNanos");
@@ -58,6 +71,16 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
                 new ThreadPoolExecutor.AbortPolicy()
         );
         bidExecutor.prestartAllCoreThreads();
+        noticeExecutor = new ThreadPoolExecutor(
+                noticeSettings.noticeWorkers(),
+                noticeSettings.noticeWorkers(),
+                0,
+                TimeUnit.MILLISECONDS,
+                new SynchronousQueue<>(),
+                namedThreads("dsp-notice-worker-"),
+                new ThreadPoolExecutor.AbortPolicy()
+        );
+        noticeExecutor.prestartAllCoreThreads();
 
         server = Server.builder()
                 .http(settings.port())
@@ -69,7 +92,40 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
                 )
                 .service(settings.bidPath(), (ctx, request) -> serve(
                         ctx, request, adapter, clock, monotonicNanos))
+                .service(noticeSettings.winPath(), (ctx, request) -> serveNotice(
+                        ctx, request, NoticeKind.WIN, adapter, clock))
+                .service(noticeSettings.lossPath(), (ctx, request) -> serveNotice(
+                        ctx, request, NoticeKind.LOSS, adapter, clock))
+                .service(noticeSettings.billingPath(), (ctx, request) -> serveNotice(
+                        ctx, request, NoticeKind.BILLING, adapter, clock))
                 .build();
+    }
+
+    private HttpResponse serveNotice(
+            ServiceRequestContext context,
+            HttpRequest request,
+            NoticeKind kind,
+            DspOpenRtbHttpAdapter adapter,
+            Clock clock
+    ) {
+        String authenticatedSspId = request.headers().get(AUTHENTICATED_SSP_HEADER);
+        if (authenticatedSspId == null || authenticatedSspId.isBlank()) {
+            return toArmeriaResponse(DspOpenRtbHttpAdapter.Response.noContent(401));
+        }
+        String token = context.queryParam("token");
+        if (token == null || token.isBlank()) {
+            return toArmeriaResponse(DspOpenRtbHttpAdapter.Response.noContent(400));
+        }
+        var notice = new DspOpenRtbHttpAdapter.NoticeRequest(
+                request.method().name(), authenticatedSspId, kind, token, clock.instant());
+        try {
+            return HttpResponse.of(CompletableFuture.supplyAsync(
+                            () -> adapter.handleNotice(notice), noticeExecutor)
+                    .thenCompose(stage -> stage)
+                    .thenApply(ArmeriaDspOpenRtbServer::toArmeriaResponse));
+        } catch (RejectedExecutionException rejected) {
+            return toArmeriaResponse(DspOpenRtbHttpAdapter.Response.noContent(503));
+        }
     }
 
     public void start() {
@@ -134,13 +190,49 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
     public void close() {
         server.stop().join();
         bidExecutor.shutdown();
+        noticeExecutor.shutdown();
         try {
             if (!bidExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
                 bidExecutor.shutdownNow();
             }
+            if (!noticeExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                noticeExecutor.shutdownNow();
+            }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             bidExecutor.shutdownNow();
+            noticeExecutor.shutdownNow();
+        }
+    }
+
+    public record NoticeSettings(
+            String winPath,
+            String lossPath,
+            String billingPath,
+            int noticeWorkers
+    ) {
+        public NoticeSettings {
+            requireAbsolutePath(winPath, "winPath");
+            requireAbsolutePath(lossPath, "lossPath");
+            requireAbsolutePath(billingPath, "billingPath");
+            if (winPath.equals(lossPath) || winPath.equals(billingPath)
+                    || lossPath.equals(billingPath)) {
+                throw new IllegalArgumentException("notice paths must be distinct");
+            }
+            if (noticeWorkers <= 0) {
+                throw new IllegalArgumentException("noticeWorkers must be positive");
+            }
+        }
+
+        public static NoticeSettings defaults() {
+            return new NoticeSettings(
+                    "/notices/win", "/notices/loss", "/notices/billing", 4);
+        }
+
+        private static void requireAbsolutePath(String value, String name) {
+            if (value == null || !value.startsWith("/")) {
+                throw new IllegalArgumentException(name + " must be absolute");
+            }
         }
     }
 

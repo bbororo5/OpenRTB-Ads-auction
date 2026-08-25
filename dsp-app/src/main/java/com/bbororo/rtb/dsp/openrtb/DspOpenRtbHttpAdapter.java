@@ -3,12 +3,17 @@ package com.bbororo.rtb.dsp.openrtb;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuthenticatedBidRequest;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.BidResponse;
 import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoContent;
+import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.AuctionNotice;
+import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeHttpResult;
+import com.bbororo.rtb.dsp.openrtb.OpenRtbMessages.NoticeKind;
 import com.bbororo.rtb.dsp.contract.AuctionDeadline;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.LongSupplier;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /** 인증 게이트웨이 뒤에서 OpenRTB 입찰 HTTP 의미를 DSP 컴포넌트 호출로 변환한다. */
 public final class DspOpenRtbHttpAdapter {
@@ -83,6 +88,34 @@ public final class DspOpenRtbHttpAdapter {
         }
     }
 
+    public CompletionStage<Response> handleNotice(NoticeRequest request) {
+        Objects.requireNonNull(request, "request");
+        if (!"GET".equalsIgnoreCase(request.method())) {
+            return CompletableFuture.completedFuture(Response.noContent(405));
+        }
+        CompletionStage<NoticeHttpResult> processing;
+        try {
+            processing = Objects.requireNonNull(api.handleNotice(new AuctionNotice(
+                    request.authenticatedSspId(),
+                    request.kind(),
+                    request.opaqueToken(),
+                    request.receivedAt()
+            )), "DspOpenRtbApi returned null");
+        } catch (RuntimeException failure) {
+            return CompletableFuture.completedFuture(Response.noContent(500));
+        }
+        return processing.handle((result, failure) -> {
+            if (failure != null || result == null) {
+                return Response.noContent(500);
+            }
+            return switch (result) {
+                case ACCEPTED -> Response.noContent(204);
+                case INVALID -> Response.noContent(400);
+                case TEMPORARILY_UNAVAILABLE -> Response.noContent(503);
+            };
+        });
+    }
+
     private static boolean isJson(String contentType) {
         if (contentType == null || contentType.isBlank()) {
             return true;
@@ -132,6 +165,28 @@ public final class DspOpenRtbHttpAdapter {
         @Override
         public byte[] body() {
             return body.clone();
+        }
+    }
+
+    public record NoticeRequest(
+            String method,
+            String authenticatedSspId,
+            NoticeKind kind,
+            String opaqueToken,
+            Instant receivedAt
+    ) {
+        public NoticeRequest {
+            if (method == null || method.isBlank()) {
+                throw new IllegalArgumentException("method must not be blank");
+            }
+            if (authenticatedSspId == null || authenticatedSspId.isBlank()) {
+                throw new IllegalArgumentException("authenticatedSspId must not be blank");
+            }
+            Objects.requireNonNull(kind, "kind");
+            if (opaqueToken == null || opaqueToken.isBlank()) {
+                throw new IllegalArgumentException("opaqueToken must not be blank");
+            }
+            Objects.requireNonNull(receivedAt, "receivedAt");
         }
     }
 
