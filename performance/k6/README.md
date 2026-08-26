@@ -12,6 +12,8 @@
 | `load-capacity.js` | 시간 초과 DSP를 뺈 기초 처리량 진단 |
 | `load-baseline.js` | 시간 초과 DSP의 격리 확인 |
 | `overload-recovery.js` | 과부하 후 회복 확인 |
+| `stage8c-capacity.js` | 확정 ASR의 500 RPS·10분·p99 50ms와 낙찰률 검증 |
+| `stage8c-overload-recovery.js` | 500→1,000→100 RPS에서 보호 처리량·명시적 거절·회복 검증 |
 
 ## 실행
 
@@ -27,6 +29,23 @@ RPS=100 DURATION=1m \
   docker compose -f docker-compose.perf.yml --profile test run --rm k6-load-capacity
 ```
 
+Stage 8C 합격 시험은 공급자 설정·프로젝트 DSP·외부 DSP 두 개가 준비된 대상에서 실행한다.
+
+```bash
+BASE_URL=https://stage8c.example RPS=500 DURATION=10m \
+  k6 run performance/k6/stage8c-capacity.js
+
+BASE_URL=https://stage8c.example \
+  k6 run performance/k6/stage8c-overload-recovery.js
+```
+
+빠른 문법·연결 확인 때만 시간을 줄인다. 축소 실행 결과는 합격 증거가 아니다.
+
+```bash
+BASE_URL=http://localhost:8080 RPS=10 DURATION=10s \
+  k6 run performance/k6/stage8c-capacity.js
+```
+
 정리:
 
 ```bash
@@ -40,4 +59,4 @@ docker compose -f docker-compose.perf.yml down
 - 성능만 보지 말고 낙찰 정확성, DSP 결과 수, 예산 불변식을 함께 확인한다.
 - 합격 시험은 대상과 분리된 부하 발생기, 전체 데이터, 장애 주입, 시험 전후 예산 대조를 포함해야 한다.
 
-최종 합격 기준은 [부하·데이터·검증 기준](../../docs/requirements/workload-data-verification.md)을 따른다.
+최종 합격 기준은 [부하·데이터·검증 기준](../../docs/requirements/workload.md)을 따른다.
