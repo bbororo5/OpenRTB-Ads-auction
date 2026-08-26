@@ -31,6 +31,8 @@ RPS=100 DURATION=1m \
 
 Stage 8C 합격 시험은 공급자 설정·프로젝트 DSP·외부 DSP 두 개가 준비된 대상에서 실행한다.
 
+AWS 분리 호스트 배포·증거 수집은 [Stage 8C AWS 배포 자동화](../../docs/architecture/implementation/stage8c-aws-deployment.md)를 따른다.
+
 ```bash
 BASE_URL=https://stage8c.example RPS=500 DURATION=10m \
   k6 run performance/k6/stage8c-capacity.js

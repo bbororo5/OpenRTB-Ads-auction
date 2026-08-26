@@ -14,3 +14,4 @@ monitoring/prometheus/prometheus.cloud.yml
 
 infrastructure/aws-stage8c/node_modules/
 infrastructure/aws-stage8c/cdk.out/
+infrastructure/aws-stage8c/cdk-outputs.json
