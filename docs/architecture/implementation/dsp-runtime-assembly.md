@@ -64,3 +64,5 @@ ArmeriaDspOpenRtbServer
 - SSP `OpenRtb26Codec`과 두 애플리케이션 실행 진입점을 함께 올린 전체 왕복
 - 입찰·통지 작업자 포화와 p99 보호 측정
 - 원장·Outcome DB 장애, 부분 초기 리스, 종료 중 진행 작업의 장애 주입
+
+8C 자동 검증 경계와 합격 실행 방법은 [DSP 8C 운영 검증](dsp-operational-verification.md)에 기록한다. 실제 SSP↔DSP 왕복, 작업자 양방향 포화 격리, Outcome DB 단절·복구, 부분 초기 리스와 진행 중 종료 시험을 자동화했다. 분리 호스트의 500 RPS·과부하 합격 수치는 실행 전이므로 8C 완료로 표시하지 않는다.
