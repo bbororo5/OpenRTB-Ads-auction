@@ -19,6 +19,7 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
 
 /** Armeria를 OpenRTB HTTP 어댑터 바깥에만 두는 DSP 전송 서버다. */
@@ -30,6 +31,7 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
     private final Server server;
     private final ThreadPoolExecutor bidExecutor;
     private final ThreadPoolExecutor noticeExecutor;
+    private final AtomicBoolean acceptingRequests = new AtomicBoolean();
 
     public ArmeriaDspOpenRtbServer(
             Settings settings,
@@ -108,6 +110,9 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
             DspOpenRtbHttpAdapter adapter,
             Clock clock
     ) {
+        if (!acceptingRequests.get()) {
+            return toArmeriaResponse(DspOpenRtbHttpAdapter.Response.noContent(503));
+        }
         String authenticatedSspId = request.headers().get(AUTHENTICATED_SSP_HEADER);
         if (authenticatedSspId == null || authenticatedSspId.isBlank()) {
             return toArmeriaResponse(DspOpenRtbHttpAdapter.Response.noContent(401));
@@ -129,7 +134,13 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
     }
 
     public void start() {
-        server.start().join();
+        acceptingRequests.set(true);
+        try {
+            server.start().join();
+        } catch (RuntimeException failure) {
+            acceptingRequests.set(false);
+            throw failure;
+        }
     }
 
     public int activePort() {
@@ -143,6 +154,9 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
             Clock clock,
             LongSupplier monotonicNanos
     ) {
+        if (!acceptingRequests.get()) {
+            return toArmeriaResponse(DspOpenRtbHttpAdapter.Response.noContent(503));
+        }
         Instant receivedAt = clock.instant();
         long receivedNanos = monotonicNanos.getAsLong();
         String authenticatedSspId = request.headers().get(AUTHENTICATED_SSP_HEADER);
@@ -188,7 +202,7 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
 
     @Override
     public void close() {
-        server.stop().join();
+        acceptingRequests.set(false);
         bidExecutor.shutdown();
         noticeExecutor.shutdown();
         try {
@@ -203,6 +217,7 @@ public final class ArmeriaDspOpenRtbServer implements AutoCloseable {
             bidExecutor.shutdownNow();
             noticeExecutor.shutdownNow();
         }
+        server.stop().join();
     }
 
     public record NoticeSettings(

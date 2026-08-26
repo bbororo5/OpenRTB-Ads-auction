@@ -1,6 +1,7 @@
 package com.bbororo.rtb.dsp.openrtb;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.bbororo.rtb.dsp.openrtb.ArmeriaDspOpenRtbServer.Settings;
@@ -132,6 +133,90 @@ class ArmeriaDspOpenRtbServerTest {
         }
     }
 
+    @Test
+    void protectsBiddingWhenTheNoticeWorkerIsOccupied() throws Exception {
+        CountDownLatch noticeEntered = new CountDownLatch(1);
+        CountDownLatch releaseNotice = new CountDownLatch(1);
+        var api = api(
+                ignored -> NoContent.INSTANCE,
+                ignored -> {
+                    noticeEntered.countDown();
+                    await(releaseNotice);
+                    return CompletableFuture.completedFuture(NoticeHttpResult.ACCEPTED);
+                }
+        );
+        try (var server = server(api, 1, 1, 64 * 1_024)) {
+            server.start();
+            CompletableFuture<HttpResponse<byte[]>> occupied = sendNoticeAsync(server);
+            assertTrue(noticeEntered.await(1, TimeUnit.SECONDS));
+
+            HttpResponse<byte[]> rejectedNotice = sendNotice(server);
+            HttpResponse<byte[]> protectedBid = send(server, validRequest(), true);
+            releaseNotice.countDown();
+
+            assertEquals(503, rejectedNotice.statusCode());
+            assertEquals(204, protectedBid.statusCode());
+            assertEquals(204, occupied.join().statusCode());
+        } finally {
+            releaseNotice.countDown();
+        }
+    }
+
+    @Test
+    void protectsNoticesWhenTheBidWorkerIsOccupied() throws Exception {
+        CountDownLatch bidEntered = new CountDownLatch(1);
+        CountDownLatch releaseBid = new CountDownLatch(1);
+        var api = api(request -> {
+            bidEntered.countDown();
+            await(releaseBid);
+            return NoContent.INSTANCE;
+        });
+        try (var server = server(api, 1, 1, 64 * 1_024)) {
+            server.start();
+            CompletableFuture<HttpResponse<byte[]>> occupied = sendAsync(
+                    server, validRequest(), true);
+            assertTrue(bidEntered.await(1, TimeUnit.SECONDS));
+
+            HttpResponse<byte[]> protectedNotice = sendNotice(server);
+            HttpResponse<byte[]> rejectedBid = send(server, validRequest(), true);
+            releaseBid.countDown();
+
+            assertEquals(204, protectedNotice.statusCode());
+            assertEquals(503, rejectedBid.statusCode());
+            assertEquals(204, occupied.join().statusCode());
+        } finally {
+            releaseBid.countDown();
+        }
+    }
+
+    @Test
+    void drainsAnAcceptedBidBeforeStoppingItsWorker() throws Exception {
+        CountDownLatch bidEntered = new CountDownLatch(1);
+        CountDownLatch releaseBid = new CountDownLatch(1);
+        var server = server(api(request -> {
+            bidEntered.countDown();
+            await(releaseBid);
+            return NoContent.INSTANCE;
+        }), 1);
+        try {
+            server.start();
+            CompletableFuture<HttpResponse<byte[]>> accepted = sendAsync(
+                    server, validRequest(), true);
+            assertTrue(bidEntered.await(1, TimeUnit.SECONDS));
+
+            CompletableFuture<Void> closing = CompletableFuture.runAsync(server::close);
+            Thread.sleep(50);
+            assertFalse(closing.isDone());
+
+            releaseBid.countDown();
+            assertEquals(204, accepted.join().statusCode());
+            closing.get(3, TimeUnit.SECONDS);
+        } finally {
+            releaseBid.countDown();
+            server.close();
+        }
+    }
+
     private static ArmeriaDspOpenRtbServer server(DspOpenRtbApi api, int bidWorkers) {
         return server(api, bidWorkers, 64 * 1_024);
     }
@@ -139,6 +224,15 @@ class ArmeriaDspOpenRtbServerTest {
     private static ArmeriaDspOpenRtbServer server(
             DspOpenRtbApi api,
             int bidWorkers,
+            long maxRequestBytes
+    ) {
+        return server(api, bidWorkers, 4, maxRequestBytes);
+    }
+
+    private static ArmeriaDspOpenRtbServer server(
+            DspOpenRtbApi api,
+            int bidWorkers,
+            int noticeWorkers,
             long maxRequestBytes
     ) {
         return new ArmeriaDspOpenRtbServer(
@@ -151,8 +245,11 @@ class ArmeriaDspOpenRtbServerTest {
                         Duration.ofSeconds(1),
                         bidWorkers
                 ),
+                new ArmeriaDspOpenRtbServer.NoticeSettings(
+                        "/notices/win", "/notices/loss", "/notices/billing", noticeWorkers),
                 new DspOpenRtbHttpAdapter(api),
-                Clock.systemUTC()
+                Clock.systemUTC(),
+                System::nanoTime
         );
     }
 
@@ -172,6 +269,29 @@ class ArmeriaDspOpenRtbServerTest {
     ) {
         return client().sendAsync(request(server, body, authenticated),
                 HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private static HttpResponse<byte[]> sendNotice(
+            ArmeriaDspOpenRtbServer server
+    ) throws Exception {
+        return client().send(noticeRequest(server), HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private static CompletableFuture<HttpResponse<byte[]>> sendNoticeAsync(
+            ArmeriaDspOpenRtbServer server
+    ) {
+        return client().sendAsync(
+                noticeRequest(server), HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private static HttpRequest noticeRequest(ArmeriaDspOpenRtbServer server) {
+        return HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + server.activePort()
+                                + "/notices/billing?token=opaque-token"))
+                .timeout(Duration.ofSeconds(1))
+                .header(ArmeriaDspOpenRtbServer.AUTHENTICATED_SSP_HEADER, "ssp-1")
+                .GET()
+                .build();
     }
 
     private static HttpRequest request(
