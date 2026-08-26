@@ -1,0 +1,22 @@
+{
+  "name": "rtb-stage8c-aws",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "node --import tsx --test test/**/*.test.ts && node --test ../../performance/fixtures/stage8c/server.test.mjs",
+    "cdk": "cdk",
+    "stage8c": "tsx scripts/stage8c.ts"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.266.0",
+    "constructs": "10.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "aws-cdk": "2.1138.0",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2"
+  }
+}

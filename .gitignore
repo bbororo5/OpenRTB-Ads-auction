@@ -11,3 +11,6 @@ out/
 .env.grafana-cloud
 .secrets/
 monitoring/prometheus/prometheus.cloud.yml
+
+infrastructure/aws-stage8c/node_modules/
+infrastructure/aws-stage8c/cdk.out/

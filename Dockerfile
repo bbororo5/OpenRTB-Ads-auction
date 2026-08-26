@@ -15,6 +15,7 @@ WORKDIR /workspace
 COPY settings.gradle build.gradle ./
 COPY ssp-app ./ssp-app
 COPY dsp-app ./dsp-app
+RUN mkdir -p system-test
 
 RUN gradle --no-daemon ":${APP_MODULE}:installDist"
 
