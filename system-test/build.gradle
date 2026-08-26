@@ -1,0 +1,39 @@
+plugins {
+    id 'java'
+}
+
+dependencies {
+    testImplementation project(':ssp-app')
+    testImplementation project(':dsp-app')
+    testImplementation 'org.postgresql:postgresql:42.7.12'
+    testImplementation 'com.zaxxer:HikariCP:7.1.0'
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.21.0'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'stage-8c-system'
+    }
+}
+
+tasks.register('stage8cSystemTest', Test) {
+    description = 'Runs the Stage 8C SSP-to-DSP operational round trip against PostgreSQL.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'stage-8c-system'
+    }
+
+    systemProperty 'stage8c.ssp.jdbc-url',
+            providers.gradleProperty('stage8cSspJdbcUrl').getOrElse('jdbc:postgresql://localhost:15432/rtb')
+    systemProperty 'stage8c.ledger.jdbc-url',
+            providers.gradleProperty('stage8cLedgerJdbcUrl').getOrElse('jdbc:postgresql://localhost:35432/rtb')
+    systemProperty 'stage8c.outcome.jdbc-url',
+            providers.gradleProperty('stage8cOutcomeJdbcUrl').getOrElse('jdbc:postgresql://localhost:35532/rtb')
+    systemProperty 'stage8c.store.username',
+            providers.gradleProperty('stage8cStoreUsername').getOrElse('postgres')
+    systemProperty 'stage8c.store.password',
+            providers.gradleProperty('stage8cStorePassword').getOrElse('local-dev-postgres-password')
+}

@@ -70,7 +70,7 @@ public final class DspRuntimeFactory {
                 settings, components, clock, monotonicNanos, bidIds));
     }
 
-    static DspRuntime createOperational(
+    public static DspRuntime createOperational(
             DspRuntimeSettings settings,
             DspOperationalSettings operations
     ) {

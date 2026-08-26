@@ -64,6 +64,13 @@ public final class SspRuntime implements AutoCloseable {
         stopped.await();
     }
 
+    public synchronized int activePort() {
+        if (!started || closed) {
+            throw new IllegalStateException("SSP runtime is not running");
+        }
+        return server.port();
+    }
+
     @Override
     public synchronized void close() {
         if (closed) {

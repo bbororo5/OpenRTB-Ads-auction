@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -49,12 +50,28 @@ public final class SspRuntimeFactory {
     public static SspRuntime createFromEnvironment() {
         return create(
                 SspRuntimeSettings.fromEnvironment(System.getenv()),
-                Clock.systemUTC()
+                Clock.systemUTC(),
+                RegionalDataSourceFactory.createFromEnvironment()
         );
     }
 
     static SspRuntime create(SspRuntimeSettings settings, Clock clock) {
-        HikariDataSource dataSource = RegionalDataSourceFactory.createFromEnvironment();
+        return create(
+                settings,
+                clock,
+                RegionalDataSourceFactory.createFromEnvironment()
+        );
+    }
+
+    /** 명시적 운영 설정과 지역 DB 연결 풀로 SSP 객체 그래프를 조립한다. */
+    public static SspRuntime create(
+            SspRuntimeSettings settings,
+            Clock clock,
+            HikariDataSource dataSource
+    ) {
+        Objects.requireNonNull(settings, "settings");
+        Objects.requireNonNull(clock, "clock");
+        Objects.requireNonNull(dataSource, "dataSource");
         ProviderTrustControlPlane trustControl = ProviderTrustControlPlane.start(dataSource);
         ExecutorService auctionExecutor = null;
         HttpClient noticeClient = null;

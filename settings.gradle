@@ -16,3 +16,4 @@ rootProject.name = 'low-latency-openrtb-auction'
 
 include 'ssp-app'
 include 'dsp-app'
+include 'system-test'
