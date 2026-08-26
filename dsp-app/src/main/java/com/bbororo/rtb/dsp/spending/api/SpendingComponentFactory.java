@@ -22,6 +22,7 @@ public final class SpendingComponentFactory {
                 authority,
                 authority,
                 authority,
+                authority,
                 expirations
         );
     }
@@ -29,6 +30,7 @@ public final class SpendingComponentFactory {
     public record Components(
             ReservationAuthority reservations,
             ReservationFinalizer finalizer,
+            ReservationStateView reservationStates,
             LeaseInstaller leaseInstaller,
             CampaignPacingView pacing,
             LocalLeaseSupplyView supply,
@@ -37,6 +39,7 @@ public final class SpendingComponentFactory {
         public Components {
             Objects.requireNonNull(reservations, "reservations");
             Objects.requireNonNull(finalizer, "finalizer");
+            Objects.requireNonNull(reservationStates, "reservationStates");
             Objects.requireNonNull(leaseInstaller, "leaseInstaller");
             Objects.requireNonNull(pacing, "pacing");
             Objects.requireNonNull(supply, "supply");

@@ -5,6 +5,7 @@ import static com.bbororo.rtb.dsp.outcome.api.ReservationOutcomeMessages.Monetar
 import static com.bbororo.rtb.dsp.outcome.api.ReservationOutcomeMessages.NoticeProcessingStatus.DUPLICATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.CommitReservation;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ExpireReservation;
@@ -31,6 +32,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
@@ -71,7 +73,7 @@ class ReservationOutcomeProcessorTest {
             );
             return CompletableFuture.completedFuture(new OutcomeConflict(billing, event.kind()));
         };
-        var service = new ReservationExpirationService(journal, local);
+        var service = new ReservationExpirationService(journal, local, ignored -> true);
         var reference = new ReservationReference("campaign-1", leaseId(), "reservation-1");
 
         boolean cleanOutcome = service.expire(new ReservationExpiration(
@@ -90,7 +92,7 @@ class ReservationOutcomeProcessorTest {
         ReservationOutcomeStore journal = event -> attempts.incrementAndGet() == 1
                 ? CompletableFuture.failedFuture(new IllegalStateException("store unavailable"))
                 : CompletableFuture.completedFuture(new OutcomeChosen(event, true));
-        var service = new ReservationExpirationService(journal, local);
+        var service = new ReservationExpirationService(journal, local, ignored -> true);
         var queue = new ArrayBlockingQueue<ReservationExpiration>(1);
         queue.add(new ReservationExpiration(
                 new ReservationReference("campaign-1", leaseId(), "reservation-1"),
@@ -106,6 +108,27 @@ class ReservationOutcomeProcessorTest {
         }
 
         assertEquals(2, attempts.get());
+    }
+
+    @Test
+    void expirationSkipsTheJournalWhenTheLocalReservationAlreadyFinished() {
+        var local = new CapturingLocalBudget();
+        AtomicBoolean journalCalled = new AtomicBoolean();
+        ReservationOutcomeStore journal = event -> {
+            journalCalled.set(true);
+            return CompletableFuture.completedFuture(new OutcomeChosen(event, true));
+        };
+        var service = new ReservationExpirationService(journal, local, ignored -> false);
+
+        boolean cleanOutcome = service.expire(new ReservationExpiration(
+                new ReservationReference("campaign-1", leaseId(), "reservation-1"),
+                1_000,
+                EXPIRES_AT
+        )).toCompletableFuture().join();
+
+        assertTrue(cleanOutcome);
+        assertEquals(false, journalCalled.get());
+        assertEquals(null, local.expired);
     }
 
     private static ReservationNoticeVerifier codec() {

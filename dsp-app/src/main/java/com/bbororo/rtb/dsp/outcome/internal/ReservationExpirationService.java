@@ -4,11 +4,13 @@ import static com.bbororo.rtb.dsp.outcome.api.ReservationOutcomeMessages.Monetar
 
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationExpiration;
 import com.bbororo.rtb.dsp.spending.api.ReservationFinalizer;
+import com.bbororo.rtb.dsp.spending.api.ReservationStateView;
 import com.bbororo.rtb.dsp.outcome.api.ReservationOutcomeMessages.MonetaryNoticeEvent;
 import com.bbororo.rtb.dsp.outcome.api.ReservationOutcomeMessages.OutcomeConflict;
 import com.bbororo.rtb.dsp.outcome.api.ReservationOutcomeMessages.OutcomeIgnored;
 import com.bbororo.rtb.dsp.outcome.spi.ReservationOutcomeStore;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /** 예약 만료를 먼저 내구 종결 사건으로 기록하고 로컬 권한에 재생한다. */
@@ -16,15 +18,24 @@ public final class ReservationExpirationService {
 
     private final ReservationOutcomeStore journal;
     private final ReservationOutcomeReplayer replayer;
+    private final ReservationStateView localState;
 
-    public ReservationExpirationService(ReservationOutcomeStore journal, ReservationFinalizer localBudget) {
+    public ReservationExpirationService(
+            ReservationOutcomeStore journal,
+            ReservationFinalizer localBudget,
+            ReservationStateView localState
+    ) {
         this.journal = Objects.requireNonNull(journal, "journal");
         this.replayer = new ReservationOutcomeReplayer(localBudget);
+        this.localState = Objects.requireNonNull(localState, "localState");
     }
 
     public CompletionStage<Boolean> expire(ReservationExpiration expiration) {
         Objects.requireNonNull(expiration, "expiration");
         var reference = expiration.reservation();
+        if (!localState.isPending(reference)) {
+            return CompletableFuture.completedFuture(true);
+        }
         var event = new MonetaryNoticeEvent(
                 DefaultReservationOutcomeProcessor.eventId(reference.reservationId(), EXPIRY),
                 EXPIRY,

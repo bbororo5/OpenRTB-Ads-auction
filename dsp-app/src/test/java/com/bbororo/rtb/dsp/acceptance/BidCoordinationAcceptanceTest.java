@@ -129,6 +129,7 @@ class BidCoordinationAcceptanceTest {
         var expirationService = new ReservationExpirationService(
                 candidate -> CompletableFuture.completedFuture(
                         new OutcomeChosen(candidate, true)),
+                fixture.spending(),
                 fixture.spending()
         );
         expirationService.expire(fixture.expirations().getFirst())

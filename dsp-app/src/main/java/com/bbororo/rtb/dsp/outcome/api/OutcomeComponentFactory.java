@@ -8,6 +8,7 @@ import com.bbororo.rtb.dsp.outcome.internal.ReservationExpirationWorker;
 import com.bbororo.rtb.dsp.proof.api.ReservationNoticeVerifier;
 import com.bbororo.rtb.dsp.spending.api.ReservationExpirationSource;
 import com.bbororo.rtb.dsp.spending.api.ReservationFinalizer;
+import com.bbororo.rtb.dsp.spending.api.ReservationStateView;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -27,6 +28,7 @@ public final class OutcomeComponentFactory {
             Executor jdbcExecutor,
             ReservationNoticeVerifier verifier,
             ReservationFinalizer localBudget,
+            ReservationStateView localState,
             ReservationExpirationSource expirations,
             Duration expirationRetryDelay,
             Consumer<Throwable> failureHandler
@@ -35,7 +37,7 @@ public final class OutcomeComponentFactory {
         var store = new PostgreSqlReservationOutcomeStore(dataSource, jdbcExecutor);
         var outcomeView = new PostgreSqlLeaseOutcomeView(dataSource, jdbcExecutor);
         var processor = new DefaultReservationOutcomeProcessor(verifier, store, localBudget);
-        var expirationService = new ReservationExpirationService(store, localBudget);
+        var expirationService = new ReservationExpirationService(store, localBudget, localState);
         var expirationWorker = new ReservationExpirationWorker(
                 expirations,
                 expirationService,

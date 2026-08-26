@@ -5,6 +5,7 @@ import com.bbororo.rtb.dsp.spending.api.LeaseInstaller;
 import com.bbororo.rtb.dsp.spending.api.LocalLeaseSupplyView;
 import com.bbororo.rtb.dsp.spending.api.ReservationAuthority;
 import com.bbororo.rtb.dsp.spending.api.ReservationFinalizer;
+import com.bbororo.rtb.dsp.spending.api.ReservationStateView;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.CommitReservation;
 import com.bbororo.rtb.dsp.spending.api.SpendingMessages.ExpireReservation;
@@ -33,6 +34,7 @@ import java.util.function.LongSupplier;
 public final class InMemoryLocalSpendingAuthority implements
         ReservationAuthority,
         ReservationFinalizer,
+        ReservationStateView,
         LeaseInstaller,
         CampaignPacingView,
         LocalLeaseSupplyView {
@@ -165,6 +167,13 @@ public final class InMemoryLocalSpendingAuthority implements
             return ReservationFinalization.UNKNOWN_RESERVATION;
         }
         return releaseCapacity(account.expire(command));
+    }
+
+    @Override
+    public boolean isPending(SpendingMessages.ReservationReference reservation) {
+        Objects.requireNonNull(reservation, "reservation");
+        CampaignSpendingAccount account = accounts.get(reservation.campaignId());
+        return account != null && account.isPending(reservation);
     }
 
     @Override

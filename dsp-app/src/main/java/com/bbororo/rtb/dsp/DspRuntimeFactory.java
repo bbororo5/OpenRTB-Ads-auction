@@ -126,6 +126,7 @@ public final class DspRuntimeFactory {
                     jdbcExecutor,
                     proof.verifier(),
                     spending.finalizer(),
+                    spending.reservationStates(),
                     spending.expirations(),
                     operations.expirationRetryDelay(),
                     DspRuntimeFactory::reportBackgroundFailure

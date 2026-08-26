@@ -235,6 +235,20 @@ final class CampaignSpendingAccount {
         }
     }
 
+    boolean isPending(ReservationReference reference) {
+        lock.lock();
+        try {
+            LeaseAccount lease = leases.get(reference.leaseId());
+            if (lease == null) {
+                return false;
+            }
+            Reservation reservation = lease.reservations.get(reference.reservationId());
+            return reservation != null && reservation.state() == ReservationState.RESERVED;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private FinalizationOutcome finalizeReservation(
             ReservationReference reference,
             long amountMicros,
