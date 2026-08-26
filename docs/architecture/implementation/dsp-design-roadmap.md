@@ -1,6 +1,6 @@
 # DSP 상세 설계 로드맵
 
-상태: 금액·리스·통지·캠페인 선택·로컬 입찰 실행권·입찰 조정 7A·7B 완료 · 8A 입찰 런타임·8B 운영 조립 완료 · 8C 자동화 구현·합격 측정 대기
+상태: 금액·리스·통지·캠페인 선택·로컬 입찰 실행권·입찰 조정 7A·7B 완료 · 8A 입찰 런타임·8B 운영 조립 완료 · 8C 로컬 진단 완료·분리 호스트 합격 측정 대기
 
 근거: [DSP 컴포넌트](../views/dsp-components.md), [DSP 기술 결정 경계](../technology/dsp.md)
 
@@ -229,7 +229,7 @@
 |---|---|---|
 | 8A 입찰 런타임 조립 | Bidding 실행 파사드, OpenRTB 애플리케이션 서비스, 검증된 실행 설정, HTTP 수직 E2E | 완료 |
 | 8B 운영 어댑터 조립 | 통지 HTTP 라우트, 캠페인 스냅숏·리스 공급·키 소스·Outcome DB 생성, 배경 작업자, `DspApplication.main` | 완료 |
-| 8C 운영 검증 | SSP 코덱 실제 왕복, p99 부하, 포화·DB 장애·종료 검증 | 자동화 구현·합격 측정 대기 |
+| 8C 운영 검증 | SSP 코덱 실제 왕복, p99 부하, 포화·DB 장애·종료 검증 | 로컬 병목 수정·분리 호스트 합격 측정 대기 |
 
 `DspRuntimeFactory.createFromEnvironment()`는 컴포넌트별 공개 팩토리만 호출한다. 시작은 Outcome 만료 작업자 → 초기 리스 공급·유지관리 → HTTP 순서고, 종료는 HTTP → 리스 → Outcome → JDBC 실행자 → DB 풀 역순이다. 실제 PostgreSQL 인수 시험은 초기 리스부터 HTTP `burl`과 Outcome 기록까지 확인한다. 상세 근거는 [DSP 런타임 8A·8B 조립](dsp-runtime-assembly.md)에 기록한다.
 

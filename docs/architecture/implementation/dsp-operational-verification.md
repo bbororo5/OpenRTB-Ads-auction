@@ -1,6 +1,6 @@
 # DSP 8C 운영 검증
 
-상태: 자동 검증 경계 구현 · 분리 호스트 용량 합격 실행 대기
+상태: 자동 검증 경계 구현 · 로컬 병목 수정 · 분리 호스트 용량 합격 실행 대기
 
 상위 문서: [DSP 설계 로드맵](dsp-design-roadmap.md), [부하·데이터·검증 기준](../../requirements/workload.md)
 
@@ -75,6 +75,8 @@ docker compose -f docker-compose.dsp-money-events.yml up -d dsp-money-seoul
 ```
 
 ## 부하 합격 판정
+
+2026-08-26~27 로컬 단일 호스트 실행에서 이미 종결된 LOSS 예약을 만료 worker가 다시 저널링하는 병목을 발견해 수정했다. 수정 후 conflict는 113,820건에서 0건으로, 프로젝트 낙찰률은 12.80%에서 23.66~26.28%로 회복했다. 다만 전체 토폴로지와 k6를 한 장비에 함께 둔 p99·504는 합격하지 못했으므로 최종 증거로 사용하지 않는다. 상세 수치와 다음 실행 조건은 [Stage 8C 로컬 부하 검증 보고서](stage8c-local-load-report.md)에 보존한다.
 
 기존 k6 스크립트는 초기 구현 진단용이므로 8C 합격에 사용하지 않는다. 전용 스크립트는 `constant-arrival-rate`로 도착률을 고정한다.
 
