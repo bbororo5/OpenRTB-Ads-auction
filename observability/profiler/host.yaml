@@ -1,0 +1,48 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13134
+
+receivers:
+  profiling:
+    samples_per_second: 97
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 192
+    spike_limit_mib: 48
+  resource:
+    attributes:
+      - key: host.name
+        value: ${env:HOST_ROLE}
+        action: upsert
+      - key: deployment.environment.name
+        value: ${env:DEPLOYMENT_ENVIRONMENT}
+        action: upsert
+
+exporters:
+  otlp_grpc/pyroscope:
+    endpoint: ${env:PYROSCOPE_OTLP_ENDPOINT}
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      queue_size: 2048
+    retry_on_failure:
+      enabled: true
+
+service:
+  extensions:
+    - health_check
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    profiles:
+      receivers:
+        - profiling
+      processors:
+        - memory_limiter
+        - resource
+      exporters:
+        - otlp_grpc/pyroscope

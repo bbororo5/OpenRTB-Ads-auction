@@ -20,6 +20,15 @@ datasources:
         enabled: true
       tracesToMetrics:
         datasourceUid: prometheus
+      tracesToProfiles:
+        customQuery: false
+        datasourceUid: pyroscope
+        profileTypeId: process_cpu:cpu:nanoseconds:cpu:nanoseconds
+        tags:
+          - key: service.name
+            value: service_name
+          - key: host.name
+            value: host_name
 
   - name: Loki
     uid: loki
@@ -34,3 +43,10 @@ datasources:
           matcherRegex: trace_id
           datasourceUid: tempo
           url: '$${__value.raw}'
+
+  - name: Pyroscope
+    uid: pyroscope
+    type: grafana-pyroscope-datasource
+    access: proxy
+    url: ${PYROSCOPE_URL}
+    editable: false

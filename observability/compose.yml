@@ -58,6 +58,41 @@ services:
       - "127.0.0.1:3100:3100"
     restart: unless-stopped
 
+  pyroscope:
+    image: grafana/pyroscope:2.3.0
+    command:
+      - -self-profiling.disable-push=true
+      - -usage-stats.enabled=false
+      - -compactor.blocks-retention-period=24h
+    volumes:
+      - pyroscope_data:/data
+    ports:
+      - "127.0.0.1:4040:4040"
+    restart: unless-stopped
+
+  otel-ebpf-profiler:
+    image: otel/opentelemetry-collector-ebpf-profiler:0.159.0
+    profiles:
+      - linux-profiles
+    command:
+      - --config=/etc/otelcol-ebpf-profiler/host.yaml
+      - --feature-gates=service.profilesSupport
+    environment:
+      HOST_ROLE: local
+      DEPLOYMENT_ENVIRONMENT: local-observability
+      PYROSCOPE_OTLP_ENDPOINT: pyroscope:4040
+    privileged: true
+    pid: host
+    volumes:
+      - ./profiler/host.yaml:/etc/otelcol-ebpf-profiler/host.yaml:ro
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    ports:
+      - "127.0.0.1:13134:13134"
+    depends_on:
+      - pyroscope
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:13.2.0
     environment:
@@ -67,6 +102,7 @@ services:
       PROMETHEUS_URL: http://prometheus:9090
       TEMPO_URL: http://tempo:3200
       LOKI_URL: http://loki:3100
+      PYROSCOPE_URL: http://pyroscope:4040
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
@@ -76,6 +112,7 @@ services:
       - prometheus
       - tempo
       - loki
+      - pyroscope
     restart: unless-stopped
 
   telemetrygen:
@@ -108,4 +145,5 @@ volumes:
   prometheus_data:
   tempo_data:
   loki_data:
+  pyroscope_data:
   grafana_data:

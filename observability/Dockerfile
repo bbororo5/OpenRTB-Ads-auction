@@ -6,6 +6,7 @@ COPY collector ./collector
 COPY prometheus ./prometheus
 COPY tempo ./tempo
 COPY loki ./loki
+COPY profiler ./profiler
 COPY grafana ./grafana
 
 CMD ["true"]
