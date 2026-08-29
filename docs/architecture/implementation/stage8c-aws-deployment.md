@@ -1,6 +1,6 @@
 # Stage 8C AWS 분리 호스트 배포 자동화
 
-상태: 인프라·시험 대역·최소 OpenTelemetry 스택·실행기 구현 완료 · 실제 AWS 배포 전
+상태: 인프라·시험 대역·OpenTelemetry 4-signal 스택·실행기 구현 완료 · 실제 AWS 배포 전
 
 ## 목적과 판정 경계
 
@@ -12,12 +12,12 @@ AWS VPC 10.42.0.0/24
 ├─ ssp      10.42.0.20  SSP JVM
 ├─ dsp      10.42.0.30  프로젝트 DSP JVM
 ├─ support  10.42.0.40  인증 게이트웨이 + 외부 DSP A/B + PostgreSQL 3개
-└─ observer 10.42.0.50  OTel Collector + Prometheus + Tempo + Grafana
+└─ observer 10.42.0.50  OTel Collector + Prometheus + Tempo + Loki + Pyroscope + Grafana
 ```
 
 - loadgen·SSP·DSP는 서로 CPU·메모리를 공유하지 않는다.
 - support의 세 DB는 한 EC2의 CPU·EBS를 공유한다. support가 먼저 포화되면 이 실험은 앱 한계가 아니라 DB 분리를 요구하는 증거다.
-- 각 호스트의 Collector는 host metrics를 노출하고 SSP·DSP의 Java Agent telemetry를 batch·retry한다. Observer의 Prometheus가 이를 scrape하고 Tempo가 trace를 보존한다.
+- 각 호스트의 Collector는 host metrics를 노출하고 SSP·DSP의 Java Agent metrics·traces·logs를 batch·retry한다. 별도 OTel eBPF Profiler는 모든 호스트의 CPU profile을 수집한다. Observer의 Prometheus·Tempo·Loki·Pyroscope가 네 신호를 보존하고 Grafana가 한 곳에서 조회한다.
 - 앱·DB 포트는 인터넷에 열지 않고 역할 Security Group 사이에만 허용한다.
 - NAT Gateway, Load Balancer, RDS를 생성하지 않는다. SSM 관리와 이미지 pull을 위해 다섯 EC2에 임시 public IPv4를 부여한다.
 - T 계열은 `standard` CPU credit 모드다. 크레딧 고갈 후에는 추가 과금 대신 throttle이 걸리므로 `CPUCreditBalance`를 성능 결과와 같이 판독한다.
@@ -57,6 +57,7 @@ npm run stage8c -- diff --profile YOUR_PROFILE
 npm run stage8c -- bootstrap --profile YOUR_PROFILE --ack-cost
 npm run stage8c -- deploy --profile YOUR_PROFILE --ack-cost
 npm run stage8c -- status --profile YOUR_PROFILE
+npm run stage8c -- observability --profile YOUR_PROFILE
 npm run stage8c -- smoke --profile YOUR_PROFILE
 ```
 
@@ -68,7 +69,7 @@ npm run stage8c -- overload --profile YOUR_PROFILE
 npm run stage8c -- collect --profile YOUR_PROFILE --label final
 ```
 
-`capacity`와 `overload`는 실행 전후에 다섯 호스트의 CPU·메모리·Docker 상태와 EC2 CPU credit·네트워크 지표를 `docs/evidence/performance/<date>/`에 남긴다.
+`capacity`와 `overload`는 실행 전후에 다섯 호스트의 CPU·메모리·Docker 상태와 EC2 CPU credit·네트워크 지표를 `docs/evidence/performance/<date>/`에 남긴다. Grafana는 SSM 터널로만 열며, Metrics → Traces → Logs → Profiles 순서의 병목 분해법과 신호별 인수 조건은 [OpenTelemetry OSS 관찰성 스택](../../../observability/README.md)을 따른다.
 
 실험 종료 즉시 스택을 회수한다.
 
