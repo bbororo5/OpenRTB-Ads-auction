@@ -29,6 +29,13 @@ wait_until_ready() {
   return 1
 }
 
+metric_sum() {
+  local url="$1"
+  local metric="$2"
+  curl --fail --silent --show-error "${url}" \
+    | awk -v metric="${metric}" '$1 == metric || index($1, metric "{") == 1 { sum += $NF } END { printf "%.0f", sum }'
+}
+
 docker compose -f "${observability_dir}/compose.yml" config --quiet
 
 docker run --rm \
@@ -85,6 +92,19 @@ wait_until_ready Loki http://127.0.0.1:3100/ready
 wait_until_ready Pyroscope http://127.0.0.1:4040/ready
 wait_until_ready Grafana http://127.0.0.1:3000/api/health
 
+for datasource_uid in prometheus tempo loki pyroscope; do
+  curl --fail --silent --show-error \
+    "http://127.0.0.1:3000/api/datasources/uid/${datasource_uid}" \
+    | grep "\"uid\":\"${datasource_uid}\"" >/dev/null
+done
+curl --fail --silent --show-error http://127.0.0.1:3000/api/datasources/uid/tempo \
+  | grep 'tracesToProfiles' >/dev/null
+curl --fail --silent --show-error http://127.0.0.1:3000/api/datasources/uid/loki \
+  | grep 'derivedFields' >/dev/null
+
+tempo_before="$(metric_sum http://127.0.0.1:3200/metrics tempo_distributor_spans_received_total)"
+loki_before="$(metric_sum http://127.0.0.1:3100/metrics loki_distributor_lines_received_total)"
+
 docker compose -f "${observability_dir}/compose.yml" --profile verify run --rm telemetrygen \
   >/dev/null 2>&1
 docker compose -f "${observability_dir}/compose.yml" --profile verify run --rm telemetrygen-logs \
@@ -93,20 +113,27 @@ sleep 2
 
 curl --fail --silent --show-error http://127.0.0.1:9090/api/v1/targets \
   | grep '"health":"up"' >/dev/null
-curl --fail --silent --show-error http://127.0.0.1:3200/metrics \
-  | grep '^tempo_distributor_spans_received_total.* [1-9][0-9]*$' >/dev/null
-curl --fail --silent --show-error http://127.0.0.1:3100/metrics \
-  | grep '^loki_distributor_lines_received_total.* [1-9][0-9]*$' >/dev/null
+tempo_after="$(metric_sum http://127.0.0.1:3200/metrics tempo_distributor_spans_received_total)"
+loki_after="$(metric_sum http://127.0.0.1:3100/metrics loki_distributor_lines_received_total)"
+if ((tempo_after <= tempo_before)); then
+  printf 'Tempo did not receive the generated trace.\n' >&2
+  exit 1
+fi
+if ((loki_after <= loki_before)); then
+  printf 'Loki did not receive the generated log.\n' >&2
+  exit 1
+fi
 
 if [[ "${verify_profiles}" == "true" ]]; then
   wait_until_ready eBPF-profiler http://127.0.0.1:13134/
+  profiles_before="$(metric_sum http://127.0.0.1:4040/metrics pyroscope_distributor_profiles_received_total)"
   for attempt in {1..30}; do
-    if curl --fail --silent --show-error http://127.0.0.1:4040/metrics \
-      | grep '^pyroscope_distributor_profiles_received_total.* [1-9][0-9]*$' >/dev/null; then
+    sleep 1
+    profiles_after="$(metric_sum http://127.0.0.1:4040/metrics pyroscope_distributor_profiles_received_total)"
+    if ((profiles_after > profiles_before)); then
       printf 'Running metrics, traces, logs, and profiles pipeline verification passed.\n'
       exit 0
     fi
-    sleep 1
   done
   printf 'Pyroscope did not receive an OTLP profile.\n' >&2
   exit 1
