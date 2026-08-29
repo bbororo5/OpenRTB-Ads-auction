@@ -51,6 +51,12 @@ async function main(): Promise<void> {
     case "status":
       await status();
       return;
+    case "observability":
+      await observabilityStatus();
+      return;
+    case "grafana-tunnel":
+      grafanaTunnel();
+      return;
     case "smoke":
       await runLoadTest("smoke", "stage8c-capacity.js", {
         RPS: options.rps ?? "10",
@@ -148,6 +154,36 @@ async function status(): Promise<void> {
       process.stderr.write(`[${role}] ${String(error)}\n`);
     }
   }));
+}
+
+async function observabilityStatus(): Promise<void> {
+  const outputs = stackOutputs();
+  const observerId = requireOutput(outputs, "ObserverInstanceId");
+  const result = await sendCommand(observerId, [
+    "curl --fail --silent --show-error http://127.0.0.1:13133/",
+    "curl --fail --silent --show-error http://127.0.0.1:9090/-/ready",
+    "curl --fail --silent --show-error http://127.0.0.1:3200/ready",
+    "curl --fail --silent --show-error http://127.0.0.1:3000/api/health",
+    "curl --fail --silent --show-error http://127.0.0.1:9090/api/v1/targets",
+    "curl --fail --silent --show-error http://127.0.0.1:3200/metrics | grep tempo_distributor_spans_received_total || true",
+  ], 90);
+  process.stdout.write(`${result.stdout}\n`);
+  if (result.stderr) {
+    process.stderr.write(`${result.stderr}\n`);
+  }
+  if (result.status !== "Success") {
+    throw new Error(`Observability check ended with ${result.status}`);
+  }
+}
+
+function grafanaTunnel(): void {
+  const observerId = requireOutput(stackOutputs(), "ObserverInstanceId");
+  run("aws", [
+    "ssm", "start-session",
+    "--target", observerId,
+    "--document-name", "AWS-StartPortForwardingSession",
+    "--parameters", JSON.stringify({ portNumber: ["3000"], localPortNumber: ["3000"] }),
+  ]);
 }
 
 async function runLoadTest(
@@ -314,6 +350,7 @@ function hostInstances(outputs: Outputs): Record<string, string> {
     ssp: requireOutput(outputs, "SspInstanceId"),
     dsp: requireOutput(outputs, "DspInstanceId"),
     support: requireOutput(outputs, "SupportInstanceId"),
+    observer: requireOutput(outputs, "ObserverInstanceId"),
   };
 }
 
@@ -431,6 +468,8 @@ Read-only/local:
   build        Type-check, test, and synthesize CloudFormation
   diff         Preview the AWS changes
   status       Show SSM, cloud-init, and container status
+  observability Check Collector, Prometheus, Tempo, Grafana, and scrape targets
+  grafana-tunnel Open an SSM tunnel from localhost:3000 to the private Grafana
   collect      Save host and CloudWatch evidence
 
 Mutating (requires --ack-cost):

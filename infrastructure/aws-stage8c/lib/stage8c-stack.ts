@@ -35,7 +35,12 @@ const PRIVATE_IPS = {
   ssp: "10.42.0.20",
   dsp: "10.42.0.30",
   support: "10.42.0.40",
+  observer: "10.42.0.50",
 } as const;
+const OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector-contrib:0.159.0";
+const PROMETHEUS_IMAGE = "prom/prometheus:v3.14.0";
+const TEMPO_IMAGE = "grafana/tempo:3.0.3";
+const GRAFANA_IMAGE = "grafana/grafana:13.2.0";
 
 export interface Stage8cStackProps extends StackProps {
   readonly instanceType?: string;
@@ -67,12 +72,22 @@ export class Stage8cStack extends Stack {
     const sspSecurityGroup = new SecurityGroup(this, "SspSecurityGroup", { vpc });
     const dspSecurityGroup = new SecurityGroup(this, "DspSecurityGroup", { vpc });
     const supportSecurityGroup = new SecurityGroup(this, "SupportSecurityGroup", { vpc });
+    const observerSecurityGroup = new SecurityGroup(this, "ObserverSecurityGroup", { vpc });
 
     sspSecurityGroup.addIngressRule(loadgenSecurityGroup, Port.tcp(8080), "k6 to SSP");
     supportSecurityGroup.addIngressRule(sspSecurityGroup, Port.tcpRange(8080, 8082), "SSP to DSP fixtures");
     supportSecurityGroup.addIngressRule(sspSecurityGroup, Port.tcp(5432), "SSP store");
     supportSecurityGroup.addIngressRule(dspSecurityGroup, Port.tcpRange(5433, 5434), "DSP stores");
     dspSecurityGroup.addIngressRule(supportSecurityGroup, Port.tcp(8081), "authenticated gateway to DSP");
+    for (const [source, description] of [
+      [loadgenSecurityGroup, "loadgen"],
+      [sspSecurityGroup, "SSP"],
+      [dspSecurityGroup, "DSP"],
+      [supportSecurityGroup, "support"],
+    ] as const) {
+      observerSecurityGroup.addIngressRule(source, Port.tcp(4317), `${description} traces to Tempo`);
+      source.addIngressRule(observerSecurityGroup, Port.tcp(9464), `Prometheus scrapes ${description}`);
+    }
 
     const sspImage = new DockerImageAsset(this, "SspImage", {
       directory: repositoryRoot,
@@ -91,6 +106,11 @@ export class Stage8cStack extends Stack {
       file: "performance/fixtures/stage8c/Dockerfile",
       platform: Platform.LINUX_ARM64,
     });
+    const observabilityImage = new DockerImageAsset(this, "ObservabilityImage", {
+      directory: path.join(repositoryRoot, "observability"),
+      file: "Dockerfile",
+      platform: Platform.LINUX_ARM64,
+    });
 
     const loadgen = this.createHost(
       "Loadgen", vpc, instanceType, loadgenSecurityGroup, PRIVATE_IPS.loadgen, 16);
@@ -100,16 +120,33 @@ export class Stage8cStack extends Stack {
       "Dsp", vpc, instanceType, dspSecurityGroup, PRIVATE_IPS.dsp, 16);
     const support = this.createHost(
       "Support", vpc, instanceType, supportSecurityGroup, PRIVATE_IPS.support, 24);
+    const observer = this.createHost(
+      "Observer", vpc, instanceType, observerSecurityGroup, PRIVATE_IPS.observer, 24);
 
     supportImage.repository.grantPull(loadgen.role);
     sspImage.repository.grantPull(ssp.role);
     dspImage.repository.grantPull(dsp.role);
     supportImage.repository.grantPull(support.role);
+    for (const host of [loadgen, ssp, dsp, support, observer]) {
+      observabilityImage.repository.grantPull(host.role);
+    }
 
     this.addRegistryLogin(loadgen.instance.userData);
     this.addRegistryLogin(ssp.instance.userData);
     this.addRegistryLogin(dsp.instance.userData);
     this.addRegistryLogin(support.instance.userData);
+    this.addRegistryLogin(observer.instance.userData);
+
+    this.configureCollector(
+      loadgen.instance.userData, observabilityImage.imageUri, "loadgen", PRIVATE_IPS.observer);
+    this.configureCollector(
+      ssp.instance.userData, observabilityImage.imageUri, "ssp", PRIVATE_IPS.observer);
+    this.configureCollector(
+      dsp.instance.userData, observabilityImage.imageUri, "dsp", PRIVATE_IPS.observer);
+    this.configureCollector(
+      support.instance.userData, observabilityImage.imageUri, "support", PRIVATE_IPS.observer);
+    this.configureObserver(
+      observer.instance.userData, observabilityImage.imageUri, PRIVATE_IPS.observer);
 
     this.configureSupport(
       support.instance.userData,
@@ -137,11 +174,12 @@ export class Stage8cStack extends Stack {
     this.outputHost("Ssp", ssp.instance);
     this.outputHost("Dsp", dsp.instance);
     this.outputHost("Support", support.instance);
+    this.outputHost("Observer", observer.instance);
     new CfnOutput(this, "SspBaseUrl", {
       value: `http://${PRIVATE_IPS.ssp}:8080`,
     });
     new CfnOutput(this, "Topology", {
-      value: "loadgen -> ssp -> support(gateway,external-a,external-b) -> dsp; ssp,dsp -> support(postgres x3)",
+      value: "loadgen -> ssp -> support(gateway,external-a,external-b) -> dsp; ssp,dsp -> support(postgres x3); all hosts -> observer",
     });
 
     Tags.of(this).add("Project", "low-latency-rtb");
@@ -203,6 +241,40 @@ export class Stage8cStack extends Stack {
     );
   }
 
+  private configureCollector(
+    userData: UserData,
+    observabilityImage: string,
+    hostRole: string,
+    observerPrivateIp: string,
+  ): void {
+    userData.addCommands(
+      `docker pull ${observabilityImage}`,
+      `docker create --name observability-assets ${observabilityImage}`,
+      "docker cp observability-assets:/opt/observability /opt/rtb/observability",
+      "docker rm observability-assets",
+      `docker pull ${OTEL_COLLECTOR_IMAGE}`,
+      `docker run -d --name otel-collector --restart unless-stopped --network host --pid host -v /:/hostfs:ro -v /opt/rtb/observability/collector/agent.yaml:/etc/otelcol-contrib/agent.yaml:ro -e HOST_ROLE=${hostRole} -e DEPLOYMENT_ENVIRONMENT=aws-stage8c -e TEMPO_OTLP_ENDPOINT=${observerPrivateIp}:4317 ${OTEL_COLLECTOR_IMAGE} --config=/etc/otelcol-contrib/agent.yaml`,
+    );
+  }
+
+  private configureObserver(
+    userData: UserData,
+    observabilityImage: string,
+    observerPrivateIp: string,
+  ): void {
+    this.configureCollector(userData, observabilityImage, "observer", observerPrivateIp);
+    userData.addCommands(
+      "mkdir -p /opt/rtb/tempo-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
+      "chmod 0777 /opt/rtb/tempo-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
+      `docker pull ${TEMPO_IMAGE}`,
+      `docker run -d --name tempo --restart unless-stopped --network host -v /opt/rtb/observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro -v /opt/rtb/tempo-data:/var/tempo ${TEMPO_IMAGE} -config.file=/etc/tempo/tempo.yaml`,
+      `docker pull ${PROMETHEUS_IMAGE}`,
+      `docker run -d --name prometheus --restart unless-stopped --network host -v /opt/rtb/observability/prometheus/aws-stage8c.yaml:/etc/prometheus/prometheus.yml:ro -v /opt/rtb/prometheus-data:/prometheus ${PROMETHEUS_IMAGE} --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=24h`,
+      `docker pull ${GRAFANA_IMAGE}`,
+      `docker run -d --name grafana --restart unless-stopped --network host -v /opt/rtb/observability/grafana/provisioning:/etc/grafana/provisioning:ro -v /opt/rtb/grafana-data:/var/lib/grafana -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer -e GF_AUTH_DISABLE_LOGIN_FORM=true -e PROMETHEUS_URL=http://127.0.0.1:9090 -e TEMPO_URL=http://127.0.0.1:3200 ${GRAFANA_IMAGE}`,
+    );
+  }
+
   private configureLoadgen(userData: UserData, supportImage: string): void {
     userData.addCommands(
       `docker pull ${supportImage}`,
@@ -260,7 +332,7 @@ export class Stage8cStack extends Stack {
       "printf '{\"version\":\"v1\",\"campaigns\":[{\"id\":\"campaign-1\",\"active\":true,\"bidCpmMilliKrw\":2000,\"startsAt\":\"%s\",\"endsAt\":\"%s\",\"creatives\":[{\"id\":\"creative-1\",\"width\":300,\"height\":250}]}]}\n' \"$STARTS_AT\" \"$ENDS_AT\" > /opt/rtb/campaigns.json",
       "CAMPAIGN_SHA=$(sha256sum /opt/rtb/campaigns.json | cut -d' ' -f1)",
       "NOTICE_KEY=$(openssl rand -base64 32 | tr -d '\\n')",
-      `docker run -d --name dsp --restart unless-stopped --network host -v /opt/rtb/campaigns.json:/opt/rtb/campaigns.json:ro -e JAVA_TOOL_OPTIONS='-Xms768m -Xmx768m -XX:+UseG1GC' -e SERVER_PORT=8081 -e DSP_REGION_ID=${this.region} -e DSP_INSTANCE_ID=dsp-stage8c-1 -e DSP_PUBLIC_BASE_URL=http://${supportPrivateIp}:8080 -e DSP_CAMPAIGN_SNAPSHOT_PATH=/opt/rtb/campaigns.json -e DSP_CAMPAIGN_VERSION=v1 -e DSP_CAMPAIGN_SHA256=\"$CAMPAIGN_SHA\" -e DSP_NOTICE_TOKEN_ACTIVE_KEY_ID=key-1 -e DSP_NOTICE_TOKEN_KEYS=key-1=\"$NOTICE_KEY\" -e DSP_LEDGER_JDBC_URL=jdbc:postgresql://${supportPrivateIp}:5433/rtb -e DSP_OUTCOME_JDBC_URL=jdbc:postgresql://${supportPrivateIp}:5434/rtb -e DSP_STORE_USERNAME=postgres -e DSP_STORE_PASSWORD='${databasePassword}' -e DSP_BID_WORKERS=8 -e DSP_NOTICE_WORKERS=4 -e DSP_LEDGER_POOL_SIZE=6 -e DSP_OUTCOME_POOL_SIZE=6 -e DSP_JDBC_WORKERS=6 ${dspImage}`,
+      `docker run -d --name dsp --restart unless-stopped --network host -v /opt/rtb/campaigns.json:/opt/rtb/campaigns.json:ro ${this.otelJavaEnvironment("rtb-dsp")} -e JAVA_TOOL_OPTIONS='-Xms768m -Xmx768m -XX:+UseG1GC -javaagent:/otel/opentelemetry-javaagent.jar' -e SERVER_PORT=8081 -e DSP_REGION_ID=${this.region} -e DSP_INSTANCE_ID=dsp-stage8c-1 -e DSP_PUBLIC_BASE_URL=http://${supportPrivateIp}:8080 -e DSP_CAMPAIGN_SNAPSHOT_PATH=/opt/rtb/campaigns.json -e DSP_CAMPAIGN_VERSION=v1 -e DSP_CAMPAIGN_SHA256=\"$CAMPAIGN_SHA\" -e DSP_NOTICE_TOKEN_ACTIVE_KEY_ID=key-1 -e DSP_NOTICE_TOKEN_KEYS=key-1=\"$NOTICE_KEY\" -e DSP_LEDGER_JDBC_URL=jdbc:postgresql://${supportPrivateIp}:5433/rtb -e DSP_OUTCOME_JDBC_URL=jdbc:postgresql://${supportPrivateIp}:5434/rtb -e DSP_STORE_USERNAME=postgres -e DSP_STORE_PASSWORD='${databasePassword}' -e DSP_BID_WORKERS=8 -e DSP_NOTICE_WORKERS=4 -e DSP_LEDGER_POOL_SIZE=6 -e DSP_OUTCOME_POOL_SIZE=6 -e DSP_JDBC_WORKERS=6 ${dspImage}`,
     );
   }
 
@@ -280,8 +352,24 @@ export class Stage8cStack extends Stack {
       `docker pull ${sspImage}`,
       "until timeout 1 bash -c '</dev/tcp/" + supportPrivateIp + "/5432'; do sleep 2; done",
       "RENDER_KEY=$(openssl rand -base64 32 | tr -d '\\n')",
-      `docker run -d --name ssp --restart unless-stopped --network host -e JAVA_TOOL_OPTIONS='-Xms768m -Xmx768m -XX:+UseG1GC' -e SERVER_PORT=8080 -e SSP_REGION_ID=${this.region} -e RENDER_COMPLETION_URL=http://${sspPrivateIp}:8080/publisher/render -e DATABASE_URL=jdbc:postgresql://${supportPrivateIp}:5432/rtb -e DATABASE_USERNAME=postgres -e DATABASE_PASSWORD='${databasePassword}' -e RENDER_PROOF_KEY_BASE64=\"$RENDER_KEY\" -e DSP_ENDPOINTS='${endpoints}' -e PROVIDER_MAX_IN_FLIGHT=128 -e DSP_BID_TIMEOUT_MS=100 -e DSP_MAX_IN_FLIGHT=256 -e BILLING_WORKER_CONCURRENCY=8 ${sspImage}`,
+      `docker run -d --name ssp --restart unless-stopped --network host ${this.otelJavaEnvironment("rtb-ssp")} -e JAVA_TOOL_OPTIONS='-Xms768m -Xmx768m -XX:+UseG1GC -javaagent:/otel/opentelemetry-javaagent.jar' -e SERVER_PORT=8080 -e SSP_REGION_ID=${this.region} -e RENDER_COMPLETION_URL=http://${sspPrivateIp}:8080/publisher/render -e DATABASE_URL=jdbc:postgresql://${supportPrivateIp}:5432/rtb -e DATABASE_USERNAME=postgres -e DATABASE_PASSWORD='${databasePassword}' -e RENDER_PROOF_KEY_BASE64=\"$RENDER_KEY\" -e DSP_ENDPOINTS='${endpoints}' -e PROVIDER_MAX_IN_FLIGHT=128 -e DSP_BID_TIMEOUT_MS=100 -e DSP_MAX_IN_FLIGHT=256 -e BILLING_WORKER_CONCURRENCY=8 ${sspImage}`,
     );
+  }
+
+  private otelJavaEnvironment(serviceName: string): string {
+    return [
+      `-e OTEL_SERVICE_NAME=${serviceName}`,
+      "-e OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318",
+      "-e OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf",
+      "-e OTEL_TRACES_EXPORTER=otlp",
+      "-e OTEL_METRICS_EXPORTER=otlp",
+      "-e OTEL_LOGS_EXPORTER=none",
+      "-e OTEL_TRACES_SAMPLER=parentbased_traceidratio",
+      "-e OTEL_TRACES_SAMPLER_ARG=0.10",
+      "-e OTEL_METRIC_EXPORT_INTERVAL=5000",
+      "-e OTEL_BSP_SCHEDULE_DELAY=1000",
+      "-e OTEL_RESOURCE_ATTRIBUTES=service.namespace=rtb,deployment.environment.name=aws-stage8c,service.version=0.1.0-SNAPSHOT",
+    ].join(" ");
   }
 
   private outputHost(name: string, instance: Instance): void {
