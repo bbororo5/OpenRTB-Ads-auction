@@ -38,9 +38,11 @@ const PRIVATE_IPS = {
   observer: "10.42.0.50",
 } as const;
 const OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector-contrib:0.159.0";
+const OTEL_EBPF_PROFILER_IMAGE = "otel/opentelemetry-collector-ebpf-profiler:0.159.0";
 const PROMETHEUS_IMAGE = "prom/prometheus:v3.14.0";
 const TEMPO_IMAGE = "grafana/tempo:3.0.3";
 const LOKI_IMAGE = "grafana/loki:3.7.7";
+const PYROSCOPE_IMAGE = "grafana/pyroscope:2.3.0";
 const GRAFANA_IMAGE = "grafana/grafana:13.2.0";
 
 export interface Stage8cStackProps extends StackProps {
@@ -88,6 +90,7 @@ export class Stage8cStack extends Stack {
     ] as const) {
       observerSecurityGroup.addIngressRule(source, Port.tcp(4317), `${description} traces to Tempo`);
       observerSecurityGroup.addIngressRule(source, Port.tcp(3100), `${description} logs to Loki`);
+      observerSecurityGroup.addIngressRule(source, Port.tcp(4040), `${description} profiles to Pyroscope`);
       source.addIngressRule(observerSecurityGroup, Port.tcp(9464), `Prometheus scrapes ${description}`);
     }
 
@@ -141,12 +144,16 @@ export class Stage8cStack extends Stack {
 
     this.configureCollector(
       loadgen.instance.userData, observabilityImage.imageUri, "loadgen", PRIVATE_IPS.observer);
+    this.configureProfiler(loadgen.instance.userData, "loadgen", PRIVATE_IPS.observer);
     this.configureCollector(
       ssp.instance.userData, observabilityImage.imageUri, "ssp", PRIVATE_IPS.observer);
+    this.configureProfiler(ssp.instance.userData, "ssp", PRIVATE_IPS.observer);
     this.configureCollector(
       dsp.instance.userData, observabilityImage.imageUri, "dsp", PRIVATE_IPS.observer);
+    this.configureProfiler(dsp.instance.userData, "dsp", PRIVATE_IPS.observer);
     this.configureCollector(
       support.instance.userData, observabilityImage.imageUri, "support", PRIVATE_IPS.observer);
+    this.configureProfiler(support.instance.userData, "support", PRIVATE_IPS.observer);
     this.configureObserver(
       observer.instance.userData, observabilityImage.imageUri, PRIVATE_IPS.observer);
 
@@ -266,16 +273,30 @@ export class Stage8cStack extends Stack {
   ): void {
     this.configureCollector(userData, observabilityImage, "observer", observerPrivateIp);
     userData.addCommands(
-      "mkdir -p /opt/rtb/tempo-data /opt/rtb/loki-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
-      "chmod 0777 /opt/rtb/tempo-data /opt/rtb/loki-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
+      "mkdir -p /opt/rtb/tempo-data /opt/rtb/loki-data /opt/rtb/pyroscope-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
+      "chmod 0777 /opt/rtb/tempo-data /opt/rtb/loki-data /opt/rtb/pyroscope-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
       `docker pull ${TEMPO_IMAGE}`,
       `docker run -d --name tempo --restart unless-stopped --network host -v /opt/rtb/observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro -v /opt/rtb/tempo-data:/var/tempo ${TEMPO_IMAGE} -config.file=/etc/tempo/tempo.yaml`,
       `docker pull ${LOKI_IMAGE}`,
       `docker run -d --name loki --restart unless-stopped --network host -v /opt/rtb/observability/loki/loki.yaml:/etc/loki/loki.yaml:ro -v /opt/rtb/loki-data:/var/loki ${LOKI_IMAGE} -config.file=/etc/loki/loki.yaml`,
+      `docker pull ${PYROSCOPE_IMAGE}`,
+      `docker run -d --name pyroscope --restart unless-stopped --network host -v /opt/rtb/pyroscope-data:/data ${PYROSCOPE_IMAGE} -self-profiling.disable-push=true -usage-stats.enabled=false -compactor.blocks-retention-period=24h`,
       `docker pull ${PROMETHEUS_IMAGE}`,
       `docker run -d --name prometheus --restart unless-stopped --network host -v /opt/rtb/observability/prometheus/aws-stage8c.yaml:/etc/prometheus/prometheus.yml:ro -v /opt/rtb/prometheus-data:/prometheus ${PROMETHEUS_IMAGE} --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=24h`,
       `docker pull ${GRAFANA_IMAGE}`,
-      `docker run -d --name grafana --restart unless-stopped --network host -v /opt/rtb/observability/grafana/provisioning:/etc/grafana/provisioning:ro -v /opt/rtb/grafana-data:/var/lib/grafana -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer -e GF_AUTH_DISABLE_LOGIN_FORM=true -e PROMETHEUS_URL=http://127.0.0.1:9090 -e TEMPO_URL=http://127.0.0.1:3200 -e LOKI_URL=http://127.0.0.1:3100 ${GRAFANA_IMAGE}`,
+      `docker run -d --name grafana --restart unless-stopped --network host -v /opt/rtb/observability/grafana/provisioning:/etc/grafana/provisioning:ro -v /opt/rtb/grafana-data:/var/lib/grafana -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer -e GF_AUTH_DISABLE_LOGIN_FORM=true -e PROMETHEUS_URL=http://127.0.0.1:9090 -e TEMPO_URL=http://127.0.0.1:3200 -e LOKI_URL=http://127.0.0.1:3100 -e PYROSCOPE_URL=http://127.0.0.1:4040 ${GRAFANA_IMAGE}`,
+    );
+    this.configureProfiler(userData, "observer", observerPrivateIp);
+  }
+
+  private configureProfiler(
+    userData: UserData,
+    hostRole: string,
+    observerPrivateIp: string,
+  ): void {
+    userData.addCommands(
+      `docker pull ${OTEL_EBPF_PROFILER_IMAGE}`,
+      `docker run -d --name otel-ebpf-profiler --restart unless-stopped --network host --pid host --privileged -v /opt/rtb/observability/profiler/host.yaml:/etc/otelcol-ebpf-profiler/host.yaml:ro -v /sys/kernel/debug:/sys/kernel/debug:ro -v /sys/fs/cgroup:/sys/fs/cgroup:ro -e HOST_ROLE=${hostRole} -e DEPLOYMENT_ENVIRONMENT=aws-stage8c -e PYROSCOPE_OTLP_ENDPOINT=${observerPrivateIp}:4040 ${OTEL_EBPF_PROFILER_IMAGE} --config=/etc/otelcol-ebpf-profiler/host.yaml --feature-gates=service.profilesSupport`,
     );
   }
 

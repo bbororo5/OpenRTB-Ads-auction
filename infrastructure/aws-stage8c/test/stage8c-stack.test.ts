@@ -35,6 +35,11 @@ test("SSP and DSP attach the Java agent and export all stable OTel signals", () 
   assert.match(template, /OTEL_LOGS_EXPORTER=otlp/);
   assert.match(template, /OTEL_PROPAGATORS=tracecontext,baggage/);
   assert.match(template, /grafana\/loki:3\.7\.7/);
+  assert.match(template, /grafana\/pyroscope:2\.3\.0/);
+  assert.match(template, /opentelemetry-collector-ebpf-profiler:0\.159\.0/);
+  assert.match(template, /feature-gates=service\.profilesSupport/);
+  assert.match(template, /PYROSCOPE_OTLP_ENDPOINT=10\.42\.0\.50:4040/);
+  assert.equal(template.match(/--name otel-ebpf-profiler/g)?.length, 5);
   assert.match(template, /aws-stage8c\.yaml/);
 });
 
@@ -53,4 +58,6 @@ test("application ports are never open to the public internet", () => {
 
   assert.equal(ingress.some((rule) => rule.CidrIp === "0.0.0.0/0"), false);
   assert.equal(ingress.some((rule) => rule.CidrIpv6 === "::/0"), false);
+  assert.equal(ingress.filter((rule) => rule.FromPort === 3100).length, 4);
+  assert.equal(ingress.filter((rule) => rule.FromPort === 4040).length, 4);
 });

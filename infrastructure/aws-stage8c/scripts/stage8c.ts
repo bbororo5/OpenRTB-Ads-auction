@@ -158,14 +158,32 @@ async function status(): Promise<void> {
 
 async function observabilityStatus(): Promise<void> {
   const outputs = stackOutputs();
+  const hosts = hostInstances(outputs);
   const observerId = requireOutput(outputs, "ObserverInstanceId");
+  const hostResults = await Promise.all(Object.entries(hosts).map(async ([role, instanceId]) => ({
+    role,
+    result: await sendCommand(instanceId, [
+      "curl --fail --silent --show-error http://127.0.0.1:13133/",
+      "curl --fail --silent --show-error http://127.0.0.1:13134/",
+    ], 90),
+  })));
+  for (const { role, result: hostResult } of hostResults) {
+    process.stdout.write(`[${role} collectors] ${hostResult.status}\n`);
+    if (hostResult.status !== "Success") {
+      throw new Error(`${role} telemetry agents ended with ${hostResult.status}`);
+    }
+  }
   const result = await sendCommand(observerId, [
     "curl --fail --silent --show-error http://127.0.0.1:13133/",
     "curl --fail --silent --show-error http://127.0.0.1:9090/-/ready",
     "curl --fail --silent --show-error http://127.0.0.1:3200/ready",
+    "curl --fail --silent --show-error http://127.0.0.1:3100/ready",
+    "curl --fail --silent --show-error http://127.0.0.1:4040/ready",
     "curl --fail --silent --show-error http://127.0.0.1:3000/api/health",
     "curl --fail --silent --show-error http://127.0.0.1:9090/api/v1/targets",
     "curl --fail --silent --show-error http://127.0.0.1:3200/metrics | grep tempo_distributor_spans_received_total || true",
+    "curl --fail --silent --show-error http://127.0.0.1:3100/metrics | grep loki_distributor_lines_received_total || true",
+    "curl --fail --silent --show-error http://127.0.0.1:4040/metrics | grep pyroscope_distributor_profiles_received_total",
   ], 90);
   process.stdout.write(`${result.stdout}\n`);
   if (result.stderr) {
