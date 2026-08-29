@@ -280,7 +280,7 @@ export class Stage8cStack extends Stack {
       `docker pull ${LOKI_IMAGE}`,
       `docker run -d --name loki --restart unless-stopped --network host -v /opt/rtb/observability/loki/loki.yaml:/etc/loki/loki.yaml:ro -v /opt/rtb/loki-data:/var/loki ${LOKI_IMAGE} -config.file=/etc/loki/loki.yaml`,
       `docker pull ${PYROSCOPE_IMAGE}`,
-      `docker run -d --name pyroscope --restart unless-stopped --network host -v /opt/rtb/pyroscope-data:/data ${PYROSCOPE_IMAGE} -self-profiling.disable-push=true -usage-stats.enabled=false -compactor.blocks-retention-period=24h`,
+      `docker run -d --name pyroscope --restart unless-stopped --network host -v /opt/rtb/pyroscope-data:/data ${PYROSCOPE_IMAGE} -self-profiling.disable-push=true -usage-stats.enabled=false -retention-period=24h`,
       `docker pull ${PROMETHEUS_IMAGE}`,
       `docker run -d --name prometheus --restart unless-stopped --network host -v /opt/rtb/observability/prometheus/aws-stage8c.yaml:/etc/prometheus/prometheus.yml:ro -v /opt/rtb/prometheus-data:/prometheus ${PROMETHEUS_IMAGE} --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=24h`,
       `docker pull ${GRAFANA_IMAGE}`,

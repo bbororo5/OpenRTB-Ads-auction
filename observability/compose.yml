@@ -63,7 +63,7 @@ services:
     command:
       - -self-profiling.disable-push=true
       - -usage-stats.enabled=false
-      - -compactor.blocks-retention-period=24h
+      - -retention-period=24h
     volumes:
       - pyroscope_data:/data
     ports:
