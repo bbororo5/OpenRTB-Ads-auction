@@ -61,6 +61,19 @@ services:
       - tempo
     restart: unless-stopped
 
+  telemetrygen:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.158.0
+    profiles:
+      - verify
+    command:
+      - traces
+      - --otlp-endpoint=otel-collector:4317
+      - --otlp-insecure
+      - --duration=1s
+      - --rate=1
+    depends_on:
+      - otel-collector
+
 volumes:
   prometheus_data:
   tempo_data:

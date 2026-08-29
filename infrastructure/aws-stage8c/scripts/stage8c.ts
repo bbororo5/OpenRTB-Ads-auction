@@ -474,7 +474,7 @@ Read-only/local:
 
 Mutating (requires --ack-cost):
   bootstrap    Prepare the account/region for CDK assets
-  deploy       Create the ephemeral four-host experiment cell
+  deploy       Create the ephemeral five-host experiment cell
   destroy      Delete the experiment stack
 
 Tests:
