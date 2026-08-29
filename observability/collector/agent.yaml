@@ -1,0 +1,84 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  host_metrics:
+    root_path: /hostfs
+    collection_interval: 5s
+    scrapers:
+      cpu:
+      filesystem:
+        exclude_mount_points:
+          mount_points:
+            - /dev/*
+            - /proc/*
+            - /sys/*
+            - /var/lib/docker/*
+          match_type: regexp
+      load:
+      memory:
+      network:
+      paging:
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+    spike_limit_mib: 32
+  resource:
+    attributes:
+      - key: host.name
+        value: ${env:HOST_ROLE}
+        action: upsert
+      - key: deployment.environment.name
+        value: ${env:DEPLOYMENT_ENVIRONMENT}
+        action: upsert
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    resource_to_telemetry_conversion:
+      enabled: true
+  otlp_grpc/tempo:
+    endpoint: ${env:TEMPO_OTLP_ENDPOINT}
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      queue_size: 2048
+    retry_on_failure:
+      enabled: true
+
+service:
+  extensions:
+    - health_check
+  pipelines:
+    metrics:
+      receivers:
+        - otlp
+        - host_metrics
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - prometheus
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp_grpc/tempo

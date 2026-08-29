@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: stage8c-hosts
+    static_configs:
+      - targets: [10.42.0.10:9464]
+        labels: { node_role: loadgen }
+      - targets: [10.42.0.20:9464]
+        labels: { node_role: ssp }
+      - targets: [10.42.0.30:9464]
+        labels: { node_role: dsp }
+      - targets: [10.42.0.40:9464]
+        labels: { node_role: support }
+      - targets: [10.42.0.50:9464]
+        labels: { node_role: observer }
+
