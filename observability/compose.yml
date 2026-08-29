@@ -6,6 +6,7 @@ services:
       HOST_ROLE: local
       DEPLOYMENT_ENVIRONMENT: local-observability
       TEMPO_OTLP_ENDPOINT: tempo:4317
+      LOKI_OTLP_ENDPOINT: http://loki:3100/otlp
     volumes:
       - ./collector/agent.yaml:/etc/otelcol-contrib/agent.yaml:ro
       - /:/hostfs:ro
@@ -16,6 +17,7 @@ services:
       - "127.0.0.1:13133:13133"
     depends_on:
       - tempo
+      - loki
     restart: unless-stopped
 
   prometheus:
@@ -43,6 +45,19 @@ services:
       - "127.0.0.1:3200:3200"
     restart: unless-stopped
 
+  loki:
+    image: grafana/loki:3.7.7
+    # Docker-managed volumes are root-owned on first creation. AWS uses a
+    # pre-created writable host directory; local Compose needs this bootstrap.
+    user: "0"
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki_data:/var/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:13.2.0
     environment:
@@ -51,6 +66,7 @@ services:
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
       PROMETHEUS_URL: http://prometheus:9090
       TEMPO_URL: http://tempo:3200
+      LOKI_URL: http://loki:3100
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
@@ -59,6 +75,7 @@ services:
     depends_on:
       - prometheus
       - tempo
+      - loki
     restart: unless-stopped
 
   telemetrygen:
@@ -74,8 +91,21 @@ services:
     depends_on:
       - otel-collector
 
+  telemetrygen-logs:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.158.0
+    profiles:
+      - verify
+    command:
+      - logs
+      - --otlp-endpoint=otel-collector:4317
+      - --otlp-insecure
+      - --duration=1s
+      - --rate=1
+    depends_on:
+      - otel-collector
+
 volumes:
   prometheus_data:
   tempo_data:
+  loki_data:
   grafana_data:
-

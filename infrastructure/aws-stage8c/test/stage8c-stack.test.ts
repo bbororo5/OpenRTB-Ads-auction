@@ -22,7 +22,7 @@ test("performance experiment isolates four workload roles and one observer", () 
   });
 });
 
-test("SSP and DSP attach the Java agent while logs remain outside the OTel pipeline", () => {
+test("SSP and DSP attach the Java agent and export all stable OTel signals", () => {
   const app = new App();
   const stack = new Stage8cStack(app, "TelemetryTestStack", {
     env: { account: "111111111111", region: "ap-northeast-2" },
@@ -32,7 +32,9 @@ test("SSP and DSP attach the Java agent while logs remain outside the OTel pipel
   assert.match(template, /-javaagent:\/otel\/opentelemetry-javaagent\.jar/);
   assert.match(template, /OTEL_SERVICE_NAME=rtb-ssp/);
   assert.match(template, /OTEL_SERVICE_NAME=rtb-dsp/);
-  assert.match(template, /OTEL_LOGS_EXPORTER=none/);
+  assert.match(template, /OTEL_LOGS_EXPORTER=otlp/);
+  assert.match(template, /OTEL_PROPAGATORS=tracecontext,baggage/);
+  assert.match(template, /grafana\/loki:3\.7\.7/);
   assert.match(template, /aws-stage8c\.yaml/);
 });
 

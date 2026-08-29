@@ -40,6 +40,7 @@ const PRIVATE_IPS = {
 const OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector-contrib:0.159.0";
 const PROMETHEUS_IMAGE = "prom/prometheus:v3.14.0";
 const TEMPO_IMAGE = "grafana/tempo:3.0.3";
+const LOKI_IMAGE = "grafana/loki:3.7.7";
 const GRAFANA_IMAGE = "grafana/grafana:13.2.0";
 
 export interface Stage8cStackProps extends StackProps {
@@ -86,6 +87,7 @@ export class Stage8cStack extends Stack {
       [supportSecurityGroup, "support"],
     ] as const) {
       observerSecurityGroup.addIngressRule(source, Port.tcp(4317), `${description} traces to Tempo`);
+      observerSecurityGroup.addIngressRule(source, Port.tcp(3100), `${description} logs to Loki`);
       source.addIngressRule(observerSecurityGroup, Port.tcp(9464), `Prometheus scrapes ${description}`);
     }
 
@@ -253,7 +255,7 @@ export class Stage8cStack extends Stack {
       "docker cp observability-assets:/opt/observability /opt/rtb/observability",
       "docker rm observability-assets",
       `docker pull ${OTEL_COLLECTOR_IMAGE}`,
-      `docker run -d --name otel-collector --restart unless-stopped --network host --pid host -v /:/hostfs:ro -v /opt/rtb/observability/collector/agent.yaml:/etc/otelcol-contrib/agent.yaml:ro -e HOST_ROLE=${hostRole} -e DEPLOYMENT_ENVIRONMENT=aws-stage8c -e TEMPO_OTLP_ENDPOINT=${observerPrivateIp}:4317 ${OTEL_COLLECTOR_IMAGE} --config=/etc/otelcol-contrib/agent.yaml`,
+      `docker run -d --name otel-collector --restart unless-stopped --network host --pid host -v /:/hostfs:ro -v /opt/rtb/observability/collector/agent.yaml:/etc/otelcol-contrib/agent.yaml:ro -e HOST_ROLE=${hostRole} -e DEPLOYMENT_ENVIRONMENT=aws-stage8c -e TEMPO_OTLP_ENDPOINT=${observerPrivateIp}:4317 -e LOKI_OTLP_ENDPOINT=http://${observerPrivateIp}:3100/otlp ${OTEL_COLLECTOR_IMAGE} --config=/etc/otelcol-contrib/agent.yaml`,
     );
   }
 
@@ -264,14 +266,16 @@ export class Stage8cStack extends Stack {
   ): void {
     this.configureCollector(userData, observabilityImage, "observer", observerPrivateIp);
     userData.addCommands(
-      "mkdir -p /opt/rtb/tempo-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
-      "chmod 0777 /opt/rtb/tempo-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
+      "mkdir -p /opt/rtb/tempo-data /opt/rtb/loki-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
+      "chmod 0777 /opt/rtb/tempo-data /opt/rtb/loki-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
       `docker pull ${TEMPO_IMAGE}`,
       `docker run -d --name tempo --restart unless-stopped --network host -v /opt/rtb/observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro -v /opt/rtb/tempo-data:/var/tempo ${TEMPO_IMAGE} -config.file=/etc/tempo/tempo.yaml`,
+      `docker pull ${LOKI_IMAGE}`,
+      `docker run -d --name loki --restart unless-stopped --network host -v /opt/rtb/observability/loki/loki.yaml:/etc/loki/loki.yaml:ro -v /opt/rtb/loki-data:/var/loki ${LOKI_IMAGE} -config.file=/etc/loki/loki.yaml`,
       `docker pull ${PROMETHEUS_IMAGE}`,
       `docker run -d --name prometheus --restart unless-stopped --network host -v /opt/rtb/observability/prometheus/aws-stage8c.yaml:/etc/prometheus/prometheus.yml:ro -v /opt/rtb/prometheus-data:/prometheus ${PROMETHEUS_IMAGE} --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=24h`,
       `docker pull ${GRAFANA_IMAGE}`,
-      `docker run -d --name grafana --restart unless-stopped --network host -v /opt/rtb/observability/grafana/provisioning:/etc/grafana/provisioning:ro -v /opt/rtb/grafana-data:/var/lib/grafana -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer -e GF_AUTH_DISABLE_LOGIN_FORM=true -e PROMETHEUS_URL=http://127.0.0.1:9090 -e TEMPO_URL=http://127.0.0.1:3200 ${GRAFANA_IMAGE}`,
+      `docker run -d --name grafana --restart unless-stopped --network host -v /opt/rtb/observability/grafana/provisioning:/etc/grafana/provisioning:ro -v /opt/rtb/grafana-data:/var/lib/grafana -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer -e GF_AUTH_DISABLE_LOGIN_FORM=true -e PROMETHEUS_URL=http://127.0.0.1:9090 -e TEMPO_URL=http://127.0.0.1:3200 -e LOKI_URL=http://127.0.0.1:3100 ${GRAFANA_IMAGE}`,
     );
   }
 
@@ -363,7 +367,8 @@ export class Stage8cStack extends Stack {
       "-e OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf",
       "-e OTEL_TRACES_EXPORTER=otlp",
       "-e OTEL_METRICS_EXPORTER=otlp",
-      "-e OTEL_LOGS_EXPORTER=none",
+      "-e OTEL_LOGS_EXPORTER=otlp",
+      "-e OTEL_PROPAGATORS=tracecontext,baggage",
       "-e OTEL_TRACES_SAMPLER=parentbased_traceidratio",
       "-e OTEL_TRACES_SAMPLER_ARG=0.10",
       "-e OTEL_METRIC_EXPORT_INTERVAL=5000",

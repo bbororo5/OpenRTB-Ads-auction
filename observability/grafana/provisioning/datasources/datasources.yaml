@@ -21,3 +21,16 @@ datasources:
       tracesToMetrics:
         datasourceUid: prometheus
 
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: ${LOKI_URL}
+    editable: false
+    jsonData:
+      derivedFields:
+        - name: TraceID
+          matcherType: label
+          matcherRegex: trace_id
+          datasourceUid: tempo
+          url: '$${__value.raw}'

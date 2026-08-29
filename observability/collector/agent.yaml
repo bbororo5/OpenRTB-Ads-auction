@@ -58,6 +58,13 @@ exporters:
       queue_size: 2048
     retry_on_failure:
       enabled: true
+  otlp_http/loki:
+    endpoint: ${env:LOKI_OTLP_ENDPOINT}
+    sending_queue:
+      enabled: true
+      queue_size: 2048
+    retry_on_failure:
+      enabled: true
 
 service:
   extensions:
@@ -82,3 +89,12 @@ service:
         - batch
       exporters:
         - otlp_grpc/tempo
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters:
+        - otlp_http/loki
