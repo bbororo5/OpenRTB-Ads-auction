@@ -3,8 +3,7 @@
 **/.gradle
 **/build
 **/bin
-infrastructure/aws-stage8c/node_modules
-infrastructure/aws-stage8c/cdk.out
+infrastructure/aws-stage8c
 docs
 monitoring
 system-test
