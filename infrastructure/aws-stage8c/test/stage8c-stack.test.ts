@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { App } from "aws-cdk-lib";
@@ -41,6 +42,10 @@ test("SSP and DSP attach the Java agent and export all stable OTel signals", () 
   assert.match(template, /PYROSCOPE_OTLP_ENDPOINT=10\.42\.0\.50:4040/);
   assert.equal(template.match(/--name otel-ebpf-profiler/g)?.length, 5);
   assert.match(template, /aws-stage8c\.yaml/);
+  assert.match(template, /docker network create observability/);
+  assert.match(template, /--network observability -p 4317:4317/);
+  assert.match(template, /TEMPO_OTLP_ENDPOINT=tempo:4317/);
+  assert.match(template, /PROMETHEUS_URL=http:\/\/prometheus:9090/);
 });
 
 test("application ports are never open to the public internet", () => {
@@ -60,4 +65,13 @@ test("application ports are never open to the public internet", () => {
   assert.equal(ingress.some((rule) => rule.CidrIpv6 === "::/0"), false);
   assert.equal(ingress.filter((rule) => rule.FromPort === 3100).length, 4);
   assert.equal(ingress.filter((rule) => rule.FromPort === 4040).length, 4);
+});
+
+test("host profiler does not compete with the Collector internal metrics port", () => {
+  const profilerConfig = readFileSync(
+    new URL("../../../observability/profiler/host.yaml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(profilerConfig, /telemetry:[\s\S]*metrics:\s*#[\s\S]*level: none/);
 });

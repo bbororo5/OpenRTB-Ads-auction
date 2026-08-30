@@ -271,20 +271,26 @@ export class Stage8cStack extends Stack {
     observabilityImage: string,
     observerPrivateIp: string,
   ): void {
-    this.configureCollector(userData, observabilityImage, "observer", observerPrivateIp);
     userData.addCommands(
+      "docker network create observability",
+      `docker pull ${observabilityImage}`,
+      `docker create --name observability-assets ${observabilityImage}`,
+      "docker cp observability-assets:/opt/observability /opt/rtb/observability",
+      "docker rm observability-assets",
+      `docker pull ${OTEL_COLLECTOR_IMAGE}`,
+      `docker run -d --name otel-collector --restart unless-stopped --network observability --pid host -p 127.0.0.1:13133:13133 -p 9464:9464 -v /:/hostfs:ro -v /opt/rtb/observability/collector/agent.yaml:/etc/otelcol-contrib/agent.yaml:ro -e HOST_ROLE=observer -e DEPLOYMENT_ENVIRONMENT=aws-stage8c -e TEMPO_OTLP_ENDPOINT=tempo:4317 -e LOKI_OTLP_ENDPOINT=http://loki:3100/otlp ${OTEL_COLLECTOR_IMAGE} --config=/etc/otelcol-contrib/agent.yaml`,
       "mkdir -p /opt/rtb/tempo-data /opt/rtb/loki-data /opt/rtb/pyroscope-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
       "chmod 0777 /opt/rtb/tempo-data /opt/rtb/loki-data /opt/rtb/pyroscope-data /opt/rtb/prometheus-data /opt/rtb/grafana-data",
       `docker pull ${TEMPO_IMAGE}`,
-      `docker run -d --name tempo --restart unless-stopped --network host -v /opt/rtb/observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro -v /opt/rtb/tempo-data:/var/tempo ${TEMPO_IMAGE} -config.file=/etc/tempo/tempo.yaml`,
+      `docker run -d --name tempo --restart unless-stopped --network observability -p 4317:4317 -p 127.0.0.1:3200:3200 -v /opt/rtb/observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro -v /opt/rtb/tempo-data:/var/tempo ${TEMPO_IMAGE} -config.file=/etc/tempo/tempo.yaml`,
       `docker pull ${LOKI_IMAGE}`,
-      `docker run -d --name loki --restart unless-stopped --network host -v /opt/rtb/observability/loki/loki.yaml:/etc/loki/loki.yaml:ro -v /opt/rtb/loki-data:/var/loki ${LOKI_IMAGE} -config.file=/etc/loki/loki.yaml`,
+      `docker run -d --name loki --restart unless-stopped --network observability -p 3100:3100 -v /opt/rtb/observability/loki/loki.yaml:/etc/loki/loki.yaml:ro -v /opt/rtb/loki-data:/var/loki ${LOKI_IMAGE} -config.file=/etc/loki/loki.yaml`,
       `docker pull ${PYROSCOPE_IMAGE}`,
-      `docker run -d --name pyroscope --restart unless-stopped --network host -v /opt/rtb/pyroscope-data:/data ${PYROSCOPE_IMAGE} -self-profiling.disable-push=true -usage-stats.enabled=false -retention-period=24h`,
+      `docker run -d --name pyroscope --restart unless-stopped --network observability -p 4040:4040 -v /opt/rtb/pyroscope-data:/data ${PYROSCOPE_IMAGE} -self-profiling.disable-push=true -usage-stats.enabled=false -retention-period=24h`,
       `docker pull ${PROMETHEUS_IMAGE}`,
-      `docker run -d --name prometheus --restart unless-stopped --network host -v /opt/rtb/observability/prometheus/aws-stage8c.yaml:/etc/prometheus/prometheus.yml:ro -v /opt/rtb/prometheus-data:/prometheus ${PROMETHEUS_IMAGE} --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=24h`,
+      `docker run -d --name prometheus --restart unless-stopped --network observability -p 127.0.0.1:9090:9090 -v /opt/rtb/observability/prometheus/aws-stage8c.yaml:/etc/prometheus/prometheus.yml:ro -v /opt/rtb/prometheus-data:/prometheus ${PROMETHEUS_IMAGE} --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=24h`,
       `docker pull ${GRAFANA_IMAGE}`,
-      `docker run -d --name grafana --restart unless-stopped --network host -v /opt/rtb/observability/grafana/provisioning:/etc/grafana/provisioning:ro -v /opt/rtb/grafana-data:/var/lib/grafana -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer -e GF_AUTH_DISABLE_LOGIN_FORM=true -e PROMETHEUS_URL=http://127.0.0.1:9090 -e TEMPO_URL=http://127.0.0.1:3200 -e LOKI_URL=http://127.0.0.1:3100 -e PYROSCOPE_URL=http://127.0.0.1:4040 ${GRAFANA_IMAGE}`,
+      `docker run -d --name grafana --restart unless-stopped --network observability -p 127.0.0.1:3000:3000 -v /opt/rtb/observability/grafana/provisioning:/etc/grafana/provisioning:ro -v /opt/rtb/grafana-data:/var/lib/grafana -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer -e GF_AUTH_DISABLE_LOGIN_FORM=true -e PROMETHEUS_URL=http://prometheus:9090 -e TEMPO_URL=http://tempo:3200 -e LOKI_URL=http://loki:3100 -e PYROSCOPE_URL=http://pyroscope:4040 ${GRAFANA_IMAGE}`,
     );
     this.configureProfiler(userData, "observer", observerPrivateIp);
   }
