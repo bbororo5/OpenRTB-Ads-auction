@@ -126,7 +126,6 @@ public final class SspRuntimeFactory {
             billingWorker = new BillingDeliveryWorker(
                     notificationDelivery,
                     clock,
-                    settings.billingWorkerInterval(),
                     settings.billingWorkerConcurrency()
             );
             server = new ProviderHttpServer(

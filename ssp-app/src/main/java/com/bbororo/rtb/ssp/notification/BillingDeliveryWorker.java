@@ -2,107 +2,142 @@ package com.bbororo.rtb.ssp.notification;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.Instant;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** 인스턴스 안에서 지역 DB의 burl 전달 작업을 제한된 수만큼 병렬 처리한다. */
+/** 내구 과금 작업 신호와 재시도 시각에만 깨어나는 제한 동시성 전달기다. */
 public final class BillingDeliveryWorker implements AutoCloseable {
 
     private static final System.Logger LOGGER = System.getLogger(BillingDeliveryWorker.class.getName());
+    private static final Duration FAILURE_RETRY_DELAY = Duration.ofMillis(100);
 
     private final DspNotificationDelivery delivery;
     private final Clock clock;
-    private final Duration interval;
     private final int concurrency;
-    private final ScheduledExecutorService executor;
+    private final ExecutorService workers;
+    private final ScheduledExecutorService timer;
+    private final Semaphore workSignals = new Semaphore(0);
     private final AtomicBoolean started = new AtomicBoolean();
-    private final List<ScheduledFuture<?>> tasks = new ArrayList<>();
-
-    public BillingDeliveryWorker(DspNotificationDelivery delivery, Clock clock, Duration interval) {
-        this(delivery, clock, interval, 1);
-    }
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     public BillingDeliveryWorker(
             DspNotificationDelivery delivery,
             Clock clock,
-            Duration interval,
             int concurrency
     ) {
-        this(delivery, clock, interval, concurrency, newExecutor(concurrency));
+        this(
+                delivery,
+                clock,
+                concurrency,
+                newWorkerExecutor(concurrency),
+                newTimerExecutor()
+        );
     }
 
     BillingDeliveryWorker(
             DspNotificationDelivery delivery,
             Clock clock,
-            Duration interval,
             int concurrency,
-            ScheduledExecutorService executor
+            ExecutorService workers,
+            ScheduledExecutorService timer
     ) {
-        this.delivery = Objects.requireNonNull(delivery);
-        this.clock = Objects.requireNonNull(clock);
-        if (interval.isZero() || interval.isNegative()) {
-            throw new IllegalArgumentException("interval must be positive");
-        }
-        this.interval = interval;
+        this.delivery = Objects.requireNonNull(delivery, "delivery");
+        this.clock = Objects.requireNonNull(clock, "clock");
         if (concurrency <= 0) {
             throw new IllegalArgumentException("concurrency must be positive");
         }
         this.concurrency = concurrency;
-        this.executor = Objects.requireNonNull(executor);
+        this.workers = Objects.requireNonNull(workers, "workers");
+        this.timer = Objects.requireNonNull(timer, "timer");
     }
 
     public void start() {
-        if (!started.compareAndSet(false, true)) {
-            throw new IllegalStateException("billing delivery worker is already started");
+        if (closed.get() || !started.compareAndSet(false, true)) {
+            throw new IllegalStateException("billing delivery worker cannot be started");
         }
         for (int index = 0; index < concurrency; index++) {
-            tasks.add(executor.scheduleWithFixedDelay(
-                    this::runSafely,
-                    0,
-                    interval.toNanos(),
-                    TimeUnit.NANOSECONDS
-            ));
+            workers.execute(this::runLoop);
         }
     }
 
-    /** 한 번의 실행은 한 작업만 처리해 다른 호출의 재시도 시간을 독점하지 않는다. */
-    public void runOnce() {
-        delivery.deliverDueBilling(clock.instant());
+    /** DB commit 뒤 새 과금 작업 하나가 생겼음을 알린다. */
+    public void signal() {
+        if (!closed.get()) {
+            workSignals.release();
+        }
     }
 
-    private void runSafely() {
-        try {
-            runOnce();
-        } catch (RuntimeException exception) {
-            LOGGER.log(System.Logger.Level.ERROR, "burl 전달 작업 실행에 실패했습니다.", exception);
+    /** 복구한 작업이나 내구 저장소가 정한 재시도를 정확한 시각에 깨운다. */
+    public void schedule(Instant dueAt) {
+        Objects.requireNonNull(dueAt, "dueAt");
+        if (closed.get()) {
+            return;
+        }
+        long delayNanos = Math.max(
+                0L,
+                Duration.between(clock.instant(), dueAt).toNanos()
+        );
+        timer.schedule(this::signal, delayNanos, TimeUnit.NANOSECONDS);
+    }
+
+    /** 동기 조립 시험용 단건 실행이다. */
+    public BillingDeliveryAttempt runOnce() {
+        return delivery.deliverDueBilling(clock.instant());
+    }
+
+    private void runLoop() {
+        while (!closed.get()) {
+            try {
+                workSignals.acquire();
+                if (closed.get()) {
+                    return;
+                }
+                BillingDeliveryAttempt attempt = runOnce();
+                attempt.retryAt().ifPresent(this::schedule);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (RuntimeException failure) {
+                LOGGER.log(System.Logger.Level.ERROR, "burl 전달 작업 실행에 실패했습니다.", failure);
+                schedule(clock.instant().plus(FAILURE_RETRY_DELAY));
+            }
         }
     }
 
     @Override
     public void close() {
-        for (ScheduledFuture<?> task : tasks) {
-            task.cancel(false);
+        if (!closed.compareAndSet(false, true)) {
+            return;
         }
-        executor.shutdown();
+        timer.shutdownNow();
+        workers.shutdownNow();
     }
 
-    private static ScheduledExecutorService newExecutor(int concurrency) {
+    private static ExecutorService newWorkerExecutor(int concurrency) {
         if (concurrency <= 0) {
             throw new IllegalArgumentException("concurrency must be positive");
         }
-        AtomicInteger threadSequence = new AtomicInteger();
-        return Executors.newScheduledThreadPool(concurrency, runnable -> {
+        AtomicInteger sequence = new AtomicInteger();
+        return Executors.newFixedThreadPool(concurrency, runnable -> {
             Thread thread = new Thread(
                     runnable,
-                    "ssp-billing-delivery-" + threadSequence.incrementAndGet()
+                    "ssp-billing-delivery-" + sequence.incrementAndGet()
             );
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    private static ScheduledExecutorService newTimerExecutor() {
+        return Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "ssp-billing-scheduler");
             thread.setDaemon(true);
             return thread;
         });
