@@ -112,6 +112,22 @@ class BillingDeliveryWorkerTest {
         }
     }
 
+    @Test
+    void restoresDurableWorkBeforeStartingTheWorkerLoops() throws Exception {
+        CountDownLatch attempted = new CountDownLatch(1);
+        var delivery = delivery(ignored -> {
+            attempted.countDown();
+            return BillingDeliveryAttempt.completed();
+        });
+
+        try (var worker = new BillingDeliveryWorker(delivery, Clock.systemUTC(), 1)) {
+            worker.recover(List.of(Instant.now()));
+            worker.start();
+
+            assertTrue(attempted.await(1, TimeUnit.SECONDS));
+        }
+    }
+
     private static DspNotificationDelivery delivery(Attempt attempt) {
         return new DspNotificationDelivery() {
             @Override

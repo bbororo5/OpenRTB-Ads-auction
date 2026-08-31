@@ -66,6 +66,28 @@ class InMemoryClaimDeliveryStoreTest {
     }
 
     @Test
+    void exposesOnlyNonTerminalWorkAtItsNextRecoverableTime() {
+        InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore(
+                Duration.ofMillis(100),
+                new DeliveryRetryPolicy(Duration.ofMillis(50), Duration.ofMillis(500))
+        );
+        store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusSeconds(5)));
+        assertEquals(List.of(NOW), store.recoverableDeliveryTimes(NOW));
+
+        var leased = store.leaseDueDelivery(NOW).orElseThrow();
+        assertEquals(
+                List.of(NOW.plusMillis(100)),
+                store.recoverableDeliveryTimes(NOW)
+        );
+
+        store.completeOrReleaseDelivery(leased.lease(), DeliveryOutcome.RETRY, NOW);
+        assertEquals(
+                List.of(NOW.plusMillis(50)),
+                store.recoverableDeliveryTimes(NOW)
+        );
+    }
+
+    @Test
     void terminalizesARetryThatCannotStartBeforeTheDeadline() {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
         store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusMillis(40)));

@@ -6,6 +6,7 @@ import com.bbororo.rtb.ssp.contract.SspMessages.DeliveryLease;
 import com.bbororo.rtb.ssp.contract.SspMessages.LeasedBillingDelivery;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderAcceptance;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -18,6 +19,9 @@ public interface ClaimDeliveryStore {
     RenderAcceptance recordClaimAndScheduleDelivery(BillingClaim claim);
 
     Optional<LeasedBillingDelivery> leaseDueDelivery(Instant now);
+
+    /** 프로세스 시작 시 비종결 작업을 메모리 scheduler에 한 번 복원한다. */
+    List<Instant> recoverableDeliveryTimes(Instant now);
 
     Optional<Instant> completeOrReleaseDelivery(
             DeliveryLease lease,

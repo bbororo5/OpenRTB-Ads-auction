@@ -113,7 +113,7 @@ final class SspE2eFixture {
         AuctionRenderApi api = new DefaultAuctionRenderApi(
                 admission,
                 proofService,
-                new StoreBackedRenderClaimService(store, trust),
+                new StoreBackedRenderClaimService(store, trust, () -> { }),
                 System::nanoTime
         );
         return new SspE2eFixture(

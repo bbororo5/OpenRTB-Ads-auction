@@ -12,6 +12,8 @@ import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -62,6 +64,19 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
                       delivery.provider_request_id, delivery.imp_id, delivery.slot_auction_key,
                       delivery.dsp_id, delivery.cpm_milli_krw, delivery.billing_url,
                       delivery.billing_deadline, delivery.lease_generation, delivery.lease_until
+            """;
+
+    private static final String RECOVER_SCHEDULES = """
+            SELECT GREATEST(
+                       ?,
+                       CASE state
+                         WHEN 'PENDING' THEN LEAST(next_attempt_at, billing_deadline)
+                         WHEN 'LEASED' THEN LEAST(lease_until, billing_deadline)
+                       END
+                   ) AS due_at
+              FROM ssp_billing_delivery
+             WHERE state IN ('PENDING', 'LEASED')
+             ORDER BY due_at, created_at
             """;
 
     private final DataSource dataSource;
@@ -185,6 +200,24 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
             }
         } catch (Exception exception) {
             throw new IllegalStateException("Could not lease SSP billing delivery", exception);
+        }
+    }
+
+    @Override
+    public List<Instant> recoverableDeliveryTimes(Instant now) {
+        Objects.requireNonNull(now);
+        try (Connection connection = dataSource.getConnection();
+             var statement = connection.prepareStatement(RECOVER_SCHEDULES)) {
+            statement.setTimestamp(1, Timestamp.from(now));
+            try (ResultSet result = statement.executeQuery()) {
+                List<Instant> dueTimes = new ArrayList<>();
+                while (result.next()) {
+                    dueTimes.add(result.getTimestamp("due_at").toInstant());
+                }
+                return List.copyOf(dueTimes);
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not recover SSP billing deliveries", exception);
         }
     }
 

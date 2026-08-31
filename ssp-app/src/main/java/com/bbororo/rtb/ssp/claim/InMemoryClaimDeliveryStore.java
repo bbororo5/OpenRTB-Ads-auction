@@ -8,7 +8,9 @@ import com.bbororo.rtb.ssp.contract.SspMessages.LeasedBillingDelivery;
 import com.bbororo.rtb.ssp.contract.SspMessages.RenderAcceptance;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -77,6 +79,17 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
     }
 
     @Override
+    public synchronized List<Instant> recoverableDeliveryTimes(Instant now) {
+        Objects.requireNonNull(now);
+        List<Instant> dueTimes = new ArrayList<>();
+        for (StoredDelivery delivery : deliveriesBySlotAuctionKey.values()) {
+            delivery.recoverableAt(now).ifPresent(dueTimes::add);
+        }
+        dueTimes.sort(Instant::compareTo);
+        return List.copyOf(dueTimes);
+    }
+
+    @Override
     public synchronized Optional<Instant> completeOrReleaseDelivery(
             DeliveryLease lease,
             DeliveryOutcome outcome,
@@ -140,6 +153,19 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
 
         private boolean isPending() {
             return state == DeliveryState.PENDING || state == DeliveryState.LEASED;
+        }
+
+        private Optional<Instant> recoverableAt(Instant now) {
+            if (!isPending()) {
+                return Optional.empty();
+            }
+            Instant availableAt = state == DeliveryState.PENDING
+                    ? nextAttemptAt
+                    : lease.leaseUntil();
+            Instant dueAt = availableAt.isBefore(task.claim().billingDeadline())
+                    ? availableAt
+                    : task.claim().billingDeadline();
+            return Optional.of(dueAt.isBefore(now) ? now : dueAt);
         }
 
         private LeasedBillingDelivery lease(Instant now, Duration duration) {

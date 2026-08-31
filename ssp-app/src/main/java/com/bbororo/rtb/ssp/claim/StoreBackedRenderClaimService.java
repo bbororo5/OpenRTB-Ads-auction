@@ -15,10 +15,16 @@ public final class StoreBackedRenderClaimService implements RenderClaimService {
 
     private final ClaimDeliveryStore store;
     private final ProviderTrustSnapshot trustSnapshot;
+    private final BillingWorkSignal billingWorkSignal;
 
-    public StoreBackedRenderClaimService(ClaimDeliveryStore store, ProviderTrustSnapshot trustSnapshot) {
+    public StoreBackedRenderClaimService(
+            ClaimDeliveryStore store,
+            ProviderTrustSnapshot trustSnapshot,
+            BillingWorkSignal billingWorkSignal
+    ) {
         this.store = Objects.requireNonNull(store);
         this.trustSnapshot = Objects.requireNonNull(trustSnapshot);
+        this.billingWorkSignal = Objects.requireNonNull(billingWorkSignal);
     }
 
     @Override
@@ -27,7 +33,7 @@ public final class StoreBackedRenderClaimService implements RenderClaimService {
         if (!trustSnapshot.isActive(render.providerId())) {
             return RenderAcceptance.REJECTED;
         }
-        return store.recordClaimAndScheduleDelivery(new BillingClaim(
+        RenderAcceptance acceptance = store.recordClaimAndScheduleDelivery(new BillingClaim(
                 render.providerId(),
                 render.providerRequestId(),
                 render.impId(),
@@ -44,5 +50,9 @@ public final class StoreBackedRenderClaimService implements RenderClaimService {
                 )),
                 render.auctionIssuedAt().plus(BILLING_DELIVERY_WINDOW)
         ));
+        if (acceptance == RenderAcceptance.ACCEPTED) {
+            billingWorkSignal.signal();
+        }
+        return acceptance;
     }
 }

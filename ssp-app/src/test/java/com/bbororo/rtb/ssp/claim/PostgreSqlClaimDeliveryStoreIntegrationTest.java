@@ -41,6 +41,10 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
                     URI.create("https://project-dsp.test/burl/1"), now.plusSeconds(5)
             );
             assertEquals(RenderAcceptance.REJECTED, store.recordClaimAndScheduleDelivery(conflictingClaim));
+            Instant recoveryStartedAt = Instant.now();
+            List<Instant> recoveryTimes = store.recoverableDeliveryTimes(recoveryStartedAt);
+            assertEquals(1, recoveryTimes.size());
+            assertTrue(!recoveryTimes.getFirst().isBefore(recoveryStartedAt));
             var leased = store.leaseDueDelivery(Instant.now()).orElseThrow();
             assertEquals(2_000L, leased.task().claim().cpmMilliKrw());
 

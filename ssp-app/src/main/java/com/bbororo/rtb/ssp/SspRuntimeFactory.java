@@ -97,6 +97,13 @@ public final class SspRuntimeFactory {
                     settings,
                     clock
             );
+            var assembledBillingWorker = new BillingDeliveryWorker(
+                    notificationDelivery,
+                    clock,
+                    settings.billingWorkerConcurrency()
+            );
+            assembledBillingWorker.recover(store.recoverableDeliveryTimes(clock.instant()));
+            billingWorker = assembledBillingWorker;
             RenderProofService proofService = createProofService(settings);
             var resultAssembler = new AuctionResultAssembler(
                     proofService,
@@ -119,14 +126,10 @@ public final class SspRuntimeFactory {
                     proofService,
                     new StoreBackedRenderClaimService(
                             store,
-                            trustControl.trustSnapshot()
+                            trustControl.trustSnapshot(),
+                            assembledBillingWorker::signal
                     ),
                     System::nanoTime
-            );
-            billingWorker = new BillingDeliveryWorker(
-                    notificationDelivery,
-                    clock,
-                    settings.billingWorkerConcurrency()
             );
             server = new ProviderHttpServer(
                     new InetSocketAddress("0.0.0.0", settings.serverPort()),

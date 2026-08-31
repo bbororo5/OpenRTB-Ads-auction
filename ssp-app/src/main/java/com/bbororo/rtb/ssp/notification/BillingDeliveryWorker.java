@@ -87,6 +87,12 @@ public final class BillingDeliveryWorker implements AutoCloseable {
         timer.schedule(this::signal, delayNanos, TimeUnit.NANOSECONDS);
     }
 
+    /** 시작 전에 DB에서 읽은 비종결 작업의 실행 시각을 복원한다. */
+    public void recover(Iterable<Instant> dueTimes) {
+        Objects.requireNonNull(dueTimes, "dueTimes");
+        dueTimes.forEach(this::schedule);
+    }
+
     /** 동기 조립 시험용 단건 실행이다. */
     public BillingDeliveryAttempt runOnce() {
         return delivery.deliverDueBilling(clock.instant());

@@ -11,7 +11,9 @@ import com.bbororo.rtb.ssp.contract.SspMessages.LeasedBillingDelivery;
 import com.bbororo.rtb.ssp.contract.NoticeUrlTemplate;
 import com.bbororo.rtb.ssp.trust.ProviderTrustSnapshot;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class StoreBackedRenderClaimServiceTest {
@@ -19,18 +21,22 @@ class StoreBackedRenderClaimServiceTest {
     @Test
     void recordsOneClaimAndOneDeliveryTaskForRepeatedProofs() {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
-        RenderClaimService service = new StoreBackedRenderClaimService(store, trust(true));
+        AtomicInteger signals = new AtomicInteger();
+        RenderClaimService service = new StoreBackedRenderClaimService(
+                store, trust(true), signals::incrementAndGet);
         VerifiedRender render = verifiedRender();
 
         assertEquals(RenderAcceptance.ACCEPTED, service.acceptRender(render));
         assertEquals(RenderAcceptance.DUPLICATE, service.acceptRender(render));
         assertEquals(1, store.recordedClaimCount());
+        assertEquals(1, signals.get());
     }
 
     @Test
     void rejectsAnOtherwiseValidProofWhenTheProviderIsNoLongerActive() {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
-        RenderClaimService service = new StoreBackedRenderClaimService(store, trust(false));
+        RenderClaimService service = new StoreBackedRenderClaimService(
+                store, trust(false), () -> { });
 
         assertEquals(RenderAcceptance.REJECTED, service.acceptRender(verifiedRender()));
         assertEquals(0, store.recordedClaimCount());
@@ -40,7 +46,8 @@ class StoreBackedRenderClaimServiceTest {
     void exposesAnUnavailableStoreAsRetryLater() {
         RenderClaimService service = new StoreBackedRenderClaimService(
                 unavailableStore(),
-                trust(true)
+                trust(true),
+                () -> { }
         );
 
         assertEquals(RenderAcceptance.RETRY_LATER, service.acceptRender(verifiedRender()));
@@ -49,7 +56,8 @@ class StoreBackedRenderClaimServiceTest {
     @Test
     void expandsBillingMacrosWithTheVerifiedImpressionTimestamp() {
         InMemoryClaimDeliveryStore store = new InMemoryClaimDeliveryStore();
-        RenderClaimService service = new StoreBackedRenderClaimService(store, trust(true));
+        RenderClaimService service = new StoreBackedRenderClaimService(
+                store, trust(true), () -> { });
         Instant issuedAt = Instant.parse("2026-07-27T00:00:00Z");
         Instant impressionAt = issuedAt.plusMillis(200);
         VerifiedRender render = new VerifiedRender(
@@ -111,6 +119,11 @@ class StoreBackedRenderClaimServiceTest {
 
             @Override
             public Optional<LeasedBillingDelivery> leaseDueDelivery(Instant now) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public List<Instant> recoverableDeliveryTimes(Instant now) {
                 throw new UnsupportedOperationException();
             }
 
