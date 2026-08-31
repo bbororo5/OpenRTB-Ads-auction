@@ -230,7 +230,7 @@ class Stage8cOperationalRoundTripTest {
                 Map.of("project-dsp", dspEndpoint),
                 Duration.ofMillis(100), 32, 65_536, 1_000,
                 (byte) 1, Map.of((byte) 1, new byte[32]),
-                Duration.ofMillis(10), 4, Duration.ofMillis(500));
+                4, Duration.ofMillis(500));
     }
 
     private static HttpRequest jsonPost(URI uri, String body) {

@@ -21,7 +21,6 @@ public record SspRuntimeSettings(
         int auctionDedupMaximumEntries,
         byte renderProofKeyId,
         Map<Byte, byte[]> renderProofKeys,
-        Duration billingWorkerInterval,
         int billingWorkerConcurrency,
         Duration noticeTimeout
 ) {
@@ -77,7 +76,6 @@ public record SspRuntimeSettings(
         if (!renderProofKeys.containsKey(renderProofKeyId)) {
             throw new IllegalArgumentException("renderProofKeys must contain the active key id");
         }
-        requirePositive(billingWorkerInterval, "billingWorkerInterval");
         if (billingWorkerConcurrency <= 0 || billingWorkerConcurrency > 256) {
             throw new IllegalArgumentException(
                     "billingWorkerConcurrency must be between 1 and 256"
@@ -125,9 +123,6 @@ public record SspRuntimeSettings(
         );
         byte keyId = Byte.parseByte(environment.getOrDefault("RENDER_PROOF_KEY_ID", "1"));
         Map<Byte, byte[]> keys = parseRenderProofKeys(environment, keyId);
-        Duration workerInterval = Duration.ofMillis(
-                Long.parseLong(environment.getOrDefault("BILLING_WORKER_INTERVAL_MS", "10"))
-        );
         int workerConcurrency = Integer.parseInt(
                 environment.getOrDefault("BILLING_WORKER_CONCURRENCY", "16")
         );
@@ -148,7 +143,6 @@ public record SspRuntimeSettings(
                 dedupMaximumEntries,
                 keyId,
                 keys,
-                workerInterval,
                 workerConcurrency,
                 noticeTimeout
         );
