@@ -106,7 +106,8 @@ class CoordinatingAuctionStarterTest {
                     }
 
                     @Override
-                    public void deliverDueBilling(Instant now) {
+                    public com.bbororo.rtb.ssp.notification.BillingDeliveryAttempt deliverDueBilling(Instant now) {
+                        return com.bbororo.rtb.ssp.notification.BillingDeliveryAttempt.empty();
                     }
                 }
         );
@@ -150,7 +151,8 @@ class CoordinatingAuctionStarterTest {
             }
 
             @Override
-            public void deliverDueBilling(Instant now) {
+            public com.bbororo.rtb.ssp.notification.BillingDeliveryAttempt deliverDueBilling(Instant now) {
+                return com.bbororo.rtb.ssp.notification.BillingDeliveryAttempt.empty();
             }
         };
     }

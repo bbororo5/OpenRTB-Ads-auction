@@ -25,8 +25,9 @@ class BillingDeliveryWorkerTest {
             }
 
             @Override
-            public void deliverDueBilling(Instant deliveryTime) {
+            public BillingDeliveryAttempt deliverDueBilling(Instant deliveryTime) {
                 observed.set(deliveryTime);
+                return BillingDeliveryAttempt.empty();
             }
         };
 
@@ -51,13 +52,14 @@ class BillingDeliveryWorkerTest {
             }
 
             @Override
-            public void deliverDueBilling(Instant deliveryTime) {
+            public BillingDeliveryAttempt deliverDueBilling(Instant deliveryTime) {
                 entered.countDown();
                 try {
                     release.await();
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
                 }
+                return BillingDeliveryAttempt.empty();
             }
         };
 

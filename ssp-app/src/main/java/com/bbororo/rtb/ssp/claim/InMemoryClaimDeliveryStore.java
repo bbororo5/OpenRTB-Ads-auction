@@ -77,16 +77,20 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
     }
 
     @Override
-    public synchronized void completeOrReleaseDelivery(DeliveryLease lease, DeliveryOutcome outcome, Instant now) {
+    public synchronized Optional<Instant> completeOrReleaseDelivery(
+            DeliveryLease lease,
+            DeliveryOutcome outcome,
+            Instant now
+    ) {
         Objects.requireNonNull(lease);
         Objects.requireNonNull(outcome);
         Objects.requireNonNull(now);
         for (StoredDelivery delivery : deliveriesBySlotAuctionKey.values()) {
             if (delivery.matches(lease)) {
-                delivery.finish(outcome, now);
-                return;
+                return delivery.finish(outcome, now);
             }
         }
+        return Optional.empty();
     }
 
     /** 시험용 어댑터가 현재 보존한 청구 수다. */
@@ -151,22 +155,23 @@ public final class InMemoryClaimDeliveryStore implements ClaimDeliveryStore {
                     && lease.generation() == candidate.generation();
         }
 
-        private void finish(DeliveryOutcome outcome, Instant now) {
+        private Optional<Instant> finish(DeliveryOutcome outcome, Instant now) {
             if (outcome == DeliveryOutcome.DELIVERED) {
                 state = DeliveryState.DELIVERED;
-                return;
+                return Optional.empty();
             }
             if (outcome == DeliveryOutcome.UNDELIVERED) {
                 state = DeliveryState.UNDELIVERED;
-                return;
+                return Optional.empty();
             }
             Instant retryAt = now.plus(retryPolicy.delayAfter(lease.generation()));
             if (retryAt.isBefore(task.claim().billingDeadline())) {
                 nextAttemptAt = retryAt;
                 state = DeliveryState.PENDING;
-                return;
+                return Optional.of(retryAt);
             }
             state = DeliveryState.UNDELIVERED;
+            return Optional.empty();
         }
     }
 

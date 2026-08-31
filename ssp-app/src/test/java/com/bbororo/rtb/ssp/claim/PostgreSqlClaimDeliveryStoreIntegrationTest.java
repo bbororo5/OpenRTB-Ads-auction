@@ -138,7 +138,12 @@ class PostgreSqlClaimDeliveryStoreIntegrationTest {
 
             Instant recordedAt = Instant.now();
             var first = store.leaseDueDelivery(recordedAt.plusMillis(10)).orElseThrow();
-            store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.RETRY, recordedAt.plusMillis(20));
+            assertEquals(
+                    java.util.Optional.of(recordedAt.plusMillis(70)),
+                    store.completeOrReleaseDelivery(
+                            first.lease(), DeliveryOutcome.RETRY, recordedAt.plusMillis(20)
+                    )
+            );
             assertTrue(store.leaseDueDelivery(recordedAt.plusMillis(69)).isEmpty());
 
             var second = store.leaseDueDelivery(recordedAt.plusMillis(70)).orElseThrow();

@@ -84,7 +84,8 @@ class AuctionAdmissionToCoordinatorTest {
             }
 
             @Override
-            public void deliverDueBilling(java.time.Instant now) {
+            public com.bbororo.rtb.ssp.notification.BillingDeliveryAttempt deliverDueBilling(java.time.Instant now) {
+                return com.bbororo.rtb.ssp.notification.BillingDeliveryAttempt.empty();
             }
         };
     }

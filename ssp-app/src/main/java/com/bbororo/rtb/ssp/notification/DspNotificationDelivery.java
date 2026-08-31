@@ -9,5 +9,5 @@ public interface DspNotificationDelivery {
 
     void sendAuctionNotices(List<AuctionNotice> notices);
 
-    void deliverDueBilling(Instant now);
+    BillingDeliveryAttempt deliverDueBilling(Instant now);
 }

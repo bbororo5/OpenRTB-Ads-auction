@@ -56,7 +56,10 @@ class InMemoryClaimDeliveryStoreTest {
         store.recordClaimAndScheduleDelivery(claim("a".repeat(64), NOW.plusSeconds(5)));
         var first = store.leaseDueDelivery(NOW).orElseThrow();
 
-        store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.RETRY, NOW);
+        assertEquals(
+                java.util.Optional.of(NOW.plusMillis(50)),
+                store.completeOrReleaseDelivery(first.lease(), DeliveryOutcome.RETRY, NOW)
+        );
 
         assertTrue(store.leaseDueDelivery(NOW.plusMillis(49)).isEmpty());
         assertEquals(2, store.leaseDueDelivery(NOW.plusMillis(50)).orElseThrow().lease().generation());

@@ -189,15 +189,25 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
     }
 
     @Override
-    public void completeOrReleaseDelivery(DeliveryLease lease, DeliveryOutcome outcome, Instant now) {
+    public Optional<Instant> completeOrReleaseDelivery(
+            DeliveryLease lease,
+            DeliveryOutcome outcome,
+            Instant now
+    ) {
         Objects.requireNonNull(lease);
         Objects.requireNonNull(outcome);
         Objects.requireNonNull(now);
-        switch (outcome) {
-            case DELIVERED -> completeTerminal(lease, "DELIVERED", now);
-            case UNDELIVERED -> completeTerminal(lease, "UNDELIVERED", now);
+        return switch (outcome) {
+            case DELIVERED -> {
+                completeTerminal(lease, "DELIVERED", now);
+                yield Optional.empty();
+            }
+            case UNDELIVERED -> {
+                completeTerminal(lease, "UNDELIVERED", now);
+                yield Optional.empty();
+            }
             case RETRY -> releaseForRetry(lease, now);
-        }
+        };
     }
 
     private void completeTerminal(
@@ -226,7 +236,7 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
         }
     }
 
-    private void releaseForRetry(DeliveryLease lease, Instant completedAt) {
+    private Optional<Instant> releaseForRetry(DeliveryLease lease, Instant completedAt) {
         Instant retryAt = completedAt.plus(retryPolicy.delayAfter(lease.generation()));
         String sql = """
                 UPDATE ssp_billing_delivery
@@ -248,7 +258,7 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
                    AND lease_generation = ?
                 """;
         try (Connection connection = dataSource.getConnection();
-             var statement = connection.prepareStatement(sql)) {
+             var statement = connection.prepareStatement(sql + " RETURNING state")) {
             statement.setTimestamp(1, Timestamp.from(retryAt));
             statement.setTimestamp(2, Timestamp.from(retryAt));
             statement.setTimestamp(3, Timestamp.from(retryAt));
@@ -256,7 +266,12 @@ public final class PostgreSqlClaimDeliveryStore implements ClaimDeliveryStore {
             statement.setTimestamp(5, Timestamp.from(completedAt));
             statement.setObject(6, UUID.fromString(lease.deliveryId()));
             statement.setLong(7, lease.generation());
-            statement.executeUpdate();
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next() || !"PENDING".equals(result.getString("state"))) {
+                    return Optional.empty();
+                }
+                return Optional.of(retryAt);
+            }
         } catch (Exception exception) {
             throw new IllegalStateException("Could not release SSP billing delivery", exception);
         }

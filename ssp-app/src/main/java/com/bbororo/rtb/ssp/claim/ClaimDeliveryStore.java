@@ -19,5 +19,9 @@ public interface ClaimDeliveryStore {
 
     Optional<LeasedBillingDelivery> leaseDueDelivery(Instant now);
 
-    void completeOrReleaseDelivery(DeliveryLease lease, DeliveryOutcome outcome, Instant now);
+    Optional<Instant> completeOrReleaseDelivery(
+            DeliveryLease lease,
+            DeliveryOutcome outcome,
+            Instant now
+    );
 }

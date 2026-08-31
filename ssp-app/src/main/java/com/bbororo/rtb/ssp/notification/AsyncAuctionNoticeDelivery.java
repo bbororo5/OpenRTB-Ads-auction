@@ -29,8 +29,8 @@ public final class AsyncAuctionNoticeDelivery implements DspNotificationDelivery
     }
 
     @Override
-    public void deliverDueBilling(Instant now) {
-        delegate.deliverDueBilling(now);
+    public BillingDeliveryAttempt deliverDueBilling(Instant now) {
+        return delegate.deliverDueBilling(now);
     }
 
     @Override

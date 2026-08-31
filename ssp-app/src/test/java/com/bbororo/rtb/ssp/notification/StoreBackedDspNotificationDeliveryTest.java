@@ -31,8 +31,9 @@ class StoreBackedDspNotificationDeliveryTest {
             return DeliveryOutcome.DELIVERED;
         });
 
-        delivery.deliverDueBilling(NOW);
+        BillingDeliveryAttempt attempt = delivery.deliverDueBilling(NOW);
 
+        assertEquals(BillingDeliveryAttempt.completed(), attempt);
         assertEquals(List.of(BURL), delivered);
         assertEquals(0, store.pendingDeliveryCount());
     }
@@ -45,10 +46,15 @@ class StoreBackedDspNotificationDeliveryTest {
                 attempts.incrementAndGet() == 1 ? DeliveryOutcome.RETRY : DeliveryOutcome.DELIVERED
         );
 
-        delivery.deliverDueBilling(NOW);
+        BillingDeliveryAttempt first = delivery.deliverDueBilling(NOW);
+        assertEquals(
+                BillingDeliveryAttempt.retryScheduled(NOW.plusMillis(50)),
+                first
+        );
         assertEquals(1, store.pendingDeliveryCount());
 
-        delivery.deliverDueBilling(NOW.plusMillis(100));
+        BillingDeliveryAttempt second = delivery.deliverDueBilling(NOW.plusMillis(100));
+        assertEquals(BillingDeliveryAttempt.completed(), second);
         assertEquals(2, attempts.get());
         assertEquals(0, store.pendingDeliveryCount());
     }
@@ -60,9 +66,27 @@ class StoreBackedDspNotificationDeliveryTest {
             throw new IllegalStateException("temporary network failure");
         });
 
-        delivery.deliverDueBilling(NOW);
+        BillingDeliveryAttempt attempt = delivery.deliverDueBilling(NOW);
 
+        assertEquals(
+                BillingDeliveryAttempt.retryScheduled(NOW.plusMillis(50)),
+                attempt
+        );
         assertEquals(1, store.pendingDeliveryCount());
+    }
+
+    @Test
+    void reportsThatNoBillingWasDueWithoutCallingTheClient() {
+        AtomicInteger calls = new AtomicInteger();
+        var delivery = delivery(new InMemoryClaimDeliveryStore(), (ignored, timeout) -> {
+            calls.incrementAndGet();
+            return DeliveryOutcome.DELIVERED;
+        });
+
+        BillingDeliveryAttempt attempt = delivery.deliverDueBilling(NOW);
+
+        assertEquals(BillingDeliveryAttempt.empty(), attempt);
+        assertEquals(0, calls.get());
     }
 
     @Test
@@ -81,8 +105,9 @@ class StoreBackedDspNotificationDeliveryTest {
                 Duration.ofMillis(500)
         );
 
-        delivery.deliverDueBilling(NOW.plusMillis(4_700));
+        BillingDeliveryAttempt attempt = delivery.deliverDueBilling(NOW.plusMillis(4_700));
 
+        assertEquals(BillingDeliveryAttempt.completed(), attempt);
         assertEquals(Duration.ofMillis(300), observedTimeout.get());
         assertEquals(0, store.pendingDeliveryCount());
     }

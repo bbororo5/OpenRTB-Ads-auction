@@ -115,7 +115,7 @@ class StoreBackedRenderClaimServiceTest {
             }
 
             @Override
-            public void completeOrReleaseDelivery(
+            public Optional<Instant> completeOrReleaseDelivery(
                     DeliveryLease lease,
                     DeliveryOutcome outcome,
                     Instant now

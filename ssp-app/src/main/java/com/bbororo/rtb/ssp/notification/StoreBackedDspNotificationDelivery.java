@@ -43,23 +43,28 @@ public final class StoreBackedDspNotificationDelivery implements DspNotification
     }
 
     @Override
-    public void deliverDueBilling(Instant now) {
+    public BillingDeliveryAttempt deliverDueBilling(Instant now) {
         Objects.requireNonNull(now);
-        store.leaseDueDelivery(now).ifPresent(delivery -> {
-            Instant attemptStartedAt = notBefore(clock.instant(), now);
-            Duration remaining = Duration.between(
-                    attemptStartedAt,
-                    delivery.task().claim().billingDeadline()
-            );
-            DeliveryOutcome outcome = remaining.isZero() || remaining.isNegative()
-                    ? DeliveryOutcome.UNDELIVERED
-                    : sendSafely(
-                            delivery.task().claim().billingUrl(),
-                            shorterOf(maxAttemptDuration, remaining)
-                    );
-            Instant completedAt = notBefore(clock.instant(), attemptStartedAt);
-            store.completeOrReleaseDelivery(delivery.lease(), outcome, completedAt);
-        });
+        var leased = store.leaseDueDelivery(now);
+        if (leased.isEmpty()) {
+            return BillingDeliveryAttempt.empty();
+        }
+        var delivery = leased.orElseThrow();
+        Instant attemptStartedAt = notBefore(clock.instant(), now);
+        Duration remaining = Duration.between(
+                attemptStartedAt,
+                delivery.task().claim().billingDeadline()
+        );
+        DeliveryOutcome outcome = remaining.isZero() || remaining.isNegative()
+                ? DeliveryOutcome.UNDELIVERED
+                : sendSafely(
+                        delivery.task().claim().billingUrl(),
+                        shorterOf(maxAttemptDuration, remaining)
+                );
+        Instant completedAt = notBefore(clock.instant(), attemptStartedAt);
+        return store.completeOrReleaseDelivery(delivery.lease(), outcome, completedAt)
+                .map(BillingDeliveryAttempt::retryScheduled)
+                .orElseGet(BillingDeliveryAttempt::completed);
     }
 
     private DeliveryOutcome sendSafely(java.net.URI url, Duration timeout) {
