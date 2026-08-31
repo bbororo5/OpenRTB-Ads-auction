@@ -37,6 +37,7 @@ flowchart LR
             COORDINATOR -->|"nurl·lurl"| DELIVERY
             API -->|"렌더링 완료"| CLAIM
             CLAIM -->|"증표 검증"| PROOF
+            CLAIM -->|"커밋 후 작업 신호"| DELIVERY
         end
 
         STORE[("리전별 SSP 청구 기록 DB<br/>[Container: PostgreSQL]")]
@@ -77,7 +78,7 @@ flowchart LR
 | 렌더링 청구 | 유효 증표와 현재 공급자 활성 상태의 청구 판정, 슬롯별 멱등 청구와 전달 작업의 원자 생성 | `VerifiedRender` → `RenderAcceptance` | `burl` HTTP 호출·재시도 |
 | DSP 통지 전달 | `nurl`·`lurl` 단발 통지, `burl` 작업 임대·전달·종결 | `AuctionNotice`, `BillingDeliveryTask` | DSP 내부 금액 판정 |
 
-`BillingClaimRecorded`와 `BillingDeliveryPending`은 같은 DB 트랜잭션에서 생성한다. 이 커밋이 성공한 뒤에만 API가 렌더링 성공을 응답한다. 따라서 성공 응답은 “청구와 `burl` 전달 책임이 내구화됐다”는 뜻이다.
+`BillingClaimRecorded`와 `BillingDeliveryPending`은 같은 DB 트랜잭션에서 생성한다. 이 커밋이 성공한 뒤에만 내부 전달기를 깨우고 API가 렌더링 성공을 응답한다. 따라서 성공 응답은 “청구와 `burl` 전달 책임이 내구화됐다”는 뜻이다. 전달기는 새 작업 신호와 DB가 정한 재시도 시각에만 깨어나며, 시작할 때 비종결 작업을 한 번 복원한 뒤 고정 주기 polling을 하지 않는다.
 
 ## 인터페이스
 
@@ -102,7 +103,7 @@ flowchart LR
 | 낙찰 결정 | `selectWinners` | `auctionId` + `AuctionRequest` + `BidResponses` → `AuctionWinners` | 최저가 이상 최고 CPM을 제출가로 낙찰한다. 동가는 경매·슬롯·입찰 식별자의 결정적 해시로 분산하며 응답 순서에 영향받지 않는다. |
 | 렌더링 증표 | `issue` / `verify` | `ProofIssuance` → `RenderProof`, `RenderCompleted` → `Optional<VerifiedRender>` | 공급자·요청·슬롯·낙찰 사실·발급 리전·1ms~2초 기한을 봉인한다. 같은 증표의 재검증은 같은 신원을 내며 금액 중복 판정은 렌더링 청구가 소유한다. |
 | 렌더링 청구 | `acceptRender` | `VerifiedRender` → `RenderAcceptance` | 현재 지역 공급자 스냅숏에서 활성 상태를 확인하고, 청구와 `burl` 전달 작업을 함께 저장한 뒤에만 수락한다. |
-| DSP 통지 전달 | `sendAuctionNotices` / `deliverDueBilling` | `AuctionNotice` / `BillingDeliveryTask` → 전달 결과 | `burl`은 중복될 수 있음을 전제로 한다. 제한된 작업자들이 세대번호가 붙은 작업을 임대하고, 일시 실패는 지수 지연해 재시도하며 5초 마감 뒤 미전달로 종결한다. |
+| DSP 통지 전달 | `sendAuctionNotices` / `deliverDueBilling` | `AuctionNotice` / `BillingDeliveryTask` → 처리 여부·다음 재시도 시각 | `burl`은 중복될 수 있음을 전제로 한다. 커밋 신호로 즉시 실행하고, 제한된 작업자들이 세대번호가 붙은 작업을 임대하며, 일시 실패는 저장소가 정한 시각에 다시 깨워 5초 마감 뒤 미전달로 종결한다. |
 
 ### 저장소 포트
 
@@ -113,12 +114,13 @@ PostgreSQL 접근은 C3 컴포넌트가 아니라 구현 내부의 저장소 포
 | `recordClaimAndScheduleDelivery` | 렌더링 청구 | `slotAuctionKey` 고유 제약 아래 최초 증표만 청구 사건과 전달 작업으로 저장한다. 같은 증표는 중복, 다른 증표는 충돌로 판정하며 저장 불확실성은 재시도 결과로 반환한다. |
 | `leaseDueDelivery` | DSP 통지 전달 | 재시도 시각이 된 대기 작업 하나에 짧은 임대와 새 작업 세대번호를 원자 부여한다. 여러 작업자는 `SKIP LOCKED`로 서로 다른 작업을 가져간다. |
 | `completeOrReleaseDelivery` | DSP 통지 전달 | 같은 작업 세대번호를 가진 실행기만 성공·재시도·미전달 결과를 기록한다. 재시도는 기한 안에서만 다음 실행 시각을 갖는다. |
+| `recoverableDeliveryTimes` | SSP 런타임 조립 | 시작 시 비종결 작업의 실행 시각을 한 번 읽어 메모리 scheduler를 복원한다. 정상 운영 중 반복 조회하지 않는다. |
 
 작업 세대번호는 금액·인증 토큰이 아니다. 임대가 끝난 뒤 늦게 실행된 이전 작업자가 새 작업자의 결과를 덮어쓰지 못하게 하는 DB 조건값이다.
 
 ## 구현 경계
 
-- 8개 컴포넌트는 우선 하나의 SSP 프로세스에 둔다. `burl` 전달 실행기는 각 인스턴스 내부의 백그라운드 실행기이며 별도 배포 서비스가 아니다.
+- 8개 컴포넌트는 우선 하나의 SSP 프로세스에 둔다. `burl` 전달 실행기는 각 인스턴스 내부의 신호 기반 백그라운드 실행기이며 별도 배포 서비스가 아니다. DB는 내구 원장과 작업 임대만 소유하고, 실행 시점은 commit 신호·재시도 timer·시작 시 reconciliation이 결정한다.
 - 경매 API와 렌더링 API는 기본 128개의 공유 진입 허가를 쓴다. 허가가 없으면 기다리지 않고 `503`으로 거절한다. 실제 경합이 경매 p99 50ms 또는 렌더링 접수를 침범할 때만 경로별 자원을 분리한다.
 - 공급자 설정의 복제·메모리 스냅숏 교체는 경매 C3의 아홉 번째 업무 컴포넌트가 아닌 제어 경로 어댑터다. API는 그 스냅숏만 읽으며 서울의 설정 원본이나 도쿄 복제본을 요청마다 조회하지 않는다.
 - 렌더링 증표는 공급자–SSP 프로젝트 전용 봉투이며 OpenRTB 객체에 넣지 않는다. SSP–DSP 경계만 OpenRTB 2.6의 `BidRequest`, `BidResponse`, `nurl`, `lurl`, `burl`, `Imp.exp`, `Bid.exp`를 사용한다.

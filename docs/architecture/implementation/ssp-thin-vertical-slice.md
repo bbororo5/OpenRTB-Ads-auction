@@ -110,7 +110,7 @@ ProofIssuance
 | 저장소 포트 | `ClaimDeliveryStore.recordClaimAndScheduleDelivery` |
 | 입력 메시지 | `ProofIssuance`, `RenderCompleted`, `VerifiedRender` |
 | 출력 메시지 | `RenderProof`, `RenderAcceptance`, `BillingClaim`, `BillingDeliveryTask` |
-| 현재 구현 | 버전·키 ID를 가진 이진 증표가 공급자·요청·슬롯·낙찰 가격·DSP `burl`·2초 기한을 AES-GCM으로 봉인한다. PostgreSQL 한 행이 청구 근거와 전달 작업을 함께 보존한다. |
+| 현재 구현 | 버전·키 ID를 가진 이진 증표가 공급자·요청·슬롯·낙찰 가격·DSP `burl`·2초 기한을 AES-GCM으로 봉인한다. PostgreSQL 한 행이 청구 근거와 전달 작업을 함께 보존하고, 최초 커밋 뒤 같은 프로세스의 전달기에 작업 신호를 보낸다. |
 | 완료 조건 | 완료. 유효하고 현재 활성인 공급자에 귀속된 증표만 `ACCEPTED`가 된다. 같은 증표의 재전송은 `DUPLICATE`, 다른 증표가 같은 `slotAuctionKey`를 주장하면 `REJECTED`이며 청구와 전달 작업은 정확히 1개만 생긴다. |
 
 ## 4. 전달 — 대기 작업을 `burl`로 종결하기
@@ -128,7 +128,7 @@ DspNotificationDelivery.deliverDueBilling(now)
 | 저장소 포트 | `leaseDueDelivery`, `completeOrReleaseDelivery` |
 | 입력 메시지 | `BillingDeliveryTask`, `DeliveryLease` |
 | 출력 메시지 | `DeliveryOutcome.DELIVERED` |
-| 현재 구현 | PostgreSQL `FOR UPDATE SKIP LOCKED` 작업 임대, 세대번호, 제한된 병렬 실행기와 Java 21 HTTP 통지 클라이언트 |
+| 현재 구현 | PostgreSQL `FOR UPDATE SKIP LOCKED` 작업 임대, 세대번호, commit 신호와 정확한 재시도 timer에만 깨어나는 제한 병렬 실행기, 시작 시 1회 reconciliation, Java 21 HTTP 통지 클라이언트 |
 | 완료 조건 | 완료. HTTP 성공은 종결한다. `408`·`429`·`5xx`·통신 실패는 50ms부터 최대 500ms까지 지수 지연해 재시도하되, 각 호출 제한시간과 다음 재시도는 5초 기한을 넘지 않는다. 오래된 작업 세대의 결과는 현재 작업을 덮어쓰지 않는다. |
 
 이 시점에 네 결과를 연결한 SSP 전체 E2E가 통과한다.
