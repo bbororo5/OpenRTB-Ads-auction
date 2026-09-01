@@ -94,6 +94,7 @@ final class CampaignSpendingAccount {
             if (command.generation() <= lastInstalledGeneration) {
                 return STALE_GENERATION;
             }
+            evictRetiredLeases();
             if (leases.size() >= maxLeases) {
                 return CAPACITY_EXCEEDED;
             }
@@ -312,6 +313,10 @@ final class CampaignSpendingAccount {
                 .anyMatch(lease -> lease.reservations.containsKey(reservationId));
     }
 
+    private void evictRetiredLeases() {
+        leases.values().removeIf(LeaseAccount::isRetired);
+    }
+
     private void refreshAndPublish(Instant now) {
         leases.values().forEach(LeaseAccount::refreshState);
         boolean usable = leases.values().stream()
@@ -440,6 +445,13 @@ final class CampaignSpendingAccount {
 
         boolean canReserve(long amountMicros) {
             return isOpen() && unusedMicros >= amountMicros;
+        }
+
+        boolean isRetired() {
+            refreshState();
+            return state == LeaseState.DRAINING
+                    && reservations.values().stream()
+                    .noneMatch(reservation -> reservation.state() == ReservationState.RESERVED);
         }
 
         void refreshState() {

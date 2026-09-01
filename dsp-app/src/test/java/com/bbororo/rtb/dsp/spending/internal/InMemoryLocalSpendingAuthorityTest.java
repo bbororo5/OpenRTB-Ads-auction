@@ -1,5 +1,6 @@
 package com.bbororo.rtb.dsp.spending.internal;
 
+import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.CAPACITY_EXCEEDED;
 import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.LeaseInstallResult.INSTALLED;
 import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationFinalization.ALREADY_APPLIED;
 import static com.bbororo.rtb.dsp.spending.api.SpendingMessages.ReservationFinalization.ALREADY_FINALIZED_DIFFERENTLY;
@@ -178,6 +179,56 @@ class InMemoryLocalSpendingAuthorityTest {
         monotonicNanos.addAndGet(Duration.ofSeconds(10).toNanos());
 
         assertRejected(authority.tryReserve(reserve("bid-1", 100)), LEASE_EXPIRED);
+    }
+
+    @Test
+    void expiredLeasesWithoutPendingReservationsDoNotExhaustTheLeaseCapacity() {
+        AtomicLong monotonicNanos = new AtomicLong(1_000);
+        var authority = new InMemoryLocalSpendingAuthority(
+                10,
+                10,
+                2,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                monotonicNanos::get,
+                Duration.ZERO,
+                () -> "reservation-1",
+                expiration -> { }
+        );
+        assertEquals(INSTALLED, authority.install(
+                lease("lease-1", 1, 100, 5), monotonicNanos.get()));
+        assertEquals(INSTALLED, authority.install(
+                lease("lease-2", 2, 100, 5), monotonicNanos.get()));
+
+        monotonicNanos.addAndGet(Duration.ofSeconds(6).toNanos());
+
+        assertEquals(INSTALLED, authority.install(
+                lease("lease-3", 3, 100, 5), monotonicNanos.get()));
+        assertInstanceOf(ReservationGranted.class,
+                authority.tryReserve(reserve("bid-1", 100)));
+    }
+
+    @Test
+    void expiredLeaseWithAPendingReservationStillConsumesCapacity() {
+        AtomicLong monotonicNanos = new AtomicLong(1_000);
+        var authority = new InMemoryLocalSpendingAuthority(
+                10,
+                10,
+                1,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                monotonicNanos::get,
+                Duration.ZERO,
+                () -> "reservation-1",
+                expiration -> { }
+        );
+        assertEquals(INSTALLED, authority.install(
+                lease("lease-1", 1, 100, 5), monotonicNanos.get()));
+        assertInstanceOf(ReservationGranted.class,
+                authority.tryReserve(reserve("bid-1", 100)));
+
+        monotonicNanos.addAndGet(Duration.ofSeconds(6).toNanos());
+
+        assertEquals(CAPACITY_EXCEEDED, authority.install(
+                lease("lease-2", 2, 100, 5), monotonicNanos.get()));
     }
 
     private static TestFixture fixture(int instanceCapacity, int campaignCapacity) {
