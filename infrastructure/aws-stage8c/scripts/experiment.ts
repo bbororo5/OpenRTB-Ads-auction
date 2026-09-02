@@ -163,7 +163,7 @@ try {
       verify: async () => {
         await ready();
         // Cold-start warmup is recorded separately, never counted as formal success.
-        try { await stage(["smoke", "--rps", "10", "--duration", "10s"], 240_000); }
+        try { await stage(["smoke", "--label", "warmup", "--rps", "10", "--duration", "10s"], 240_000); }
         catch (error) { if (cancelled) throw error; summary.warmup = String(error); }
         await stage(["smoke", "--rps", "10", "--duration", "30s"], 240_000);
         summary.smoke = "passed";

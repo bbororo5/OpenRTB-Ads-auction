@@ -70,6 +70,8 @@ export class ExperimentControlStack extends Stack {
           "ec2:CreateTags", "ec2:DeleteTags", "ec2:TerminateInstances", "ec2:ModifyInstanceAttribute", "ec2:ModifyInstanceCreditSpecification"], ["*"], regional),
         allow(["ec2:RunInstances"], ["*"], { StringEquals: { "aws:RequestedRegion": this.region }, StringEqualsIfExists: { "ec2:InstanceType": "t4g.small" } }),
         allow(["iam:PassRole"], [host.attrArn], { StringEquals: { "iam:PassedToService": "ec2.amazonaws.com" } }),
+        allow(["iam:GetInstanceProfile"], [`arn:aws:iam::${this.account}:instance-profile/${hostProfile}`]),
+        allow(["s3:GetObject"], [`${bucketArn}/rtb-*/*`]),
         allow(["ssm:GetParameters", "ssm:GetParameter"], [`arn:aws:ssm:${this.region}::parameter/aws/service/ami-amazon-linux-latest/*`, arn("ssm", "parameter/rtb/stage8c/bootstrap-version")]),
       ] } }],
     });

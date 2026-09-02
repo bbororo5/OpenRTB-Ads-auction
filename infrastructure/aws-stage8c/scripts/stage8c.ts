@@ -38,9 +38,7 @@ async function main(): Promise<void> {
       runCdk(["synth"]);
       return;
     case "bootstrap":
-      requireCostAcknowledgement();
-      runCdk(["bootstrap"]);
-      return;
+      throw new Error("Use npm run experiment-control -- install --ack-cost; the guarded runner does not use CDKToolkit administrator roles.");
     case "diff":
       runCdk(["diff"]);
       return;
@@ -58,7 +56,7 @@ async function main(): Promise<void> {
       grafanaTunnel();
       return;
     case "smoke":
-      await runLoadTest("smoke", "stage8c-capacity.js", {
+      await runLoadTest(options.label ?? "smoke", "stage8c-capacity.js", {
         RPS: options.rps ?? "10",
         DURATION: options.duration ?? "10s",
         PRE_ALLOCATED_VUS: "50",
@@ -215,6 +213,7 @@ async function runLoadTest(
   environment: Record<string, string>,
   timeoutSeconds: number,
 ): Promise<void> {
+  if (!/^[a-z0-9-]+$/.test(label)) throw new Error("Invalid load-test evidence label");
   const outputs = stackOutputs();
   const loadgenId = requireOutput(outputs, "LoadgenInstanceId");
   const baseUrl = requireOutput(outputs, "SspBaseUrl");
@@ -497,9 +496,10 @@ Read-only/local:
   collect      Save host and CloudWatch evidence
 
 Mutating (requires --ack-cost):
-  bootstrap    Prepare the account/region for CDK assets
-  deploy       Create the ephemeral five-host experiment cell
-  destroy      Delete the experiment stack
+  deploy       Internal guarded step; requires the experiment runner's active lease
+
+Lifecycle: npm run experiment -- run --ack-cost
+Recovery: npm run experiment -- cleanup --ack-cost --run-id=rtb-...
 
 Tests:
   smoke        10 RPS for 10 seconds by default
