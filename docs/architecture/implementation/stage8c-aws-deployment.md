@@ -40,7 +40,7 @@ TypeScript runner
 
 ## 실행 순서
 
-반복 로그인 제거를 위한 [GitHub OIDC 전환](stage8c-github-oidc.md)은 AWS 설치·인증 실증까지 완료됐다. 배포 권한·자동 회수 장치는 아직 연결 전이므로 아래 명령에는 기존 로컬 인증이 필요하다. 자동 회수 장치 검증 전에는 실제 실험 배포를 진행하지 않는다.
+반복 로그인 제거를 위한 [GitHub OIDC 전환](stage8c-github-oidc.md)은 AWS 설치·인증 실증까지 완료됐다. 후속 [제한된 배포·자동 회수](stage8c-safe-experiments.md)는 별도 제어 스택과 실행기를 사용한다. 새 배포 경로는 기존 CDKToolkit 관리자 역할을 사용하지 않는다. 로컬 진단에는 여전히 유효한 로컬 인증이 필요하다.
 
 ```bash
 cd infrastructure/aws-stage8c
@@ -53,17 +53,17 @@ npm run stage8c -- diff --profile YOUR_PROFILE
 
 `doctor`의 `FreeTierEligible=true`는 인스턴스 유형의 현재 표시일 뿐이다. 계정 생성일, 남은 크레딧, EBS, public IPv4, ECR 저장량을 합쳐 무료를 보증하지 않는다.
 
-최초 한 번만 부트스트랩한다. 비용 발생 명령은 `--ack-cost`가 없으면 실행기가 거절한다.
+최초 한 번 관리자 인증으로 제어 스택을 설치한다. 비용 발생 명령은 `--ack-cost`가 없으면 실행기가 거절한다. 아래 안전성 시험은 EC2를 생성하지 않는다.
 
 ```bash
-npm run stage8c -- bootstrap --profile YOUR_PROFILE --ack-cost
-npm run stage8c -- deploy --profile YOUR_PROFILE --ack-cost
-npm run stage8c -- status --profile YOUR_PROFILE
-npm run stage8c -- observability --profile YOUR_PROFILE
-npm run stage8c -- smoke --profile YOUR_PROFILE
+AWS_PROFILE=YOUR_PROFILE npm run experiment-control -- install --ack-cost
+AWS_PROFILE=YOUR_PROFILE npm run experiment -- safety-check
+
+# 안전성 시험 → 배포 → 워밍업 → 정식 smoke → 반드시 회수 시도
+AWS_PROFILE=YOUR_PROFILE npm run experiment -- run --ack-cost
 ```
 
-smoke 통과 후에만 합격 시험을 실행한다.
+새 실행기는 우선 smoke를 한정된 수명주기로 수행한다. 아래 capacity/overload는 기존 저수준 명령이다. 더 긴 시험을 자동 수명주기에 연결하고 종료·회수 시간 예산을 검토하기 전에는 별도 배포를 유지하며 실행하지 않는다.
 
 ```bash
 npm run stage8c -- capacity --profile YOUR_PROFILE
@@ -73,13 +73,13 @@ npm run stage8c -- collect --profile YOUR_PROFILE --label final
 
 `capacity`와 `overload`는 실행 전후에 다섯 호스트의 CPU·메모리·Docker 상태와 EC2 CPU credit·네트워크 지표를 `docs/evidence/performance/<date>/`에 남긴다. Grafana는 SSM 터널로만 열며, Metrics → Traces → Logs → Profiles 순서의 병목 분해법과 신호별 인수 조건은 [OpenTelemetry OSS 관찰성 스택](../../../observability/README.md)을 따른다.
 
-실험 종료 즉시 스택을 회수한다.
+새 실행기는 실험 종료 즉시 회수를 요청한다. 수동 재시도는 실제 실행 ID를 지정한다.
 
 ```bash
-npm run stage8c -- destroy --profile YOUR_PROFILE --ack-cost
+AWS_PROFILE=YOUR_PROFILE npm run experiment -- cleanup --ack-cost --run-id=rtb-실제실행ID
 ```
 
-CDK bootstrap의 ECR·S3 자원은 `RtbStage8c` 스택이 아니라 `CDKToolkit`에 남는다. 다른 CDK 배포에도 쓰는 계정 공통 자원이므로 실행기가 자동 삭제하지 않는다.
+기존 `CDKToolkit`의 계정 공통 ECR·S3는 건드리지 않는다. 새 실험 assets는 `RtbStage8cControl`의 전용 저장소에 RunId별로 게시하고 회수기가 해당 실행의 이미지·파일만 삭제한다. 전용 저장소와 회수기 자체는 다음 실험을 위해 남는다.
 
 ## 프리티어 해석 주의
 
