@@ -50,7 +50,7 @@ async function safetyCheck(): Promise<void> {
   const fn = aws(["lambda", "get-function-configuration", "--function-name", reaperName]);
   const digest = createHash("sha256").update(readFileSync(path.join(directory, "runtime/reaper.cjs"))).digest("hex");
   if (rule.State !== "ENABLED" || rule.ScheduleExpression !== "rate(1 minute)"
-    || fn.State !== "Active" || fn.Description !== `reaper-sha256:${digest}`
+    || fn.State !== "Active" || fn.LastUpdateStatus !== "Successful" || fn.Description !== `reaper-sha256:${digest}`
     || !targets.some((target: any) => target.Arn === fn.FunctionArn)) throw new Error("Installed reaper does not match the verified control plane");
   if (getStack("RtbStage8cSafetyCanary")) throw new Error("Previous canary exists; wait for independent cleanup");
   const id = createMarker("RtbStage8cSafetyCanary", runId, new Date(Date.now() + 15_000).toISOString());
