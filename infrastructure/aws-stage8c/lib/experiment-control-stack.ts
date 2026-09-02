@@ -69,6 +69,9 @@ export class ExperimentControlStack extends Stack {
           "ec2:AuthorizeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupEgress", "ec2:RevokeSecurityGroupIngress", "ec2:RevokeSecurityGroupEgress",
           "ec2:CreateTags", "ec2:DeleteTags", "ec2:TerminateInstances", "ec2:ModifyInstanceAttribute", "ec2:ModifyInstanceCreditSpecification"], ["*"], regional),
         allow(["ec2:RunInstances"], ["*"], { StringEquals: { "aws:RequestedRegion": this.region }, StringEqualsIfExists: { "ec2:InstanceType": "t4g.small" } }),
+        // CDK implements requireImdsv2 with a separate launch template per host.
+        // Both creation and rollback/deletion need permission; no version editing.
+        allow(["ec2:CreateLaunchTemplate", "ec2:DeleteLaunchTemplate"], [arn("ec2", "launch-template/*")], regional),
         allow(["iam:PassRole"], [host.attrArn], { StringEquals: { "iam:PassedToService": "ec2.amazonaws.com" } }),
         allow(["iam:GetInstanceProfile"], [`arn:aws:iam::${this.account}:instance-profile/${hostProfile}`]),
         allow(["s3:GetObject"], [`${bucketArn}/rtb-*/*`]),

@@ -130,6 +130,12 @@ test("control plane contains no EC2, administrator policy, or GitHub AssumeRole 
   const grants = JSON.stringify(deploy.Properties.Policies);
   assert.doesNotMatch(grants, /AdministratorAccess|sts:AssumeRole|iam:CreateRole|lambda:UpdateFunction|events:DisableRule/);
   assert.doesNotMatch(JSON.stringify(template.toJSON()), /AdministratorAccess|cdk-hnb659fds/);
+  const execution = Object.values(resources).find((resource: any) => resource.Properties?.RoleName === "RtbStage8cExecution") as any;
+  const launchTemplateGrant = execution.Properties.Policies[0].PolicyDocument.Statement
+    .find((statement: any) => statement.Action.includes("ec2:CreateLaunchTemplate"));
+  assert.deepEqual(launchTemplateGrant.Action, ["ec2:CreateLaunchTemplate", "ec2:DeleteLaunchTemplate"]);
+  assert.deepEqual(launchTemplateGrant.Resource, ["arn:aws:ec2:ap-northeast-2:333982363617:launch-template/*"]);
+  assert.equal(launchTemplateGrant.Condition.StringEquals["aws:RequestedRegion"], "ap-northeast-2");
 });
 test("controlled workload imports host profiles and never creates IAM roles or policies", () => {
   const app = new App();
@@ -139,6 +145,8 @@ test("controlled workload imports host profiles and never creates IAM roles or p
   const template = Template.fromStack(stack);
   for (const type of ["AWS::IAM::Role", "AWS::IAM::Policy", "AWS::IAM::InstanceProfile"]) template.resourceCountIs(type, 0);
   template.allResourcesProperties("AWS::EC2::Instance", { IamInstanceProfile: "RtbStage8cHost" });
+  template.resourceCountIs("AWS::EC2::LaunchTemplate", 5);
+  template.allResourcesProperties("AWS::EC2::LaunchTemplate", { LaunchTemplateData: { MetadataOptions: { HttpTokens: "required" } } });
   const assembly = app.synth();
   const artifact = assembly.getStackByName("WorkloadTest");
   assert.equal(artifact.assumeRoleArn, "");
