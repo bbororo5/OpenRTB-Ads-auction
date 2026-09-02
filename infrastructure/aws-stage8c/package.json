@@ -8,7 +8,9 @@
     "test": "node --import tsx --test test/**/*.test.ts && node --test ../../performance/fixtures/stage8c/server.test.mjs",
     "cdk": "cdk",
     "stage8c": "tsx scripts/stage8c.ts",
-    "github-oidc": "tsx scripts/github-oidc.ts"
+    "github-oidc": "tsx scripts/github-oidc.ts",
+    "experiment-control": "tsx scripts/experiment-control.ts",
+    "experiment": "tsx scripts/experiment.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "2.266.0",

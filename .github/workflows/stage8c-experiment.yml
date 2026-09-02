@@ -1,0 +1,80 @@
+name: Stage8C bounded experiment
+
+'on':
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'safety-check creates no EC2; smoke deploys and always attempts cleanup'
+        type: choice
+        options: [safety-check, smoke]
+        default: safety-check
+        required: true
+      acknowledge_cost:
+        description: 'Accept temporary EC2, EBS, IPv4 and asset charges for smoke'
+        type: boolean
+        default: false
+        required: true
+
+permissions: {}
+concurrency:
+  group: stage8c-experiment
+  cancel-in-progress: false
+
+jobs:
+  experiment:
+    if: github.repository == 'bbororo5/OpenRTB-Ads-auction' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infrastructure/aws-stage8c
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Validate code before obtaining AWS credentials
+        run: npm ci && npm run build && npm test
+      - name: Obtain restricted deployment identity
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          aws-region: ap-northeast-2
+          role-to-assume: arn:aws:iam::333982363617:role/RtbStage8cDeploy
+          allowed-account-ids: '333982363617'
+          role-session-name: experiment-${{ github.run_id }}-${{ github.run_attempt }}
+          role-duration-seconds: 3600
+          unset-current-credentials: true
+          retry-max-attempts: 2
+      - name: Verify watchdog, then optionally run bounded smoke
+        env:
+          EXPERIMENT_MODE: ${{ inputs.mode }}
+          ACKNOWLEDGE_COST: ${{ inputs.acknowledge_cost }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="rtb-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$EXPERIMENT_MODE" in
+            safety-check) npm run experiment -- safety-check "--run-id=$run_id" ;;
+            smoke)
+              test "$ACKNOWLEDGE_COST" = true
+              npm run experiment -- run --ack-cost "--run-id=$run_id"
+              ;;
+            *) exit 1 ;;
+          esac
+      - name: Retry cleanup after success, failure or cancellation
+        if: always() && inputs.mode == 'smoke' && inputs.acknowledge_cost
+        timeout-minutes: 12
+        run: npm run experiment -- cleanup --ack-cost "--run-id=rtb-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - name: Preserve evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: stage8c-${{ github.run_id }}-${{ github.run_attempt }}
+          path: docs/evidence/performance/
+          if-no-files-found: warn
+          retention-days: 7

@@ -86,9 +86,7 @@ async function main(): Promise<void> {
       await collectEvidence(options.label ?? "manual");
       return;
     case "destroy":
-      requireCostAcknowledgement();
-      runCdk(["destroy", "--force"]);
-      return;
+      throw new Error("Use npm run experiment -- cleanup --ack-cost --run-id=rtb-... so assets and lease are also reclaimed.");
     case "help":
     default:
       usage(command === "help" ? 0 : 1);
@@ -118,6 +116,13 @@ function doctor(): void {
 }
 
 function deploy(): void {
+  const runId = process.env.RTB_RUN_ID;
+  const lease = awsJson(["cloudformation", "describe-stacks", "--stack-name", "RtbStage8cLease"]).Stacks?.[0];
+  const tags = Object.fromEntries((lease?.Tags ?? []).map((tag: { Key: string; Value: string }) => [tag.Key, tag.Value]));
+  if (!runId || tags.RunId !== runId || tags.Project !== "low-latency-rtb"
+    || tags.ExpiresAt !== process.env.RTB_EXPIRES_AT || Date.parse(tags.ExpiresAt) < Date.now() + 300_000) {
+    throw new Error("Deployment requires an active owned lease. Use npm run experiment -- run --ack-cost.");
+  }
   const databasePassword = randomBytes(24).toString("base64url");
   runCdk([
     "deploy",
@@ -323,7 +328,7 @@ async function sendCommand(
     "--instance-ids", instanceId,
     "--document-name", "AWS-RunShellScript",
     "--timeout-seconds", String(timeoutSeconds),
-    "--parameters", JSON.stringify({ commands }),
+    "--parameters", JSON.stringify({ commands: ["set -eu", ...commands], executionTimeout: [String(timeoutSeconds)] }),
   ]);
   const commandId = sent.Command.CommandId as string;
   const deadline = Date.now() + (timeoutSeconds + 60) * 1_000;
@@ -421,7 +426,8 @@ function run(executable: string, arguments_: string[], cwd = infrastructureDirec
     stdio: "inherit",
   });
   if (result.status !== 0) {
-    throw new Error(`${executable} ${arguments_.join(" ")} failed with ${result.status}`);
+    const safeArguments = arguments_.map(argument => argument.startsWith("DatabasePassword=") ? "DatabasePassword=<redacted>" : argument);
+    throw new Error(`${executable} ${safeArguments.join(" ")} failed with ${result.status}`);
   }
 }
 
