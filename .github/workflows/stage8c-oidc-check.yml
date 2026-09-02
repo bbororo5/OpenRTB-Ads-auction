@@ -1,0 +1,43 @@
+name: Stage8C OIDC authentication check
+
+# No push, PR, or schedule trigger. This workflow creates no paid AWS resources.
+'on':
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: stage8c-oidc-check
+  cancel-in-progress: false
+
+jobs:
+  identity:
+    if: github.repository == 'bbororo5/OpenRTB-Ads-auction' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+    steps:
+      # No checkout or execution of repository code while holding AWS credentials.
+      - name: Exchange GitHub identity for short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          aws-region: ap-northeast-2
+          role-to-assume: arn:aws:iam::333982363617:role/RtbStage8cGitHub
+          allowed-account-ids: '333982363617'
+          role-session-name: github-${{ github.run_id }}-${{ github.run_attempt }}
+          role-duration-seconds: 900
+          unset-current-credentials: true
+          retry-max-attempts: 2
+      - name: Verify role identity without printing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          identity=$(aws sts get-caller-identity --output json)
+          test "$(jq -r .Account <<< "$identity")" = '333982363617'
+          arn=$(jq -r .Arn <<< "$identity")
+          case "$arn" in
+            arn:aws:sts::333982363617:assumed-role/RtbStage8cGitHub/github-*) ;;
+            *) echo 'Unexpected role identity' >&2; exit 1 ;;
+          esac
+          printf 'OIDC verified: `%s`\n\nNo deployment permissions or AWS resources were created by this check.\n' "$arn" >> "$GITHUB_STEP_SUMMARY"
