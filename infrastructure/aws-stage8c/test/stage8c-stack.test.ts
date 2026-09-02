@@ -75,3 +75,20 @@ test("host profiler does not compete with the Collector internal metrics port", 
 
   assert.match(profilerConfig, /telemetry:[\s\S]*metrics:\s*#[\s\S]*level: none/);
 });
+
+test("smoke bootstrap lease funds a whole reservation and five seconds at 10 RPS", () => {
+  const stack = new Stage8cStack(new App(), "LeaseFundingTestStack", {
+    env: { account: "111111111111", region: "ap-northeast-2" },
+  });
+  const resources = Template.fromStack(stack).toJSON().Resources;
+  const dsp = Object.values(resources).find((resource: any) =>
+    resource.Type === "AWS::EC2::Instance" && JSON.stringify(resource.Properties.UserData).includes("--name dsp ")) as any;
+  const userData = dsp.Properties.UserData["Fn::Base64"]["Fn::Join"][1]
+    .filter((part: unknown) => typeof part === "string").join("");
+  const minimumLease = Number(/DSP_MINIMUM_LEASE_MICROS=(\d+)/.exec(userData)?.[1]);
+  const impressionCost = Number(/bidCpmMilliKrw":(\d+)/.exec(userData)?.[1]);
+  assert.equal(impressionCost, 2000);
+  // One reservation cannot combine multiple leases. Idle bootstrap must already
+  // fund a bid; successful-spend-driven demand cannot grow from zero bids.
+  assert.ok(minimumLease >= impressionCost * 10 * 5);
+});
