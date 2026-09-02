@@ -25,7 +25,8 @@ import {
   Vpc,
 } from "aws-cdk-lib/aws-ec2";
 import { DockerImageAsset, Platform } from "aws-cdk-lib/aws-ecr-assets";
-import { ManagedPolicy, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
+import { ManagedPolicy, Role, ServicePrincipal, IRole, InstanceProfile } from "aws-cdk-lib/aws-iam";
+import { hostRole, hostProfile } from "./experiment-control-stack.js";
 import { Construct } from "constructs";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -47,11 +48,16 @@ const GRAFANA_IMAGE = "grafana/grafana:13.2.0";
 
 export interface Stage8cStackProps extends StackProps {
   readonly instanceType?: string;
+  readonly controlledRuntime?: boolean;
+  readonly runId?: string;
+  readonly expiresAt?: string;
 }
 
 export class Stage8cStack extends Stack {
+  private readonly controlledRuntime: boolean;
   constructor(scope: Construct, id: string, props: Stage8cStackProps = {}) {
     super(scope, id, props);
+    this.controlledRuntime = props.controlledRuntime ?? false;
 
     const databasePassword = new CfnParameter(this, "DatabasePassword", {
       type: "String",
@@ -128,12 +134,14 @@ export class Stage8cStack extends Stack {
     const observer = this.createHost(
       "Observer", vpc, instanceType, observerSecurityGroup, PRIVATE_IPS.observer, 24);
 
-    supportImage.repository.grantPull(loadgen.role);
-    sspImage.repository.grantPull(ssp.role);
-    dspImage.repository.grantPull(dsp.role);
-    supportImage.repository.grantPull(support.role);
-    for (const host of [loadgen, ssp, dsp, support, observer]) {
-      observabilityImage.repository.grantPull(host.role);
+    if (!this.controlledRuntime) {
+      supportImage.repository.grantPull(loadgen.role);
+      sspImage.repository.grantPull(ssp.role);
+      dspImage.repository.grantPull(dsp.role);
+      supportImage.repository.grantPull(support.role);
+      for (const host of [loadgen, ssp, dsp, support, observer]) {
+        observabilityImage.repository.grantPull(host.role);
+      }
     }
 
     this.addRegistryLogin(loadgen.instance.userData);
@@ -194,6 +202,8 @@ export class Stage8cStack extends Stack {
     Tags.of(this).add("Project", "low-latency-rtb");
     Tags.of(this).add("Stage", "8c");
     Tags.of(this).add("Environment", "ephemeral-performance");
+    Tags.of(this).add("RunId", props.runId ?? "rtb-preview");
+    if (props.expiresAt) Tags.of(this).add("ExpiresAt", props.expiresAt);
   }
 
   private createHost(
@@ -203,8 +213,8 @@ export class Stage8cStack extends Stack {
     securityGroup: SecurityGroup,
     privateIpAddress: string,
     volumeGiB: number,
-  ): { instance: Instance; role: Role } {
-    const role = new Role(this, `${name}Role`, {
+  ): { instance: Instance; role: IRole } {
+    const role = this.controlledRuntime ? Role.fromRoleArn(this, `${name}Role`, `arn:aws:iam::${this.account}:role/${hostRole}`, { mutable: false }) : new Role(this, `${name}Role`, {
       assumedBy: new ServicePrincipal("ec2.amazonaws.com"),
       managedPolicies: [
         ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore"),
@@ -227,7 +237,9 @@ export class Stage8cStack extends Stack {
         cpuType: AmazonLinuxCpuType.ARM_64,
       }),
       securityGroup,
-      role,
+      ...(this.controlledRuntime ? { instanceProfile: InstanceProfile.fromInstanceProfileAttributes(this, `${name}Profile`, {
+        instanceProfileArn: `arn:aws:iam::${this.account}:instance-profile/${hostProfile}`, role,
+      }) } : { role }),
       userData,
       requireImdsv2: true,
       blockDevices: [{
@@ -241,6 +253,7 @@ export class Stage8cStack extends Stack {
     instance.applyRemovalPolicy(RemovalPolicy.DESTROY);
     const cfnInstance = instance.node.defaultChild as CfnInstance;
     cfnInstance.creditSpecification = { cpuCredits: "standard" };
+    cfnInstance.propagateTagsToVolumeOnCreation = true;
     return { instance, role };
   }
 
