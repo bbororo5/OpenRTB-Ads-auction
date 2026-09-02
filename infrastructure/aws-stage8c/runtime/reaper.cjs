@@ -96,6 +96,18 @@ function createReaper(api, config, now = Date.now) {
     const forced = event.mode === 'cleanup';
     if (forced && event.runId !== runId) throw new Error('Cleanup run ID does not own the lease');
     if (!forced && now() < deadline(lease)) return { state: 'active', runId };
+    if (forced && now() < deadline(lease)) {
+      // Persist the closing transition before deleting anything. A lost caller or
+      // a later API failure must not make the scheduler wait for the original TTL.
+      if (!['CREATE_COMPLETE', 'UPDATE_COMPLETE', 'UPDATE_ROLLBACK_COMPLETE'].includes(lease.StackStatus)) {
+        return { state: 'waiting-lease-ready', runId };
+      }
+      await api('cloudformation', 'UpdateStack', {
+        StackName: lease.StackId, UsePreviousTemplate: true,
+        Tags: lease.Tags.map(tag => tag.Key === 'ExpiresAt' ? { Key: tag.Key, Value: new Date(now()).toISOString() } : tag),
+      });
+      return { state: 'cleanup-requested', runId };
+    }
 
     const workload = await stack(WORKLOAD);
     if (workload && owned(workload).RunId !== runId) throw new Error('Workload and lease ownership differ');
@@ -110,6 +122,9 @@ function createReaper(api, config, now = Date.now) {
     const terminate = instances.filter(instance => !['terminated', 'shutting-down'].includes(instance.State.Name));
     if (terminate.length) await api('ec2', 'TerminateInstances', { InstanceIds: terminate.map(instance => instance.InstanceId) });
     if (workload) {
+      if (workload.StackStatus.endsWith('_IN_PROGRESS') && workload.StackStatus !== 'DELETE_IN_PROGRESS') {
+        return { state: 'waiting-stack-stable', runId };
+      }
       await removeStack(workload);
       return { state: 'deleting-stack', runId };
     }
@@ -118,6 +133,9 @@ function createReaper(api, config, now = Date.now) {
     const vpcs = await pages('ec2', 'DescribeVpcs', { Filters: filters }, 'Vpcs');
     if (volumes.length || vpcs.length) throw new Error('Orphan EBS/VPC remains; lease retained for retry and alarm');
     await clearAssets(runId);
+    if (lease.StackStatus.endsWith('_IN_PROGRESS') && lease.StackStatus !== 'DELETE_IN_PROGRESS') {
+      return { state: 'waiting-lease-ready', runId };
+    }
     await removeStack(lease);
     return { state: 'deleting-lease', runId };
   }

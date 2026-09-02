@@ -37,6 +37,23 @@ test("active lease is untouched and excessive lifetime is clamped to 45 minutes"
   assert.equal(calls.some(call => call.operation === "DeleteStack"), false);
   assert.equal(deadline(marker("RtbStage8cLease", "rtb-test", now + 10 ** 9)), now - 60_000 + 45 * 60_000);
 });
+test("forced cleanup durably expires the lease before mutation so the scheduler can resume", async () => {
+  const lease = marker("RtbStage8cLease", "rtb-test", now + 60_000);
+  const { reap, calls } = fake({ RtbStage8cLease: lease }, (operation, input) => {
+    if (operation === "UpdateStack") { lease.Tags = input.Tags; return {}; }
+  });
+  assert.equal((await reap({ mode: "cleanup", runId: "rtb-test" })).state, "cleanup-requested");
+  assert.equal(deadline(lease), now);
+  assert.equal(calls.some(call => call.operation === "DeleteStack"), false);
+  // No forced event on the next tick: persisted intent is enough.
+  assert.equal((await reap()).state, "deleting-lease");
+});
+test("lease tag update must settle before deleting the marker", async () => {
+  const lease = { ...marker("RtbStage8cLease"), StackStatus: "UPDATE_IN_PROGRESS" };
+  const { reap, calls } = fake({ RtbStage8cLease: lease });
+  assert.equal((await reap()).state, "waiting-lease-ready");
+  assert.equal(calls.some(call => call.operation === "DeleteStack"), false);
+});
 test("expired workload is terminated before deletion, without releasing the lease", async () => {
   const { reap, calls } = fake({ RtbStage8cLease: marker("RtbStage8cLease"), RtbStage8c: marker("RtbStage8c") }, operation => {
     if (operation === "DescribeInstances") return { Reservations: [{ Instances: [{ InstanceId: "i-test", State: { Name: "running" } }] }] };

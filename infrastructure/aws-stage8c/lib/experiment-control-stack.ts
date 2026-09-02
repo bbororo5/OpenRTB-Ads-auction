@@ -79,6 +79,8 @@ export class ExperimentControlStack extends Stack {
       roleName: "RtbStage8cReaper", assumeRolePolicyDocument: serviceTrust("lambda.amazonaws.com"),
       policies: [{ policyName: "ReapExperimentOnly", policyDocument: { Version: "2012-10-17", Statement: [
         allow(["cloudformation:DescribeStacks", "cloudformation:DeleteStack"], stacks),
+        allow(["cloudformation:UpdateStack"], [arn("cloudformation", "stack/RtbStage8cLease/*")]),
+        allow(["iam:PassRole"], [execution.attrArn], { StringEquals: { "iam:PassedToService": "cloudformation.amazonaws.com" } }),
         allow(["ec2:DescribeInstances", "ec2:DescribeVolumes", "ec2:DescribeVpcs"], ["*"], regional),
         allow(["ec2:TerminateInstances"], [arn("ec2", "instance/*")], { StringEquals: { "ec2:ResourceTag/Project": "low-latency-rtb", "ec2:ResourceTag/Stage": "8c" } }),
         allow(["ecr:ListImages", "ecr:BatchDeleteImage"], [repoArn]),
