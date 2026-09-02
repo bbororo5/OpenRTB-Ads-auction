@@ -40,7 +40,7 @@ TypeScript runner
 
 ## 실행 순서
 
-반복 로그인 제거를 위한 [GitHub OIDC 전환](stage8c-github-oidc.md)은 인증 기반 코드까지 준비됐다. AWS 설치·OIDC 실증과 배포 권한 연결 전에는 아래 명령에 기존 로컬 인증이 필요하다.
+반복 로그인 제거를 위한 [GitHub OIDC 전환](stage8c-github-oidc.md)은 AWS 설치·인증 실증까지 완료됐다. 배포 권한·자동 회수 장치는 아직 연결 전이므로 아래 명령에는 기존 로컬 인증이 필요하다. 자동 회수 장치 검증 전에는 실제 실험 배포를 진행하지 않는다.
 
 ```bash
 cd infrastructure/aws-stage8c

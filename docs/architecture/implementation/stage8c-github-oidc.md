@@ -1,6 +1,6 @@
 # Stage 8C GitHub OIDC 인증 전환
 
-상태: **인증 기반 코드·로컬 검증 완료 / AWS 설치·GitHub 실행 미검증 / 배포 권한·실험 워크플로 미구현**.
+상태: **인증 기반 코드·로컬 검증·AWS 설치·GitHub OIDC 실증 완료 / 배포 권한·자동 회수 장치·실험 워크플로 미구현**.
 
 ## 목적과 범위
 
@@ -80,11 +80,24 @@ gh workflow run stage8c-oidc-check.yml \
 
 실행의 Summary에 `arn:aws:sts::333982363617:assumed-role/RtbStage8cGitHub/github-...`가 표시되고 job이 성공해야 한다. 실제 Run ID를 증거로 남긴다. 로컬 테스트 통과만으로 OIDC 실증 성공으로 판정하지 않는다.
 
+### 2026-09-02 실증 결과
+
+- AWS `RtbStage8cGitHubAuth` 설치·업데이트 완료.
+- [첫 실행 33634354052](https://github.com/bbororo5/OpenRTB-Ads-auction/actions/runs/33634354052): `AssumeRoleWithWebIdentity` 거절. 정책이 이름 기반의 이전 subject 형식을 사용한 것이 원인.
+- GitHub OIDC 설정 API가 반환한 `sub_claim_prefix`를 대조해 owner/repository ID를 포함하는 정확한 형식으로 수정했다. wildcard를 추가하거나 GitHub 설정을 낮추지 않았다.
+- [재실행 33634579945](https://github.com/bbororo5/OpenRTB-Ads-auction/actions/runs/33634579945): **success**, `identity` job 13초. 실행 커밋 `280c49f99f0a82384963b8ae1eb63c56adda102c`. 임시 자격 증명 발급과 계정·역할 검증 모두 성공.
+- TypeScript build 및 테스트 11개 통과.
+- IAM policy simulation: `ec2:RunInstances`, `cloudformation:CreateStack`, `sts:AssumeRole` 모두 `implicitDeny`. 배포 권한은 부여하지 않았다.
+- 프로젝트 태그로 조회한 active EC2(pending/running/stopping/stopped), EBS, VPC 각각 0개. 인증 검사는 실험 자원을 만들지 않았다.
+- Actions에 Node 20 선언을 Node 24로 실행했다는 비실패 경고가 남았다. 사용한 액션의 SHA는 고정되어 있으며 이번 실행은 성공했다.
+
 공개 저장소에는 이미 검토 중인 로컬 DSP 커밋도 있으므로 인증 작업 때문에 그 커밋을 함께 밀어 넣지 않는다. 이번 변경은 별도 커밋으로 유지하고 main 반영 경계를 확인한다. GitHub CLI의 OAuth token은 workflow push 시 `workflow` scope가 추가로 필요할 수 있다.
 
 ## 다음 단계: 배포 권한과 비용 안전장치
 
 인증 복구 후 기존 CDKToolkit 역할·정책을 조회하고, 그 결과를 바탕으로 별도 변경한다.
+
+2026-09-02 조회에서 기존 CDK CloudFormation execution 역할에 `AdministratorAccess`가 연결되어 있고, deploy 역할은 여러 CloudFormation 변경 작업을 `Resource: *`에 허용하는 것으로 확인했다. GitHub `main` 브랜치 보호도 설정되어 있지 않았다. 이 기존 관리자 경로를 새 OIDC 역할에 그대로 위임하지 않는다. 배포 권한과 저장소 변경 통제는 별도 설계·검증 대상이다.
 
 1. CDK 배포·asset publishing·CloudFormation execution 역할의 실제 권한을 조사한다.
 2. 배포 역할을 제한한다. OIDC 신뢰가 한 저장소로 제한됐더라도, 광범위한 CDK 역할을 AssumeRole하면 AWS 자원 권한까지 좁아지는 것은 아니다.
@@ -93,6 +106,8 @@ gh workflow run stage8c-oidc-check.yml \
 5. runner 강제 종료에는 `always()`만으로 철거를 보장할 수 없으므로 독립적인 회수 경로를 검증한 뒤 실험 배포를 활성화한다.
 
 현재 인증 검사에는 실험 자원 생성 권한이나 단계가 없으므로 철거할 실험 자원도 없다. 배포 워크플로 완성 전까지 기존 배포 스크립트는 기존 인증을 요구한다.
+
+사용자 요구: 목적 달성 또는 검증 실패 후 결과를 보관하고 즉시 철거한다. runner 자체 장애에도 동작하는 독립적인 회수 장치를 검증하기 전에는 실제 실험 배포를 하지 않는다. 인증용 IAM 역할·OIDC 제공자는 재사용 기반이므로 매번 지우는 실험 자원과 구분한다.
 
 ## 공식 근거
 
