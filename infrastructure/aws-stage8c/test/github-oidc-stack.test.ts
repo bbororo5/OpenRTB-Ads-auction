@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { App, BootstraplessSynthesizer } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
-import { GitHubOidcStack } from "../lib/github-oidc-stack.js";
+import { GitHubOidcStack, assertGitHubSubjectConfiguration } from "../lib/github-oidc-stack.js";
 
 function template(existingProviderArn?: string): Template {
   return Template.fromStack(new GitHubOidcStack(new App(), "AuthTest", {
@@ -25,11 +25,25 @@ test("OIDC trusts exactly this repository main branch and STS audience", () => {
         Principal: { Federated: { "Fn::GetAtt": ["GitHubProvider", "Arn"] } },
         Condition: { StringEquals: {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:bbororo5/OpenRTB-Ads-auction:ref:refs/heads/main",
+          "token.actions.githubusercontent.com:sub": "repo:bbororo5@114351464/OpenRTB-Ads-auction@1273253542:ref:refs/heads/main",
         } },
       }],
     },
   });
+});
+
+test("installer validates the effective subject prefix, not the immutable opt-in flag", () => {
+  assert.doesNotThrow(() => assertGitHubSubjectConfiguration({
+    use_default: true,
+    sub_claim_prefix: "repo:bbororo5@114351464/OpenRTB-Ads-auction@1273253542",
+  }));
+  for (const configuration of [
+    { use_default: true, sub_claim_prefix: "repo:bbororo5/OpenRTB-Ads-auction" },
+    { use_default: false, sub_claim_prefix: "repo:bbororo5@114351464/OpenRTB-Ads-auction@1273253542" },
+    { use_default: true },
+  ]) {
+    assert.throws(() => assertGitHubSubjectConfiguration(configuration), /subject changed/);
+  }
 });
 
 test("authentication baseline creates neither spending resources nor deployment grants", () => {

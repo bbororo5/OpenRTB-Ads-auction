@@ -3,9 +3,21 @@ import { CfnOIDCProvider, CfnRole } from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 
 export const githubRepository = "bbororo5/OpenRTB-Ads-auction";
+// Verified using GET /repos/{owner}/{repo}/actions/oidc/customization/sub.
+// New GitHub subjects include immutable IDs; names alone do not match.
+export const githubSubjectPrefix = "repo:bbororo5@114351464/OpenRTB-Ads-auction@1273253542";
 export const githubBranch = "main";
 export const githubRoleName = "RtbStage8cGitHub";
 export const githubProviderHost = "token.actions.githubusercontent.com";
+
+export function assertGitHubSubjectConfiguration(configuration: {
+  use_default?: boolean;
+  sub_claim_prefix?: string;
+}): void {
+  if (configuration.use_default !== true || configuration.sub_claim_prefix !== githubSubjectPrefix) {
+    throw new Error("GitHub OIDC subject changed; review the exact subject before updating AWS trust.");
+  }
+}
 
 interface GitHubOidcStackProps extends StackProps {
   readonly existingProviderArn?: string;
@@ -37,7 +49,7 @@ export class GitHubOidcStack extends Stack {
           Condition: {
             StringEquals: {
               [`${githubProviderHost}:aud`]: "sts.amazonaws.com",
-              [`${githubProviderHost}:sub`]: `repo:${githubRepository}:ref:refs/heads/${githubBranch}`,
+              [`${githubProviderHost}:sub`]: `${githubSubjectPrefix}:ref:refs/heads/${githubBranch}`,
             },
           },
         }],

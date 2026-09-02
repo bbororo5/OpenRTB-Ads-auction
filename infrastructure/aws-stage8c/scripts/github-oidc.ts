@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { App, BootstraplessSynthesizer } from "aws-cdk-lib";
-import { GitHubOidcStack, githubProviderHost } from "../lib/github-oidc-stack.js";
+import { GitHubOidcStack, githubProviderHost, githubRepository, assertGitHubSubjectConfiguration } from "../lib/github-oidc-stack.js";
 
 const account = "333982363617";
 const region = "ap-northeast-2";
@@ -27,6 +27,9 @@ try {
     // Fail before mutation if credentials are absent or belong to another account.
     const identity = JSON.parse(aws(["sts", "get-caller-identity"]));
     if (identity.Account !== account) throw new Error(`Refusing install outside account ${account}.`);
+    assertGitHubSubjectConfiguration(JSON.parse(execFileSync("gh", [
+      "api", `repos/${githubRepository}/actions/oidc/customization/sub`,
+    ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })));
     const arn = `arn:aws:iam::${account}:oidc-provider/${githubProviderHost}`;
     const providers = JSON.parse(aws(["iam", "list-open-id-connect-providers"]));
     if (providers.OpenIDConnectProviderList.some((provider: { Arn: string }) => provider.Arn === arn)) {

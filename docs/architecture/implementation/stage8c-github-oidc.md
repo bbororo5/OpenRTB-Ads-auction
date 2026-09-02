@@ -30,7 +30,8 @@ SSO 전환은 보류한다. AWS 계정 접근용 IAM Identity Center를 위해 O
 ## 권한 경계
 
 - 대상: 계정 `333982363617`, 리전 `ap-northeast-2`.
-- 신뢰 주체: `repo:bbororo5/OpenRTB-Ads-auction:ref:refs/heads/main`만 `StringEquals`로 허용.
+- 신뢰 주체: `repo:bbororo5@114351464/OpenRTB-Ads-auction@1273253542:ref:refs/heads/main`만 `StringEquals`로 허용.
+- GitHub OIDC 설정 API의 `sub_claim_prefix`를 기준으로 owner/repository 불변 ID를 포함한다. `use_immutable_subject: false`만 보고 이름 기반 형식으로 추정하지 않는다. 설치 시 실제 prefix와 default subject 설정을 재확인하고 다르면 AWS 변경 전에 중단한다.
 - `aud`: `sts.amazonaws.com`만 허용. PR·fork·다른 브랜치의 기본 OIDC subject는 불일치한다.
 - 워크플로는 `workflow_dispatch`만 지원한다. push·PR·예약 실행으로 시작하지 않는다.
 - GitHub token 권한은 해당 job의 `id-token: write`만 허용한다. checkout도 하지 않는다.
@@ -66,6 +67,8 @@ AWS_PROFILE=default npm run github-oidc -- install
 
 `install`은 STS로 계정을 확인한 다음 제공자를 탐색한다. 자격 증명 만료·다른 계정·기존 제공자의 audience 불일치가 발생하면 CloudFormation 변경 전에 실패한다. CDKToolkit 재부트스트랩, Organizations, SSO, IAM 사용자·Access Key 생성은 수행하지 않는다.
 
+설치 환경에는 인증된 `gh` CLI도 필요하다. GitHub 설정 API로 현재 subject를 검증하기 때문이다.
+
 ## 인증 인수 기준
 
 AWS 설치와 main 반영 후:
@@ -94,6 +97,7 @@ gh workflow run stage8c-oidc-check.yml \
 ## 공식 근거
 
 - [GitHub OIDC를 신뢰하는 IAM 역할](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-idp_oidc.html)
+- [GitHub immutable subject 형식](https://docs.github.com/en/actions/reference/security/oidc#immutable-subject-claims)
 - [AWS credentials action](https://github.com/aws-actions/configure-aws-credentials)
 - [STS GetCallerIdentity 권한](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html)
 - [AWS CLI remote login](https://docs.aws.amazon.com/cli/latest/reference/login/)
