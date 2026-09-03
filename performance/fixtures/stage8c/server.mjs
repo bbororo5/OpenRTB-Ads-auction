@@ -17,21 +17,45 @@ export function externalBidPrice(dsp, auctionId) {
   return winsAgainstProject ? 3.0 : 1.5;
 }
 
-function startGateway() {
+const hopByHopHeaders = new Set([
+  "connection", "keep-alive", "proxy-connection", "proxy-authenticate",
+  "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade",
+  "http2-settings",
+]);
+
+export function forwardingHeaders(incoming, sspId) {
+  const headers = Object.fromEntries(Object.entries(incoming)
+    .filter(([, value]) => value !== undefined)
+    .map(([name, value]) => [name.toLowerCase(), value]));
+  // RFC 9110 §7.6.1: Connection can nominate additional hop-by-hop fields.
+  const nominated = String(headers.connection ?? "").split(",")
+    .map(name => name.trim().toLowerCase()).filter(Boolean);
+  for (const name of [...hopByHopHeaders, ...nominated, "host", "content-length",
+    "x-authenticated-ssp-id"]) delete headers[name];
+  // Install trusted identity last, even when Connection nominated this field.
+  headers["x-authenticated-ssp-id"] = sspId;
+  return headers;
+}
+
+function reportGatewayError(error) {
+  const code = error?.cause?.code ?? error?.code;
+  console.error(JSON.stringify({
+    event: "gateway_upstream_failure",
+    code: typeof code === "string" && /^[A-Z0-9_]{1,64}$/.test(code) ? code : "UNKNOWN",
+    timeout: error?.name === "TimeoutError",
+  }));
+}
+
+export function createGateway({ targetBaseUrl = dspBaseUrl, sspId = authenticatedSspId } = {}) {
   return http.createServer(async (request, response) => {
     if (request.url === "/health") {
       respondJson(response, 200, { status: "ok", role: "gateway" });
       return;
     }
 
-    const target = new URL(request.url ?? "/", dspBaseUrl);
-    const headers = { ...request.headers };
-    delete headers.host;
-    delete headers["content-length"];
-    delete headers["x-authenticated-ssp-id"];
-    headers["x-authenticated-ssp-id"] = authenticatedSspId;
-
     try {
+      const target = new URL(request.url ?? "/", targetBaseUrl);
+      const headers = forwardingHeaders(request.headers, sspId);
       const upstream = await fetch(target, {
         method: request.method,
         headers,
@@ -45,9 +69,10 @@ function startGateway() {
       });
       response.end(Buffer.from(await upstream.arrayBuffer()));
     } catch (error) {
+      reportGatewayError(error);
       respondJson(response, 503, { error: "dsp_unavailable" });
     }
-  }).listen(gatewayPort, "0.0.0.0");
+  });
 }
 
 function startExternalDsp(dsp, port) {
@@ -112,7 +137,7 @@ function respondJson(response, status, value) {
 
 export function startServers() {
   return [
-    startGateway(),
+    createGateway().listen(gatewayPort, "0.0.0.0"),
     startExternalDsp("external-a", externalAPort),
     startExternalDsp("external-b", externalBPort),
   ];
