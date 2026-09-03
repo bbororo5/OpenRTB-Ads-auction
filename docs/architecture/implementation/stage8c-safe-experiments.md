@@ -2,6 +2,8 @@
 
 > 2026-09-03 운영 변경: 사용자의 전체 테스트 과금 자원 철거 요청에 따라 `RtbStage8cControl`도 삭제 완료했다. Lambda·EventBridge·경보·로그·전용 ECR/S3의 부재를 확인했으며, 아래 설치/실증 기록은 과거 이력이다. 다음 AWS 실험 전에는 `experiment-control -- install --ack-cost`로 제어 스택을 다시 설치하고 safety-check를 통과해야 한다. 기존 baseline 테스트 EC2와 연결된 EBS도 삭제했다. GitHub 인증 스택과 비어 있는 CDK bootstrap 기반은 유지한다.
 
+> 같은 날 후속 [게이트웨이 수정 재검증](stage8c-2026-09-03-gateway-verification.md)에서 제어 스택을 재설치하고 두 회수 시험을 통과한 후 실제 5-host 스모크를 실행했다. 정식 301건 모두 성공, p99 20.53ms, 프로젝트 DSP 낙찰률 26.57%로 통과했다. 결과 보존 후 workload/asset/lease를 즉시 회수하고, 상위 실행 래퍼로 제어 스택까지 21:07 KST에 삭제 완료했다. 현재 제어 스택은 설치되어 있지 않다.
+
 상태: 구현·AWS 제어 스택 설치·GitHub 제한 역할의 사전 회수 실증과 새 경로의 실제 5-host 배포·회수까지 수행했다. 스모크 결과와 남은 검증 경계는 [2026-09-02 실제 배포 기록](stage8c-2026-09-02-verification.md)을 따른다. 로컬 실제 배포와 GitHub 제한 역할의 전체 배포 실증은 구분한다.
 
 ## 핵심 불변식

@@ -2,7 +2,7 @@
 
 ## 현재 상태
 
-2026-09-03: 게이트웨이 수정과 로컬 검증 완료. AWS 재배포는 관리자 인증 만료로 아직 시작하지 않았다. 전날 실험과 2026-09-03 잔여 자원 철거 이후 새 AWS 자원은 생성하지 않았다.
+2026-09-03: 게이트웨이 수정·로컬 검증·AWS 정식 스모크 통과. 실험 workload·배포 assets·제어 스택까지 모두 삭제 완료했다. 워밍업의 초기 실패는 별도 미해결 과제로 남긴다.
 
 ## 수정
 
@@ -28,7 +28,54 @@
 
 시스템 테스트의 기존 입찰 제한 시간이나 성공 기준은 완화하지 않았다. 기존에 관찰한 첫 요청 지연 문제의 원인까지 해결됐다고 단정하지 않는다. 이 결과는 로컬 검증이며 AWS 스모크 통과나 운영 성능 증거를 대신하지 않는다.
 
-## 다음 AWS 실행의 종료 조건
+## AWS 실증 결과
+
+- RunId: `rtb-gateway-fix-20260903a`
+- 실행 커밋: `eed77bc62bc397751b71e87d219cb81cf582f186`
+- 서울 리전, `t4g.small` 5대: loadgen / SSP / DSP / support / observer 분리.
+- 로컬 AWS 로그인으로 실행기를 구동하고 제한된 CloudFormation 실행 역할로 프로비저닝했다. GitHub OIDC 전체 배포 경로의 실증은 아니다.
+- 독립 스케줄 회수 canary와 즉시 회수 probe 모두 성공한 뒤 workload를 생성했다.
+- 정식 스모크 기록 구간: 2026-09-03 12:03:11.733–12:03:44.474 UTC (21:03 KST).
+
+| 지표 | 워밍업: 10 RPS × 10초 | 정식: 10 RPS × 30초 |
+| --- | --- | --- |
+| 실제 요청 | 100 | 301 |
+| HTTP 성공 | 95 / 100 | 301 / 301 |
+| p99 | 345.46ms | 20.53ms (기준 ≤50ms) |
+| 프로젝트 DSP 낙찰 | 24 / 95 = 25.26% | 80 / 301 = 26.57% (기준 20–28%) |
+| 기술 실패 / 잘못된 경매 | 각각 5 | 각각 0 |
+| dropped iterations | 0 | 0 |
+| 판정 | 실패 기록 보존 | 모든 threshold 통과 |
+
+직전 AWS 실험은 300건 모두 HTTP 성공했지만 프로젝트 DSP 낙찰은 0건이었다. 게이트웨이의 hop-by-hop 헤더 처리 수정 후, 기존 입찰 정책·제한 시간·정식 성공 기준을 완화하지 않고 프로젝트 DSP 참여와 정식 스모크 통과를 확인했다.
+
+### 검증 경계
+
+- 워밍업 실패 5건의 상세 원인은 아직 확정하지 않았다. 정식 통과를 최초 요청 안정성까지 해결됐다는 뜻으로 해석하지 않는다.
+- 정식 최대 지연은 62.18ms, p99.9는 54.19ms였다. 모든 요청이 50ms 이내였다는 의미는 아니다.
+- 10 RPS, 약 30초의 스모크이며 시스템 한계 처리량이나 장시간 안정성 시험이 아니다.
+- AWS k6는 경매 API를 검증한다. render/billing DB 왕복은 앞의 로컬 시스템 테스트 결과이며, 이번 AWS 스모크의 검증 범위와 구분한다.
+- 관찰 준비 검사에서 5개 Prometheus target이 모두 up, Tempo 수신 span 226개, Pyroscope 수신 profile 1,090개를 확인했다. Loki는 ready지만 로그 수신량이나 요청별 trace 연계까지 검증한 것은 아니다.
+- Pyroscope의 마지막 readiness 503은 `Segment Writer not ready: waiting for 30s after being ready`였다. 재시작 0, OOM false였고 이후 정상 준비 상태로 전환됐다.
+
+### 회수와 증거
+
+정식 결과와 전후 호스트 상태 저장 후 즉시 회수를 요청했다. 사용자 확인을 기다리지 않았다. 5개 instance가 terminated이고 EBS가 0개임을 별도 조회했으며, workload 스택 `DELETE_COMPLETE`를 확인했다. 실행기의 workload/asset/lease 회수 완료 시각은 12:05:17.529 UTC이다.
+
+상위 실행 래퍼의 `finally`는 workload/lease/canary와 EC2/EBS/VPC/ECR/S3 부재를 확인한 뒤에만 제어 스택을 삭제한다. workload가 남으면 AWS 회수기를 보존하고 오류로 종료한다. 이번 래퍼는 실행 증거에 보존하며 기존 npm experiment 명령이 제어 스택까지 삭제한다고 해석하지 않는다.
+
+제어 스택 `DELETE_COMPLETE`와 전체 실행 종료를 12:07:24.947 UTC (21:07 KST)에 확인했다. 최종 확인: 실행 중/정지 EC2 0, EBS 0, 실험 VPC 0, EIP 0, 전용 ECR/S3 삭제, Lambda·EventBridge rule·CloudWatch alarm/log group 0. 비어 있는 CDK bootstrap 기반, 인증 전용 IAM/OIDC 스택 및 기본 VPC는 유지한다. 이미 발생한 사용량과 청구 반영 지연은 별개다. 실험 DB 디스크와 서버 내 관찰 데이터도 삭제했으며 필요한 결과는 로컬 증거로 보존했다.
+
+증거 디렉토리: `docs/evidence/performance/2026-09-03/`
+
+- `stage8c-aws-warmup.md`, `stage8c-aws-smoke.md`
+- `stage8c-aws-{pre,post}-{warmup,smoke}-hosts.md`
+- `rtb-gateway-fix-20260903a-run.json`
+- `rtb-gateway-fix-20260903a-full-teardown.json`
+- `rtb-gateway-fix-20260903a-final-resource-checks.json`
+- `rtb-gateway-fix-20260903a-runner.mjs`, `rtb-gateway-fix-20260903a-console.log`
+
+## 반복 실행의 종료 조건
 
 1. 유효한 관리자 인증으로 `RtbStage8cControl` 재설치.
 2. EventBridge → Lambda 독립 회수 및 즉시 회수 시험 통과 후에만 EC2 생성.
