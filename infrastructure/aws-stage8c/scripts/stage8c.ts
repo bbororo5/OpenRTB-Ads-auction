@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomBytes } from "node:crypto";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
+import { promisify } from "node:util";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -315,7 +316,7 @@ async function collectEvidence(label: string): Promise<void> {
       "docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}' || true",
     ];
     const result = await sendCommand(instanceId, command, 90);
-    const cloudWatch = cloudWatchMetrics(instanceId);
+    const cloudWatch = await cloudWatchMetrics(instanceId);
     return { role, instanceId, result, cloudWatch };
   }));
   const content = [
@@ -342,20 +343,31 @@ async function collectEvidence(label: string): Promise<void> {
   process.stdout.write(`Host evidence: ${evidencePath}\n`);
 }
 
-function cloudWatchMetrics(instanceId: string): Record<string, unknown> {
+async function cloudWatchMetrics(instanceId: string): Promise<Record<string, unknown>> {
   const end = new Date();
   const start = new Date(end.getTime() - 20 * 60_000);
   const metrics = ["CPUUtilization", "CPUCreditBalance", "CPUCreditUsage", "NetworkIn", "NetworkOut"];
-  return Object.fromEntries(metrics.map((metric) => [metric, awsJson([
-    "cloudwatch", "get-metric-statistics",
-    "--namespace", "AWS/EC2",
-    "--metric-name", metric,
-    "--dimensions", `Name=InstanceId,Value=${instanceId}`,
-    "--start-time", start.toISOString(),
-    "--end-time", end.toISOString(),
-    "--period", "300",
-    "--statistics", "Minimum", "Average", "Maximum",
-  ])]));
+  const result: Record<string, unknown> = {};
+  // One request per host at a time; collectEvidence runs the five hosts concurrently.
+  // Synchronous CLI calls here serialize all hosts and consume the phase time budget.
+  for (const metric of metrics) {
+    const { stdout } = await promisify(execFile)("aws", [
+      "cloudwatch", "get-metric-statistics",
+      "--namespace", "AWS/EC2",
+      "--metric-name", metric,
+      "--dimensions", `Name=InstanceId,Value=${instanceId}`,
+      "--start-time", start.toISOString(),
+      "--end-time", end.toISOString(),
+      "--period", "300",
+      "--statistics", "Minimum", "Average", "Maximum",
+      "--region", region,
+      ...(profile ? ["--profile", profile] : []),
+      "--output", "json", "--no-cli-pager",
+      "--cli-connect-timeout", "10", "--cli-read-timeout", "30",
+    ], { encoding: "utf8", timeout: 45_000 });
+    result[metric] = JSON.parse(stdout || "null");
+  }
+  return result;
 }
 
 async function sendCommand(
