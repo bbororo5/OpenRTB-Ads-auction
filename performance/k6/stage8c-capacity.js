@@ -12,6 +12,7 @@ const MAX_VUS = Number(__ENV.MAX_VUS || Math.max(1000, RPS * 4));
 const technicalFailures = new Counter("stage8c_technical_failures");
 const invalidAuctions = new Counter("stage8c_invalid_auctions");
 const projectDspWinRate = new Rate("stage8c_project_dsp_win_rate");
+const httpStatuses = new Counter("stage8c_http_statuses");
 
 export const options = {
   summaryTrendStats: ["avg", "min", "med", "max", "p(90)", "p(95)", "p(99)", "p(99.9)"],
@@ -33,6 +34,8 @@ export const options = {
     stage8c_technical_failures: ["count==0"],
     stage8c_invalid_auctions: ["count==0"],
     stage8c_project_dsp_win_rate: ["rate>=0.20", "rate<=0.28"],
+    ...Object.fromEntries([0, 200, 400, 401, 500, 503, 504]
+      .map(status => [`stage8c_http_statuses{status:${status}}`, ["count>=0"]])),
   },
 };
 
@@ -44,10 +47,12 @@ export default function () {
     {
       headers: { "Content-Type": "application/json" },
       tags: { test_stage: "8c", phase: "normal_peak" },
+      timeout: __ENV.REQUEST_TIMEOUT || "60s",
     },
   );
 
   const result = parseJson(response);
+  httpStatuses.add(1, { status: String(response.status) });
   const slot = result?.slots?.[0];
   const valid = response.status === 200
     && result.auctionId

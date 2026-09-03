@@ -64,11 +64,12 @@ async function main(): Promise<void> {
       }, 180);
       return;
     case "capacity":
-      await runLoadTest("capacity", "stage8c-capacity.js", {
+      await runLoadTest(options.label ?? "capacity", "stage8c-capacity.js", {
         RPS: options.rps ?? "500",
         DURATION: options.duration ?? "10m",
         PRE_ALLOCATED_VUS: options["pre-allocated-vus"] ?? "1000",
         MAX_VUS: options["max-vus"] ?? "2000",
+        REQUEST_TIMEOUT: "2s",
       }, 900);
       return;
     case "overload":
@@ -217,6 +218,8 @@ async function runLoadTest(
   const outputs = stackOutputs();
   const loadgenId = requireOutput(outputs, "LoadgenInstanceId");
   const baseUrl = requireOutput(outputs, "SspBaseUrl");
+  const sampleSeconds = Number(options["sample-seconds"] ?? 0);
+  if (!Number.isInteger(sampleSeconds) || sampleSeconds < 0 || sampleSeconds > 120) throw new Error("sample-seconds must be 0..120");
   const envFlags = Object.entries({ BASE_URL: baseUrl, ...environment })
     .flatMap(([name, value]) => ["-e", `${name}=${shellQuote(value)}`])
     .join(" ");
@@ -224,14 +227,19 @@ async function runLoadTest(
     "docker run --rm --network host",
     envFlags,
     "-v /opt/rtb/k6:/scripts:ro",
+    "-v /tmp/rtb-k6-results:/results",
     "grafana/k6:1.2.1 run",
-    `--summary-export=/tmp/${label}-summary.json`,
+    `--summary-export=/results/${label}-summary.json`,
     `/scripts/${script}`,
   ].join(" ");
 
   await collectEvidence(`pre-${label}`);
+  if (sampleSeconds) await collectBudgetEvidence(`pre-${label}`, outputs);
   const startedAt = new Date().toISOString();
-  const result = await sendCommand(loadgenId, [remoteCommand], timeoutSeconds);
+  const samples = sampleSeconds ? sampleHosts(label, outputs, sampleSeconds) : Promise.resolve();
+  const result = await sendCommand(loadgenId, [
+    "install -d -m 0777 /tmp/rtb-k6-results", remoteCommand,
+  ], timeoutSeconds);
   const record = [
     `# Stage 8C AWS ${label}`,
     "",
@@ -253,10 +261,43 @@ async function runLoadTest(
   if (result.stderr) {
     process.stderr.write(`${result.stderr}\n`);
   }
+  const exported = await sendCommand(loadgenId, [`cat /tmp/rtb-k6-results/${label}-summary.json`], 30);
+  if (exported.status !== "Success") throw new Error("k6 summary export missing; refusing to infer success");
+  writeEvidence(`${label}-summary.json`, JSON.stringify(JSON.parse(exported.stdout), null, 2));
+  await samples;
+  if (sampleSeconds) await collectBudgetEvidence(`post-${label}`, outputs);
   await collectEvidence(`post-${label}`);
+  writeEvidence(`${label}-result.json`, JSON.stringify({ status: result.status, responseCode: result.responseCode }, null, 2));
   if (result.status !== "Success") {
     throw new Error(`Remote k6 command ended with ${result.status}`);
   }
+}
+
+async function sampleHosts(label: string, outputs: Outputs, seconds: number): Promise<void> {
+  const samples = await Promise.all(Object.entries(hostInstances(outputs)).map(async ([role, instanceId]) => {
+    try {
+      const result = await sendCommand(instanceId, [
+        `for sample in $(seq 1 ${Math.ceil(seconds / 5) + 1}); do date -u +%Y-%m-%dT%H:%M:%SZ; docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} memory={{.MemUsage}} pids={{.PIDs}}' || true; sleep 3; done`,
+      ], seconds + 40);
+      return { role, instanceId, ...result };
+    } catch (error) { return { role, instanceId, error: String(error) }; }
+  }));
+  writeEvidence(`${label}-samples.json`, JSON.stringify(samples, null, 2));
+}
+
+async function collectBudgetEvidence(label: string, outputs: Outputs): Promise<void> {
+  const ledger = [
+    "SELECT campaign_id, available_micros, outstanding_micros, committed_micros, quarantined_micros, next_lease_generation FROM regional_campaign_budget",
+    "SELECT count(*) AS leases, max(lease_generation) AS generation, min(face_value_micros) AS min_face, max(face_value_micros) AS max_face, count(*) FILTER (WHERE expires_at > now()) AS unexpired, count(*) FILTER (WHERE settlement_state='SETTLED') AS settled FROM budget_lease",
+  ];
+  const result = await sendCommand(requireOutput(outputs, "SupportInstanceId"), [
+    "date -u +%Y-%m-%dT%H:%M:%SZ",
+    "curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/diagnostics",
+    ...ledger.map(sql => `docker exec ledger-store psql -U postgres -d rtb -P pager=off -c ${shellQuote(sql)}`),
+    "docker exec outcome-store psql -U postgres -d rtb -P pager=off -c 'SELECT kind, count(*) FROM reservation_monetary_outcome GROUP BY kind'",
+  ], 30);
+  writeEvidence(`${label}-budget.json`, JSON.stringify(result, null, 2));
+  if (result.status !== "Success") throw new Error("Budget diagnostics unavailable; capacity evidence incomplete");
 }
 
 async function collectEvidence(label: string): Promise<void> {
@@ -321,7 +362,7 @@ async function sendCommand(
   instanceId: string,
   commands: string[],
   timeoutSeconds: number,
-): Promise<{ status: string; stdout: string; stderr: string }> {
+): Promise<{ status: string; responseCode: number; stdout: string; stderr: string }> {
   const sent = awsJson([
     "ssm", "send-command",
     "--instance-ids", instanceId,
@@ -342,6 +383,7 @@ async function sendCommand(
       if (terminalStatuses.has(invocation.Status)) {
         return {
           status: invocation.Status,
+          responseCode: invocation.ResponseCode,
           stdout: invocation.StandardOutputContent ?? "",
           stderr: invocation.StandardErrorContent ?? "",
         };

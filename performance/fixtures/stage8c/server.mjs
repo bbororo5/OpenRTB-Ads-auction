@@ -47,11 +47,21 @@ function reportGatewayError(error) {
 }
 
 export function createGateway({ targetBaseUrl = dspBaseUrl, sspId = authenticatedSspId } = {}) {
+  const diagnostics = {
+    bids: { requests: 0, upstreamStatuses: {}, fetchErrors: 0 },
+    notices: { requests: 0, upstreamStatuses: {}, fetchErrors: 0 },
+  };
   return http.createServer(async (request, response) => {
     if (request.url === "/health") {
       respondJson(response, 200, { status: "ok", role: "gateway" });
       return;
     }
+    if (request.method === "GET" && request.url === "/diagnostics") {
+      respondJson(response, 200, diagnostics);
+      return;
+    }
+    const counters = request.url?.startsWith("/openrtb/") ? diagnostics.bids : diagnostics.notices;
+    counters.requests++;
 
     try {
       const target = new URL(request.url ?? "/", targetBaseUrl);
@@ -64,11 +74,13 @@ export function createGateway({ targetBaseUrl = dspBaseUrl, sspId = authenticate
           : await readBody(request),
         signal: AbortSignal.timeout(2_000),
       });
+      counters.upstreamStatuses[upstream.status] = (counters.upstreamStatuses[upstream.status] ?? 0) + 1;
       response.writeHead(upstream.status, {
         "content-type": upstream.headers.get("content-type") ?? "application/octet-stream",
       });
       response.end(Buffer.from(await upstream.arrayBuffer()));
     } catch (error) {
+      counters.fetchErrors++;
       reportGatewayError(error);
       respondJson(response, 503, { error: "dsp_unavailable" });
     }

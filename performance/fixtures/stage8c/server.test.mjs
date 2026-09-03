@@ -63,6 +63,9 @@ test("real gateway forwards Java h2c headers safely, including chunked body and 
     assert.equal(result.status, 200, result.body);
   }
   assert.equal(received.length, 3);
+  const diagnostics = await (await fetch(new URL("/diagnostics", gateway))).json();
+  assert.deepEqual(diagnostics.bids, { requests: 3, upstreamStatuses: { 200: 3 }, fetchErrors: 0 });
+  assert.equal(diagnostics.notices.requests, 0);
   for (const request of received) {
     assert.equal(request.headers.upgrade, undefined);
     assert.equal(request.headers["http2-settings"], undefined);
