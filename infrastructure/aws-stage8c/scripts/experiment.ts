@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runExperiment } from "../lib/experiment-lifecycle.js";
+import { capacityStudy, readObservation } from "../lib/capacity-study.js";
 import { reaperName, ruleName, executionRole, bucketName } from "../lib/experiment-control-stack.js";
 
 const account = "333982363617", region = "ap-northeast-2";
@@ -142,9 +143,32 @@ async function ready(): Promise<void> {
   throw new Error("Hosts did not become ready within 10 minutes");
 }
 
+async function measureCapacity(): Promise<void> {
+  const limit = Math.min(Date.now() + 20 * 60_000, Date.parse(expiresAt) - 5 * 60_000);
+  summary.capacity = await capacityStudy(async (label, rps) => {
+    checkCancellation();
+    if (Date.now() + 180_000 > limit) throw new Error("Capacity time budget reached; stopping for cleanup");
+    const fullLabel = `${runId}-${label}`;
+    let stageError: unknown;
+    try {
+      await stage(["capacity", "--label", fullLabel, "--rps", String(rps), "--duration", "60s",
+        "--pre-allocated-vus", "100", "--max-vus", "200", "--sample-seconds", "60"], 180_000);
+    } catch (error) { if (cancelled) throw error; stageError = error; }
+    const raw = JSON.parse(readFileSync(path.join(evidenceDirectory, `stage8c-aws-${fullLabel}-summary.json`), "utf8"));
+    const observed = readObservation(raw, rps, 60);
+    const execution = JSON.parse(readFileSync(path.join(evidenceDirectory, `stage8c-aws-${fullLabel}-result.json`), "utf8"));
+    if (stageError && (observed.passed || execution.responseCode !== 99)) throw stageError;
+    console.log(`CAPACITY ${label} ${JSON.stringify(observed)}`);
+    // Preserve each observation immediately, even if a later stage is interrupted.
+    mkdirSync(evidenceDirectory, { recursive: true });
+    writeFileSync(path.join(evidenceDirectory, `${fullLabel}-observation.json`), JSON.stringify(observed, null, 2));
+    return observed;
+  });
+}
+
 try {
   if (!/^rtb-[a-z0-9-]{1,64}$/.test(runId)) throw new Error("Invalid run ID");
-  if (!["safety-check", "run", "cleanup"].includes(command)) throw new Error("Use safety-check | run --ack-cost | cleanup --ack-cost --run-id=rtb-...");
+  if (!["safety-check", "run", "capacity", "cleanup"].includes(command)) throw new Error("Use safety-check | run/capacity --ack-cost | cleanup --ack-cost --run-id=rtb-...");
   if (aws(["sts", "get-caller-identity"]).Account !== account) throw new Error("Wrong AWS account");
   if (command !== "safety-check" && !args.includes("--ack-cost")) throw new Error("Require --ack-cost");
   if (command === "cleanup") {
@@ -152,7 +176,7 @@ try {
     await cleanup();
   } else {
     await safetyCheck();
-    if (command === "run") await runExperiment({
+    if (command === "run" || command === "capacity") await runExperiment({
       acquire: async () => {
         checkCancellation();
         if (getStack("RtbStage8c")) throw new Error("Previous workload exists; refusing overlapping deployment");
@@ -163,8 +187,9 @@ try {
       verify: async () => {
         await ready();
         // Cold-start warmup is recorded separately, never counted as formal success.
-        try { await stage(["smoke", "--label", "warmup", "--rps", "10", "--duration", "10s"], 240_000); }
+        try { await stage(["smoke", "--label", command === "capacity" ? `${runId}-warmup` : "warmup", "--rps", "10", "--duration", command === "capacity" ? "30s" : "10s"], 240_000); }
         catch (error) { if (cancelled) throw error; summary.warmup = String(error); }
+        if (command === "capacity") { await measureCapacity(); return; }
         await stage(["smoke", "--rps", "10", "--duration", "30s"], 240_000);
         summary.smoke = "passed";
       },
