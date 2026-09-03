@@ -36,4 +36,6 @@ tasks.register('stage8cSystemTest', Test) {
             providers.gradleProperty('stage8cStoreUsername').getOrElse('postgres')
     systemProperty 'stage8c.store.password',
             providers.gradleProperty('stage8cStorePassword').getOrElse('local-dev-postgres-password')
+    systemProperty 'stage8c.gateway-script', file('src/test/fixtures/node-gateway.mjs').absolutePath
+    systemProperty 'stage8c.node', providers.gradleProperty('stage8cNode').getOrElse('node')
 }
