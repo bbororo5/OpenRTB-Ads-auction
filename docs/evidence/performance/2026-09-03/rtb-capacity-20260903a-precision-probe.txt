@@ -1,0 +1,3 @@
+input=2030-01-01T00:00:00.123456Z decision=OutcomeChosen storedDeadline=2030-01-01T00:00:00.123456Z storedOccurredAt=2030-01-01T00:00:00.123456Z beforeOriginalDeadline=false
+input=2030-01-01T00:00:00.123456123Z decision=OutcomeConflict storedDeadline=2030-01-01T00:00:00.123456Z storedOccurredAt=2030-01-01T00:00:00.123456Z beforeOriginalDeadline=true
+input=2030-01-01T00:00:00.123456789Z decision=OutcomeConflict storedDeadline=2030-01-01T00:00:00.123457Z storedOccurredAt=2030-01-01T00:00:00.123457Z beforeOriginalDeadline=false

@@ -1,0 +1,9 @@
+{
+  "commandId": "2f5a3517-407a-4358-90fe-be4ef2328873",
+  "result": [
+    {
+      "Status": "Success",
+      "Output": " conflicts | same_event_id | same_kind | affected_leases \n-----------+---------------+-----------+-----------------\n       771 |           771 |       771 |              79\n(1 row)\n\n existing_kind | incoming_kind | count \n---------------+---------------+-------\n EXPIRY        | EXPIRY        |   215\n LOSS          | LOSS          |   556\n(2 rows)\n\n"
+    }
+  ]
+}

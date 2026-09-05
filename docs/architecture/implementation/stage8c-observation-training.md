@@ -4,7 +4,7 @@
 
 오늘의 배포는 철거됐다. 먼저 로컬에 보존한 자료를 읽으며 시작한다. 새 배포나 비용 발생 작업은 이 문서만으로 자동 실행하지 않는다.
 
-원본 자료 위치는 `docs/evidence/performance/2026-09-03/`이며 아직 Git에 올리지 않은 로컬 증거다. 현재 보존물은 k6 결과, 컨테이너 CPU/메모리 표본, CloudWatch 조회 결과, gateway/DB 스냅샷과 로컬 재현 자료다. Grafana 화면이나 전체 trace/log/profile 저장소를 백업한 것은 아니다. 당시 대시보드를 그대로 다시 열 수 있다고 가정하지 않는다.
+원본 자료 위치는 `docs/evidence/performance/2026-09-03/`이다. 이 중 6구간의 observation 집계, DB 진단 2개, 로컬 재현 출력 2개는 내용 검토 후 Git에 보존했다. 공개 범위는 해당 디렉토리의 README에 명시했다. 나머지는 로컬 증거이며 k6 원본 결과, 컨테이너 CPU/메모리 표본, CloudWatch 조회 결과, gateway/DB 스냅샷과 재현 소스를 포함한다. Grafana 화면이나 전체 trace/log/profile 저장소를 백업한 것은 아니다. 당시 대시보드를 그대로 다시 열 수 있다고 가정하지 않는다.
 
 ## 진행 방식
 
