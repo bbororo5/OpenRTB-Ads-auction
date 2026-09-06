@@ -1,6 +1,6 @@
 # Stage 8C: 영속 권한과 임시 과금 자원의 분리
 
-상태 (2026-09-06): 코드 분리·로컬 테스트·합성·IAM Access Analyzer 정책 검사 완료. **새 구조의 AWS 설치 및 GitHub 전체 생성/철거 실증은 아직 하지 않았다.** 기존 9월 2~3일 실증은 이전 구조의 이력이다.
+상태 (2026-09-06): 코드 분리·로컬 테스트·합성·IAM 정책 검사 및 **새 IAM 설치와 GitHub OIDC 제어 환경 생성/철거 실증 완료**. 실험 서버 배포·부하 테스트 및 1시간 뒤 자기 철거 경로의 AWS 실증은 이번 시험에 포함하지 않았다.
 
 ## 결론
 
@@ -65,7 +65,7 @@ npm test
 npm run experiment-identity -- synth
 npm run experiment-control -- synth
 
-# 관리자 인증이 필요한 최초 한 번의 IAM 설치. 이번 작업에서는 미실행.
+# 관리자 인증이 필요한 최초 한 번의 IAM 설치. 2026-09-06 완료.
 AWS_PROFILE=stage8c npm run experiment-identity -- install
 
 # 검토한 커밋이 main에 반영된 뒤, EC2 없는 생성/회수 인수 시험부터 실행.
@@ -77,4 +77,13 @@ gh workflow run stage8c-experiment.yml --ref main \
 
 검증 결과: 인프라 테스트 35개 + gateway 4개 통과, TypeScript build 및 두 템플릿 합성 성공. IAM 6개 역할의 인라인 정책을 합성 템플릿의 역할 ARN으로 해석하여 AWS Access Analyzer validate-policy를 호출했고 모두 findings 0개였다. 이는 정책 정적 검사이며 실제 CloudFormation resource provider의 필요 권한을 모두 입증하지는 않는다.
 
-후속 AWS 인수 기준: 관리자 재로그인 없이 OIDC로 Control 생성 → 회수 시험 → Control DELETE_COMPLETE → IAM 기반 존속 확인. 그 뒤 참여형 대시보드 준비/사용자 확인 게이트를 구현하고 실제 부하 실험으로 진행한다. 현재 smoke 워크플로는 여전히 자동 부하를 실행하므로 참여형 관찰용으로 실행하지 않는다.
+AWS 인수 기준인 OIDC로 Control 생성 → 회수 시험 → Control DELETE_COMPLETE → IAM 기반 존속 확인을 통과했다. 다음은 참여형 대시보드 준비/사용자 확인 게이트 구현이다. 현재 smoke 워크플로는 여전히 자동 부하를 실행하므로 참여형 관찰용으로 실행하지 않는다.
+
+## 2026-09-06 AWS 실증 결과
+
+- 구현 커밋 `43b5e39e4f920cc3d0571649ba3f2a8bc47b694b`을 main에 푸시한 뒤 기존 관리자 세션으로 `RtbStage8cIdentity`를 최초 설치했다. 이 단계와 이후의 OIDC 실행을 구분한다.
+- [GitHub 실행 34028764593](https://github.com/bbororo5/OpenRTB-Ads-auction/actions/runs/34028764593): `safety-check`, job **success / 5분 17초**. GitHub의 ControlRunner → Deploy → ControlRunner OIDC 인증 전환, Control 생성, 독립 스케줄 canary 삭제, probe lease/S3 즉시 회수, 결과 보관, Control 삭제가 모두 성공했다. AWS 장기 키나 로컬 AWS 세션을 GitHub에 전달하지 않았다.
+- 회수 시험은 10:57:46~10:59:35 UTC에 수행했다. [시험 원본](../../evidence/performance/2026-09-06/rtb-gh-34028764593-1-safety-check.json)은 별도 보존한다.
+- Control의 immutable StackId는 `arn:aws:cloudformation:ap-northeast-2:333982363617:stack/RtbStage8cControl/9264eea0-a9e1-11f1-bc29-0ae95dc6d129`. CloudFormation 상태 `DELETE_COMPLETE`를 확인했다.
+- **20:01:21 KST 최종 조회**: 실험 EC2·EBS·VPC, 전용 S3·ECR, 철거 Lambda·EventBridge·로그·경보 모두 0개. 남은 Stage8C 스택은 Identity와 GitHubAuth뿐이다. 기존 CDKToolkit은 변경하지 않았다. [조회 원본](../../evidence/performance/2026-09-06/rtb-gh-34028764593-1-final-resource-checks.json).
+- EC2를 생성하지 않았으므로 애플리케이션 스모크·물리적 부하 한계·Grafana 접속 성공을 의미하지 않는다. 1시간 자기 철거는 로컬 테스트만 통과했고, 이번에는 정상 종료 즉시 삭제했다.

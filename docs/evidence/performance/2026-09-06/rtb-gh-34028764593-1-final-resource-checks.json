@@ -1,0 +1,24 @@
+{
+  "checkedAt": "2026-09-06T11:01:21.531Z",
+  "instances": 0,
+  "volumes": 0,
+  "vpcs": 0,
+  "buckets": 0,
+  "repositories": 0,
+  "functions": 0,
+  "rules": 0,
+  "logs": 0,
+  "alarms": 0,
+  "control": "DELETE_COMPLETE",
+  "identity": "CREATE_COMPLETE",
+  "stacks": [
+    [
+      "RtbStage8cIdentity",
+      "CREATE_COMPLETE"
+    ],
+    [
+      "RtbStage8cGitHubAuth",
+      "UPDATE_COMPLETE"
+    ]
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "runId": "rtb-gh-34028764593-1",
+  "startedAt": "2026-09-06T10:57:46.509Z",
+  "safetyCanary": {
+    "id": "arn:aws:cloudformation:ap-northeast-2:333982363617:stack/RtbStage8cSafetyCanary/cefc8f30-a9e1-11f1-97bf-0ae97bc1be19",
+    "status": "DELETE_COMPLETE"
+  },
+  "cleanup": "complete",
+  "safetyImmediateCleanup": {
+    "runId": "rtb-probe-ffe79124-60a4-4ad9-8696-accacf65c104",
+    "status": "complete"
+  },
+  "finishedAt": "2026-09-06T10:59:35.548Z"
+}

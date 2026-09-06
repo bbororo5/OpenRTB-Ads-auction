@@ -1,6 +1,6 @@
 # Stage 8C GitHub OIDC 인증 전환
 
-> 2026-09-06: [영속 권한과 임시 과금 자원 분리](stage8c-identity-lifecycle.md)를 코드에 반영했다. 기존 인증 역할은 유지하며 별도 Identity에 배포/제어 역할을 둔다. 새 구조의 AWS 설치·전체 실행 검증은 아직 하지 않았다.
+> 2026-09-06: [영속 권한과 임시 과금 자원 분리](stage8c-identity-lifecycle.md)를 적용하고 AWS Identity 설치·GitHub OIDC 제어 환경 생성/회수 시험/삭제를 검증했다. 기존 인증 역할은 유지하며 별도 Identity에 배포/제어 역할을 둔다. 새 구조의 애플리케이션 서버 배포·부하 시험은 아직 하지 않았다.
 
 상태: **인증 기반 코드·로컬 검증·AWS 설치·GitHub OIDC 실증 완료**. 후속 배포 권한·회수 장치·실험 워크플로의 구현 및 검증 경계는 [안전한 실험 실행](stage8c-safe-experiments.md)을 따른다.
 

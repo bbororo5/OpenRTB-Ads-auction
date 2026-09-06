@@ -1,6 +1,6 @@
 # Stage 8C: 제한된 배포 권한과 자동 회수
 
-> 2026-09-06 코드 변경: [영속 권한/임시 제어 분리](stage8c-identity-lifecycle.md)를 적용했다. 아래 AWS 실증은 이전 구조의 이력이다. 새 Identity 스택 설치와 GitHub 생성/철거 인수 검증은 아직 미실행이다.
+> 2026-09-06: [영속 권한/임시 제어 분리](stage8c-identity-lifecycle.md)를 적용하고 새 Identity 설치 및 GitHub OIDC 제어 환경 생성/철거 인수 시험을 통과했다. 제어 자원은 모두 삭제하고 IAM 기반만 유지한다. 아래 9월 2~3일 AWS 실증은 이전 구조의 이력이다.
 
 > 2026-09-03 운영 변경: 사용자의 전체 테스트 과금 자원 철거 요청에 따라 `RtbStage8cControl`도 삭제 완료했다. Lambda·EventBridge·경보·로그·전용 ECR/S3의 부재를 확인했으며, 아래 설치/실증 기록은 과거 이력이다. 다음 AWS 실험 전에는 `experiment-control -- install --ack-cost`로 제어 스택을 다시 설치하고 safety-check를 통과해야 한다. 기존 baseline 테스트 EC2와 연결된 EBS도 삭제했다. GitHub 인증 스택과 비어 있는 CDK bootstrap 기반은 유지한다.
 
