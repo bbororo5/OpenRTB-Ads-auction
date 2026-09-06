@@ -151,6 +151,27 @@ function createReaper(api, config, now = Date.now) {
     } catch (error) { canaryError = error; }
     const result = await reapLease(event);
     if (canaryError) throw canaryError;
+    // Runner-loss fallback: only retire the control plane after its grace period
+    // and a complete empty inventory. CF retains its original service role.
+    if (result.state === 'idle' && config.controlStack) {
+      const control = await stack(config.controlStack);
+      const created = new Date(control?.CreationTime).getTime();
+      if (control && Number.isFinite(created) && now() >= created + 60 * 60 * 1000
+        && !(await stack(CANARY))) {
+        const filters = [{ Name: 'tag:Project', Values: [PROJECT] }, { Name: 'tag:Stage', Values: ['8c'] }];
+        const hosts = await pages('ec2', 'DescribeInstances', { Filters: filters }, 'Reservations');
+        const volumes = await pages('ec2', 'DescribeVolumes', { Filters: filters }, 'Volumes');
+        const vpcs = await pages('ec2', 'DescribeVpcs', { Filters: filters }, 'Vpcs');
+        const images = await pages('ecr', 'ListImages', { repositoryName: config.repository }, 'imageIds', 'nextToken');
+        const objects = await api('s3', 'ListObjectsV2', { Bucket: config.bucket, MaxKeys: 1 });
+        if (hosts.some(r => r.Instances?.some(i => i.State?.Name !== 'terminated'))
+          || volumes.length || vpcs.length || images.length || objects.Contents?.length || objects.IsTruncated) {
+          throw new Error('Control retirement blocked by remaining resources or assets');
+        }
+        await removeStack(control);
+        return { state: 'deleting-control' };
+      }
+    }
     return result;
   };
 }
@@ -169,7 +190,8 @@ exports.handler = async event => {
     const { sdk, client } = clients[service];
     return client.send(new sdk[`${operation}Command`](input));
   };
-  const result = await createReaper(api, { bucket: process.env.ASSET_BUCKET, repository: process.env.ASSET_REPOSITORY })(event);
+  const result = await createReaper(api, { bucket: process.env.ASSET_BUCKET, repository: process.env.ASSET_REPOSITORY,
+    controlStack: process.env.CONTROL_STACK })(event);
   console.log(JSON.stringify(result));
   return result;
 };

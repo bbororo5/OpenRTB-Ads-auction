@@ -53,14 +53,16 @@ npm run stage8c -- diff --profile YOUR_PROFILE
 
 `doctor`의 `FreeTierEligible=true`는 인스턴스 유형의 현재 표시일 뿐이다. 계정 생성일, 남은 크레딧, EBS, public IPv4, ECR 저장량을 합쳐 무료를 보증하지 않는다.
 
-최초 한 번 관리자 인증으로 제어 스택을 설치한다. 비용 발생 명령은 `--ack-cost`가 없으면 실행기가 거절한다. 아래 안전성 시험은 EC2를 생성하지 않는다.
+최초 한 번 관리자 인증으로 Identity 스택을 설치하고, 이후 제어 스택은 별도 GitHub OIDC 역할로 매번 생성·철거한다. [분리 구조와 검증 경계](stage8c-identity-lifecycle.md)를 먼저 확인한다. 아래는 로컬 수동 경로이며 안전성 시험도 임시 제어 자원 과금 가능성이 있다.
 
 ```bash
+AWS_PROFILE=YOUR_PROFILE npm run experiment-identity -- install
 AWS_PROFILE=YOUR_PROFILE npm run experiment-control -- install --ack-cost
 AWS_PROFILE=YOUR_PROFILE npm run experiment -- safety-check
 
 # 안전성 시험 → 배포 → 워밍업 → 정식 smoke → 반드시 회수 시도
 AWS_PROFILE=YOUR_PROFILE npm run experiment -- run --ack-cost
+AWS_PROFILE=YOUR_PROFILE npm run experiment-control -- remove --ack-cost
 ```
 
 새 실행기는 우선 smoke를 한정된 수명주기로 수행한다. 아래 capacity/overload는 기존 저수준 명령이다. 더 긴 시험을 자동 수명주기에 연결하고 종료·회수 시간 예산을 검토하기 전에는 별도 배포를 유지하며 실행하지 않는다.

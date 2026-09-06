@@ -10,7 +10,7 @@ name: Stage8C bounded experiment
         default: safety-check
         required: true
       acknowledge_cost:
-        description: 'Accept temporary EC2, EBS, IPv4 and asset charges for smoke'
+        description: 'Accept temporary control-plane charges; smoke also creates EC2, EBS and IPv4'
         type: boolean
         default: false
         required: true
@@ -40,7 +40,25 @@ jobs:
           node-version: '24'
       - name: Validate code before obtaining AWS credentials
         run: npm ci && npm run build && npm test
+      - name: Require explicit cost acknowledgement, including control-only checks
+        env:
+          ACKNOWLEDGE_COST: ${{ inputs.acknowledge_cost }}
+        run: test "$ACKNOWLEDGE_COST" = true
+      - name: Obtain control lifecycle identity
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          aws-region: ap-northeast-2
+          role-to-assume: arn:aws:iam::333982363617:role/RtbStage8cControlRunner
+          allowed-account-ids: '333982363617'
+          role-session-name: control-${{ github.run_id }}-${{ github.run_attempt }}
+          role-duration-seconds: 3600
+          unset-current-credentials: true
+          retry-max-attempts: 2
+      - name: Create ephemeral watchdog and asset stores
+        id: control
+        run: npm run experiment-control -- install --ack-cost
       - name: Obtain restricted deployment identity
+        id: deployment_identity
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           aws-region: ap-northeast-2
@@ -67,7 +85,7 @@ jobs:
             *) exit 1 ;;
           esac
       - name: Retry cleanup after success, failure or cancellation
-        if: always() && inputs.mode == 'smoke' && inputs.acknowledge_cost
+        if: always() && steps.deployment_identity.outcome == 'success' && inputs.mode == 'smoke' && inputs.acknowledge_cost
         timeout-minutes: 12
         run: npm run experiment -- cleanup --ack-cost "--run-id=rtb-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
       - name: Preserve evidence, including failures
@@ -78,3 +96,19 @@ jobs:
           path: docs/evidence/performance/
           if-no-files-found: warn
           retention-days: 7
+      - name: Reacquire control identity for final teardown
+        if: always() && steps.control.outcome == 'success'
+        id: teardown_identity
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          aws-region: ap-northeast-2
+          role-to-assume: arn:aws:iam::333982363617:role/RtbStage8cControlRunner
+          allowed-account-ids: '333982363617'
+          role-session-name: teardown-${{ github.run_id }}-${{ github.run_attempt }}
+          role-duration-seconds: 900
+          unset-current-credentials: true
+          retry-max-attempts: 2
+      - name: Remove control only after empty resource and asset inventories
+        if: always() && steps.teardown_identity.outcome == 'success'
+        timeout-minutes: 10
+        run: npm run experiment-control -- remove --ack-cost

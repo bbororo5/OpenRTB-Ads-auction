@@ -1,5 +1,7 @@
 # Stage 8C: 제한된 배포 권한과 자동 회수
 
+> 2026-09-06 코드 변경: [영속 권한/임시 제어 분리](stage8c-identity-lifecycle.md)를 적용했다. 아래 AWS 실증은 이전 구조의 이력이다. 새 Identity 스택 설치와 GitHub 생성/철거 인수 검증은 아직 미실행이다.
+
 > 2026-09-03 운영 변경: 사용자의 전체 테스트 과금 자원 철거 요청에 따라 `RtbStage8cControl`도 삭제 완료했다. Lambda·EventBridge·경보·로그·전용 ECR/S3의 부재를 확인했으며, 아래 설치/실증 기록은 과거 이력이다. 다음 AWS 실험 전에는 `experiment-control -- install --ack-cost`로 제어 스택을 다시 설치하고 safety-check를 통과해야 한다. 기존 baseline 테스트 EC2와 연결된 EBS도 삭제했다. GitHub 인증 스택과 비어 있는 CDK bootstrap 기반은 유지한다.
 
 > 같은 날 후속 [게이트웨이 수정 재검증](stage8c-2026-09-03-gateway-verification.md)에서 제어 스택을 재설치하고 두 회수 시험을 통과한 후 실제 5-host 스모크를 실행했다. 정식 301건 모두 성공, p99 20.53ms, 프로젝트 DSP 낙찰률 26.57%로 통과했다. 결과 보존 후 workload/asset/lease를 즉시 회수하고, 상위 실행 래퍼로 제어 스택까지 21:07 KST에 삭제 완료했다. 현재 제어 스택은 설치되어 있지 않다.
@@ -46,7 +48,8 @@ IMDSv2 강제 설정 때문에 CDK가 호스트별 Launch Template을 생성한�
 
 ## 영속 자원과 실험 자원
 
-- `RtbStage8cControl`: IAM 역할·instance profile, 회수 Lambda, 분당 EventBridge, 로그(7일), 오류 경보, 전용 ECR/S3, bootstrap 호환 버전 파라미터. 재사용 기반으로 남긴다.
+- `RtbStage8cIdentity`: IAM 역할·instance profile만 재사용 기반으로 남긴다.
+- `RtbStage8cControl`: 회수 Lambda, 분당 EventBridge, 로그(7일), 오류 경보, 전용 ECR/S3, bootstrap 호환 버전 파라미터. 실험 자원과 assets 회수 후 삭제한다.
 - `RtbStage8cLease`: RunId·ExpiresAt 태그를 가진 WaitConditionHandle. 비용이 드는 서버는 없다. 중복 실행을 막고 실패 복구 정보를 보존한다.
 - `RtbStage8cSafetyCanary`: 독립 회수 시험에만 사용하며 AWS 스케줄이 스스로 삭제해야 통과한다.
 - `RtbStage8c`: 실제 5개 EC2·root EBS·VPC 등. 목적 달성/실패 즉시 회수한다.
@@ -60,12 +63,14 @@ IMDSv2 강제 설정 때문에 CDK가 호스트별 Launch Template을 생성한�
 
 ```text
 infrastructure/aws-stage8c/
-├─ lib/experiment-control-stack.ts   제어 스택·권한
+├─ lib/experiment-identity-stack.ts  영속 IAM 권한
+├─ lib/experiment-control-stack.ts   임시 제어 스택
 ├─ lib/experiment-synthesizer.ts     전용 assets·기존 관리자 역할 우회 방지
 ├─ lib/experiment-lifecycle.ts       실패를 보존하면서 finally 회수
 ├─ lib/stage8c-stack.ts              host profile 재사용·실행 태그·EBS 태그 전파
 ├─ runtime/reaper.cjs               AWS Lambda와 로컬 테스트가 공유하는 회수 로직
-├─ scripts/experiment-control.ts    제어 스택 합성/설치
+├─ scripts/experiment-identity.ts   최초 권한 설치
+├─ scripts/control-session.ts       제어 스택 합성/설치/안전 삭제
 ├─ scripts/experiment.ts            안전성 시험·실험·회수의 실행기
 └─ test/experiment-safety.test.ts    수명주기·소유권·오류·IAM 회귀 테스트
 .github/workflows/stage8c-experiment.yml   수동 실행 + 결과 artifact
@@ -75,13 +80,15 @@ SSM 실행은 `set -eu`와 원격 execution timeout을 사용한다. 앞 명령�
 
 ## 실행 방법
 
-제어 스택 설치는 최초 관리자 작업이다. GitHub 배포 역할은 이 권한을 받지 않는다.
+Identity 설치만 최초 관리자 작업이다. 이후 제어 스택은 별도 GitHub ControlRunner 역할로 생성·삭제한다. Deploy 역할은 이 권한을 받지 않는다. 아래는 로컬 수동 복구/진단 명령이며, 반복 실험은 GitHub 워크플로를 사용한다.
 
 ```bash
 cd infrastructure/aws-stage8c
 npm ci
 npm run build
 npm test
+npm run experiment-identity -- synth
+npm run experiment-identity -- install
 npm run experiment-control -- synth
 npm run experiment-control -- install --ack-cost
 
@@ -93,9 +100,10 @@ npm run experiment -- run --ack-cost
 
 # 실패한 실행을 명시적으로 다시 회수. 다른 실행의 lease면 거절.
 npm run experiment -- cleanup --ack-cost --run-id=rtb-실제실행ID
+npm run experiment-control -- remove --ack-cost
 ```
 
-GitHub에서는 `Stage8C bounded experiment`를 main에서 수동 실행한다. 기본 모드는 `safety-check`다. `smoke`와 비용 승인 둘 다 선택해야 EC2가 생성된다. push·PR·예약 실행은 없다. Linux ARM runner를 사용하여 ARM 이미지를 네이티브로 빌드한다.
+GitHub에서는 `Stage8C bounded experiment`를 main에서 수동 실행한다. 기본 모드는 `safety-check`다. 제어 스택도 임시 생성하므로 두 모드 모두 비용 승인이 필요하며, `smoke`에서만 EC2가 생성된다. push·PR·예약 실행은 없다. Linux ARM runner를 사용하여 ARM 이미지를 네이티브로 빌드한다.
 
 `finally`와 workflow `always()`는 정상적인 실패·취소를 처리하지만, runner 강제 종료에도 실행된다고 보장할 수 없다. 그래서 AWS의 별도 회수기가 필요하다. 안전성 시험은 실제 배포된 Lambda의 코드 지문·스케줄·연결 대상을 확인하고, 고정된 stack ID로 `DELETE_COMPLETE`를 관찰해야 통과한다. 단순히 이름 조회가 실패했다고 삭제 성공으로 보지 않는다.
 

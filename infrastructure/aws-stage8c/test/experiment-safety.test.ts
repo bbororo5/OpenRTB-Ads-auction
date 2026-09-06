@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { App, BootstraplessSynthesizer } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import { ExperimentControlStack } from "../lib/experiment-control-stack.js";
+import { ExperimentIdentityStack } from "../lib/experiment-identity-stack.js";
 import { Stage8cStack } from "../lib/stage8c-stack.js";
 import { experimentSynthesizer } from "../lib/experiment-synthesizer.js";
 import { runExperiment } from "../lib/experiment-lifecycle.js";
@@ -125,7 +126,10 @@ test("control plane contains no EC2, administrator policy, or GitHub AssumeRole 
   const template = Template.fromStack(stack);
   template.resourceCountIs("AWS::EC2::Instance", 0);
   template.hasResourceProperties("AWS::Events::Rule", { ScheduleExpression: "rate(1 minute)", State: "ENABLED" });
-  const resources = template.toJSON().Resources;
+  template.resourceCountIs("AWS::IAM::Role", 0);
+  const resources = Template.fromStack(new ExperimentIdentityStack(new App(), "IdentityTest", {
+    env: { account: "333982363617", region: "ap-northeast-2" }, synthesizer: new BootstraplessSynthesizer(),
+  })).toJSON().Resources;
   const deploy = Object.values(resources).find((resource: any) => resource.Properties?.RoleName === "RtbStage8cDeploy") as any;
   const grants = JSON.stringify(deploy.Properties.Policies);
   assert.doesNotMatch(grants, /AdministratorAccess|sts:AssumeRole|iam:CreateRole|lambda:UpdateFunction|events:DisableRule/);
