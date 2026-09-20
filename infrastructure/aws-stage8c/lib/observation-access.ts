@@ -23,7 +23,7 @@ test ! -e ${dir}
 mkdir -m 700 ${dir}
 docker pull ${tailscaleImage} >/dev/null
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out ${dir}/private.pem 2>/dev/null
-docker run -d --name ${name} --network host --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp:mode=1777 --tmpfs /var/lib/tailscale:mode=700 -v ${dir}:/run/auth:ro --entrypoint tailscaled ${tailscaleImage} --tun=userspace-networking --state=mem: --socket=/tmp/tailscaled.sock >/dev/null
+docker run -d --name ${name} --network host --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp:mode=1777 --tmpfs /var/lib/tailscale:mode=700 -v ${dir}:/run/auth:ro --entrypoint tailscaled ${tailscaleImage} --tun=userspace-networking --state=mem: --statedir=/var/lib/tailscale --socket=/tmp/tailscaled.sock >/dev/null
 attempt=0
 until docker exec ${name} test -S /tmp/tailscaled.sock; do
   attempt=$((attempt + 1)); test "$attempt" -lt 30; sleep 1
@@ -40,6 +40,10 @@ trap 'rm -f ${dir}/private.pem ${dir}/auth.key' EXIT
 printf '%s' '${encryptedKey}' | base64 -d | openssl pkeyutl -decrypt -inkey ${dir}/private.pem -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -pkeyopt rsa_mgf1_md:sha256 -out ${dir}/auth.key
 ${cli} up --auth-key=file:/run/auth/auth.key --hostname=${name} --accept-dns=false --accept-routes=false --advertise-tags=tag:rtb-observer --timeout=60s >/dev/null 2>&1
 rm -f ${dir}/private.pem ${dir}/auth.key
+# Issue a real certificate before reporting readiness; Serve configuration alone
+# can succeed even when subsequent TLS handshakes fail.
+timeout 60 ${cli} cert --cert-file=/tmp/observation.crt --key-file=/tmp/observation.key ${name}.taild7dd00.ts.net >/dev/null 2>&1
+docker exec ${name} rm -f /tmp/observation.crt /tmp/observation.key
 timeout 30 ${cli} serve --bg --https=443 http://127.0.0.1:3000 >/dev/null 2>&1
 ${cli} status --json
 `;
@@ -70,7 +74,7 @@ export async function connectObservation(runId: string, remote: Remote,
   const publicKey = await remote(prepareAccess(runId), 180);
   const credential = await issueKey(runId);
   try {
-    const status = JSON.parse(await remote(activateAccess(runId, sealKey(publicKey, credential.key)), 120));
+    const status = JSON.parse(await remote(activateAccess(runId, sealKey(publicKey, credential.key)), 180));
     return observationUrl(status, runId);
   } finally { await credential.revoke(); }
 }

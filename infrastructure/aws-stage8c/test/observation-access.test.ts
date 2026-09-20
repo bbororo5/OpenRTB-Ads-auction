@@ -35,8 +35,11 @@ test("scripts are syntactically valid, private, run-scoped and never expose a pu
     assert.doesNotMatch(script, /--privileged|--cap-add|funnel|--advertise-routes|TS_AUTHKEY|set -x/);
   }
   assert.match(prepareAccess(run), /--tun=userspace-networking --state=mem:/);
+  assert.match(prepareAccess(run), /--state=mem: --statedir=\/var\/lib\/tailscale/);
+  assert.match(prepareAccess(run), /--tmpfs \/var\/lib\/tailscale:mode=700/);
   assert.match(activateAccess(run, "YWJj"), /--auth-key=file:/);
   assert.match(activateAccess(run, "YWJj"), /serve --bg --https=443 http:\/\/127.0.0.1:3000/);
+  assert.ok(activateAccess(run, "YWJj").indexOf(" cert --cert-file=") < activateAccess(run, "YWJj").indexOf(" serve --bg"));
   assert.throws(() => accessNames("rtb-../../other"));
   assert.throws(() => activateAccess(run, "'; echo bad"));
   assert.notEqual(accessNames(run).dir, accessNames("rtb-other").dir);
