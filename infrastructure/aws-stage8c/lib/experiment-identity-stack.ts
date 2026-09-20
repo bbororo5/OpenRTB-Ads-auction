@@ -90,7 +90,7 @@ export class ExperimentIdentityStack extends Stack {
         allow(["s3:GetBucketLocation", "s3:ListBucket"], [bucketArn]),
         allow(["s3:GetObject", "s3:PutObject"], [`${bucketArn}/rtb-*/*`]),
         allow(["ecr:GetAuthorizationToken"], ["*"]),
-        allow(["ecr:DescribeImages", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"], [repoArn]),
+        allow(["ecr:DescribeRepositories", "ecr:DescribeImages", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"], [repoArn]),
         allow(["lambda:InvokeFunction", "lambda:GetFunctionConfiguration"], [arn("lambda", `function:${reaperName}`)]),
         allow(["events:DescribeRule", "events:ListTargetsByRule"], [arn("events", `rule/${ruleName}`)]),
         allow(["ssm:GetParameter", "ssm:GetParameters"], [arn("ssm", "parameter/rtb/stage8c/bootstrap-version"), `arn:aws:ssm:${this.region}::parameter/aws/service/ami-amazon-linux-latest/*`]),

@@ -43,6 +43,14 @@ test("normal control retirement requires empty inventory, including stopped inst
   }
   assert.throws(() => assertControlCanBeRemoved({ ...empty, instances: [{ State: { Name: "stopped" } }] }), /retain the watchdog/);
 });
+test("CDK deployment can describe only the dedicated experiment image repository", () => {
+  const deploy = resources(ExperimentIdentityStack).find(r => r.Properties.RoleName === "RtbStage8cDeploy");
+  const statements = deploy.Properties.Policies.flatMap((p: any) => p.PolicyDocument.Statement);
+  const describe = statements.filter((s: any) => s.Action.includes("ecr:DescribeRepositories"));
+  assert.equal(describe.length, 1);
+  assert.deepEqual(describe[0].Resource, ["arn:aws:ecr:ap-northeast-2:333982363617:repository/rtb-stage8c-experiment-assets"]);
+  assert.doesNotMatch(JSON.stringify(statements), /ecr:\*|ecr:CreateRepository|ecr:DeleteRepository/);
+});
 
 const now = Date.parse("2026-09-06T12:00:00Z");
 function retirement(age: number, override: (operation: string, input: any) => any = () => undefined) {
