@@ -66,3 +66,10 @@ Mac Tailscale → private HTTPS:443 → observer localhost:3000 → Grafana View
 - 신뢰 관계 생성, 로컬 테스트, 실제 OIDC 교환, 실제 AWS 접속은 서로 다른 검증 단계다. 로컬 테스트만으로 실제 Grafana 연결 성공을 선언하지 않는다.
 
 공식 근거: [workload federation](https://tailscale.com/docs/features/workload-identity-federation), [Serve](https://tailscale.com/docs/features/tailscale-serve), [ephemeral nodes](https://tailscale.com/docs/features/ephemeral-nodes).
+
+### 연결 준비 검증 결과
+
+- 2026-09-20 로컬 및 GitHub: TypeScript 검사, 인프라 47개 + gateway 4개 테스트 통과.
+- 공식 pinned 이미지의 ARM64 컨테이너를 네트워크 차단/읽기 전용 rootfs/전체 capability 제거 상태에서 실제 기동했다. userspace daemon socket과 `NeedsLogin` 상태를 확인한 후 `--rm`으로 테스트 컨테이너를 제거했다. 실제 tailnet 로그인 검증과는 구분한다.
+- [GitHub run 35496989000](https://github.com/bbororo5/OpenRTB-Ads-auction/actions/runs/35496989000): `f5a400e` 기준 SUCCESS. OIDC 교환 → 600초 1회용 ephemeral/tagged auth key 생성 → 폐기까지 성공. AWS API 호출 및 tailnet 장비 등록 없음.
+- 아직 미검증: tailnet HTTPS 활성화, EC2에서 암호문 복호화/등록/Serve, Mac 브라우저 접속, 실제 배포 후 logout과 AWS 철거. HTTPS 인증서의 도메인 공개에 대한 사용자 승인 전에는 인증서 기능을 활성화하지 않는다.
