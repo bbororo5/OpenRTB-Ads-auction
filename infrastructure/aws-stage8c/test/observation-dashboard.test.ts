@@ -28,4 +28,9 @@ test("dashboard keeps infrastructure availability distinct from auction success"
   assert.ok(queries.includes('up{job="stage8c-hosts"}'));
   assert.ok(queries.some((q: string) => q.includes('service_name="rtb-ssp"')));
   assert.ok(queries.some((q: string) => q.includes('service_name="rtb-dsp"')));
+  assert.ok(queries.some((q: string) => q.includes('http_response_status_code=~"5.."')));
+  assert.ok(queries.some((q: string) => q.includes("histogram_quantile(0.99")));
+  assert.ok(queries.some((q: string) => q.includes("jvm_gc_duration_seconds_count")));
+  assert.match(help, /including notices/);
+  assert.match(help, /NOT the k6 SLO/);
 });

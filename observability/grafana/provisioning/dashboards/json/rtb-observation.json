@@ -11,7 +11,7 @@
     {
       "id": 1, "type": "text", "title": "How to read this screen",
       "gridPos": {"x": 0, "y": 0, "w": 24, "h": 3},
-      "options": {"mode": "markdown", "content": "1. Confirm five scrape targets are UP. 2. Compare SSP and DSP HTTP status trends during the approved trial. 3. Compare CPU and JVM memory. **HTTP 200 is not proof that our DSP keeps bidding.** No HTTP data before the first request can be normal; do not interpret missing data as zero. Server latency here is not the end-to-end k6 SLO."}
+      "options": {"mode": "markdown", "content": "Start with 5xx and latency, then correlate resources. **HTTP 200 is not proof that our DSP keeps bidding.** These are SERVER metrics across all routes, including notices: DSP 204 alone does not mean no-bid. Route labels may be absent. Do not interpret missing data as zero. Exact client failures, run-wide p99, win rate and selected traces are in the saved k6 review report; histogram latency here is NOT the k6 SLO. 5-second refresh does not imply 5-second Java metric export."}
     },
     {
       "id": 2, "type": "stat", "title": "Collector scrape status — 1 = UP",
@@ -29,7 +29,7 @@
       "fieldConfig": {"defaults": {"unit": "reqps", "min": 0}, "overrides": []}
     },
     {
-      "id": 4, "type": "timeseries", "title": "DSP inbound HTTP responses / second — watch 204",
+      "id": 4, "type": "timeseries", "title": "DSP HTTP responses / second — includes notices, not just bids",
       "gridPos": {"x": 12, "y": 7, "w": 12, "h": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [{"refId": "A", "expr": "sum by (http_response_status_code, http_status_code) (rate({__name__=~\"http_server_request_duration_seconds_count|http_server_duration_milliseconds_count\",service_name=\"rtb-dsp\"}[1m]))", "legendFormat": "HTTP {{http_response_status_code}}{{http_status_code}}"}],
@@ -37,17 +37,38 @@
     },
     {
       "id": 5, "type": "timeseries", "title": "Host CPU usage — cores (not percent)",
-      "gridPos": {"x": 0, "y": 15, "w": 12, "h": 8},
+      "gridPos": {"x": 0, "y": 23, "w": 12, "h": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [{"refId": "A", "expr": "sum by (node_role) (rate(system_cpu_time_seconds_total{state!=\"idle\"}[1m]))", "legendFormat": "{{node_role}}"}],
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}, "overrides": []}
     },
     {
       "id": 6, "type": "timeseries", "title": "SSP / DSP JVM memory used",
-      "gridPos": {"x": 12, "y": 15, "w": 12, "h": 8},
+      "gridPos": {"x": 12, "y": 23, "w": 12, "h": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [{"refId": "A", "expr": "sum by (service_name) (jvm_memory_used_bytes{service_name=~\"rtb-ssp|rtb-dsp\"})", "legendFormat": "{{service_name}}"}],
       "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}, "overrides": []}
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "SERVER 5xx cumulative counter — inspect increases (not exact k6 totals)",
+      "gridPos": {"x": 0, "y": 15, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum by (service_name, http_route, http_response_status_code) (http_server_request_duration_seconds_count{service_name=~\"rtb-ssp|rtb-dsp\",http_response_status_code=~\"5..\"})", "legendFormat": "{{service_name}} {{http_route}} HTTP {{http_response_status_code}}"}],
+      "fieldConfig": {"defaults": {"min": 0, "unit": "short"}, "overrides": []}
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "SERVER rolling p99 by route — histogram estimate, NOT k6 p99",
+      "gridPos": {"x": 12, "y": 15, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "histogram_quantile(0.99, sum by (le, service_name, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=~\"rtb-ssp|rtb-dsp\"}[1m]))) * 1000", "legendFormat": "{{service_name}} {{http_route}}"}],
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ms"}, "overrides": []}
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "GC cumulative count — align increments with memory drops",
+      "gridPos": {"x": 0, "y": 31, "w": 24, "h": 7},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum by (service_name, jvm_gc_name) (jvm_gc_duration_seconds_count{service_name=~\"rtb-ssp|rtb-dsp\"})", "legendFormat": "{{service_name}} {{jvm_gc_name}}"}],
+      "fieldConfig": {"defaults": {"min": 0, "unit": "short"}, "overrides": []}
     }
   ]
 }
