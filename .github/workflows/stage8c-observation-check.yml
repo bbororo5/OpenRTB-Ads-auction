@@ -1,0 +1,26 @@
+name: Stage8C observation identity check (no AWS)
+
+'on':
+  workflow_dispatch:
+
+permissions: {}
+jobs:
+  check:
+    if: github.repository == 'bbororo5/OpenRTB-Ads-auction' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infrastructure/aws-stage8c
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - run: npm ci && npm run build && npm test
+      - run: npx tsx scripts/observation-identity-check.ts

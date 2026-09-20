@@ -9,6 +9,8 @@ import { capacityStudy, readObservation } from "../lib/capacity-study.js";
 import { reaperName, ruleName, executionRole, bucketName } from "../lib/experiment-control-stack.js";
 import { gateKey, waitForObservation, type ObservationPhase } from "../lib/observation-gate.js";
 import { observationObject } from "../lib/observation-store.js";
+import { connectObservation, stopAccess } from "../lib/observation-access.js";
+import { observerRemote } from "../lib/observation-remote.js";
 
 const account = "333982363617", region = "ap-northeast-2";
 const directory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -19,6 +21,7 @@ const evidenceDirectory = path.resolve(directory, "../../docs/evidence/performan
 const summary: Record<string, unknown> = { runId, startedAt: new Date().toISOString() };
 let cancelled = false;
 let interrupt: (() => void) | undefined;
+let observationInstanceId: string | undefined;
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => { cancelled = true; interrupt?.(); });
 
 function aws(arguments_: string[]): any {
@@ -169,6 +172,13 @@ async function measureCapacity(): Promise<void> {
 }
 
 async function observe(): Promise<void> {
+  const stack = getStack("RtbStage8c");
+  if (tags(stack).RunId !== runId) throw new Error("Observation stack belongs to another run");
+  observationInstanceId = stack.Outputs?.find((o: any) => o.OutputKey === "ObserverInstanceId")?.OutputValue;
+  if (!observationInstanceId) throw new Error("Missing observer instance");
+  const url = await connectObservation(runId, observerRemote(observationInstanceId, checkCancellation));
+  summary.observationUrl = url;
+  console.log(`OBSERVATION_URL ${url}`);
   const gate = async (phase: ObservationPhase) => {
     const deadline = Math.min(Date.now() + 5 * 60_000, Date.parse(expiresAt) - 5 * 60_000);
     await waitForObservation({ runId, phase, nonce: randomUUID(), expiresAt: new Date(deadline).toISOString() }, {
@@ -228,7 +238,18 @@ try {
         await stage(["smoke", "--rps", "10", "--duration", "30s"], 240_000);
         summary.smoke = "passed";
       },
-      cleanup,
+      cleanup: async () => {
+        // A tailnet/API outage must never prevent deletion of paid AWS resources.
+        try {
+          if (observationInstanceId) {
+            await observerRemote(observationInstanceId)(stopAccess(runId), 30);
+            summary.observationDisconnect = "complete";
+          }
+        } catch {
+          summary.observationDisconnect = "failed; ephemeral node ages out after AWS teardown";
+          console.warn("Observation logout failed; continuing mandatory AWS cleanup.");
+        } finally { await cleanup(); }
+      },
     });
   }
 } catch (error) {

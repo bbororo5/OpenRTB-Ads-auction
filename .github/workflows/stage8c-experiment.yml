@@ -44,6 +44,9 @@ jobs:
         env:
           ACKNOWLEDGE_COST: ${{ inputs.acknowledge_cost }}
         run: test "$ACKNOWLEDGE_COST" = true
+      - name: Verify observation identity before creating paid AWS resources
+        if: inputs.mode == 'observe'
+        run: npx tsx scripts/observation-identity-check.ts
       - name: Obtain control lifecycle identity
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
