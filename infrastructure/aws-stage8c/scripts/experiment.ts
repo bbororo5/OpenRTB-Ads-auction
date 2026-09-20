@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import { runExperiment } from "../lib/experiment-lifecycle.js";
 import { capacityStudy, readObservation } from "../lib/capacity-study.js";
 import { reaperName, ruleName, executionRole, bucketName } from "../lib/experiment-control-stack.js";
+import { gateKey, waitForObservation, type ObservationPhase } from "../lib/observation-gate.js";
+import { observationObject } from "../lib/observation-store.js";
 
 const account = "333982363617", region = "ap-northeast-2";
 const directory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -166,9 +168,41 @@ async function measureCapacity(): Promise<void> {
   });
 }
 
+async function observe(): Promise<void> {
+  const gate = async (phase: ObservationPhase) => {
+    const deadline = Math.min(Date.now() + 5 * 60_000, Date.parse(expiresAt) - 5 * 60_000);
+    await waitForObservation({ runId, phase, nonce: randomUUID(), expiresAt: new Date(deadline).toISOString() }, {
+      now: Date.now, checkCancellation, pause: async () => { await pause(5000); },
+      publish: async value => {
+        observationObject(gateKey(runId, phase), value);
+        console.log(`OBSERVATION_GATE ${JSON.stringify(value)}`);
+        const outputs = getStack("RtbStage8c")?.Outputs ?? [];
+        console.log(`ObserverInstanceId=${outputs.find((o: any) => o.OutputKey === "ObserverInstanceId")?.OutputValue}`);
+      },
+      read: async () => observationObject(gateKey(runId, phase, true)),
+    });
+  };
+  // No warmup or auction requests before the human confirms the screen.
+  await gate("screen-ready");
+  const label = `${runId}-observed-10`;
+  let stageError: unknown;
+  try { await stage(["capacity", "--label", label, "--rps", "10", "--duration", "60s",
+    "--pre-allocated-vus", "100", "--max-vus", "200", "--sample-seconds", "60"], 240_000); }
+  catch (error) { if (cancelled) throw error; stageError = error; }
+  const result = JSON.parse(readFileSync(path.join(evidenceDirectory, `stage8c-aws-${label}-result.json`), "utf8"));
+  if (stageError && result.responseCode !== 99) throw stageError;
+  const observed = readObservation(JSON.parse(readFileSync(path.join(evidenceDirectory, `stage8c-aws-${label}-summary.json`), "utf8")), 10, 60);
+  summary.observation = observed;
+  writeFileSync(path.join(evidenceDirectory, `${label}-observation.json`), JSON.stringify(observed, null, 2));
+  console.log(`OBSERVATION_RESULT ${JSON.stringify(observed)}`);
+  await gate("review-done");
+  // Observation time does not turn an SLO failure into a passing test.
+  if (!observed.passed) throw new Error("Observed trial failed thresholds; evidence preserved");
+}
+
 try {
   if (!/^rtb-[a-z0-9-]{1,64}$/.test(runId)) throw new Error("Invalid run ID");
-  if (!["safety-check", "run", "capacity", "cleanup"].includes(command)) throw new Error("Use safety-check | run/capacity --ack-cost | cleanup --ack-cost --run-id=rtb-...");
+  if (!["safety-check", "run", "capacity", "observe", "cleanup"].includes(command)) throw new Error("Use safety-check | run/capacity/observe --ack-cost | cleanup --ack-cost --run-id=rtb-...");
   if (aws(["sts", "get-caller-identity"]).Account !== account) throw new Error("Wrong AWS account");
   if (command !== "safety-check" && !args.includes("--ack-cost")) throw new Error("Require --ack-cost");
   if (command === "cleanup") {
@@ -176,7 +210,7 @@ try {
     await cleanup();
   } else {
     await safetyCheck();
-    if (command === "run" || command === "capacity") await runExperiment({
+    if (["run", "capacity", "observe"].includes(command)) await runExperiment({
       acquire: async () => {
         checkCancellation();
         if (getStack("RtbStage8c")) throw new Error("Previous workload exists; refusing overlapping deployment");
@@ -186,6 +220,7 @@ try {
       deploy: () => stage(["deploy", "--ack-cost"]),
       verify: async () => {
         await ready();
+        if (command === "observe") { await observe(); return; }
         // Cold-start warmup is recorded separately, never counted as formal success.
         try { await stage(["smoke", "--label", command === "capacity" ? `${runId}-warmup` : "warmup", "--rps", "10", "--duration", command === "capacity" ? "30s" : "10s"], 240_000); }
         catch (error) { if (cancelled) throw error; summary.warmup = String(error); }

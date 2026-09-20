@@ -1,0 +1,53 @@
+name: Stage8C observation approval
+
+'on':
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Exact active run ID, e.g. rtb-gh-123456-1'
+        type: string
+        required: true
+      phase:
+        description: 'screen-ready starts one trial; review-done ends observation'
+        type: choice
+        options: [screen-ready, review-done]
+        required: true
+
+permissions: {}
+# Must not queue behind the experiment which is waiting for this approval.
+concurrency:
+  group: stage8c-observation-approval-${{ inputs.run_id }}-${{ inputs.phase }}
+  cancel-in-progress: false
+jobs:
+  approve:
+    if: github.repository == 'bbororo5/OpenRTB-Ads-auction' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infrastructure/aws-stage8c
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
+        with:
+          aws-region: ap-northeast-2
+          role-to-assume: arn:aws:iam::333982363617:role/RtbStage8cDeploy
+          allowed-account-ids: '333982363617'
+          role-session-name: observation-${{ github.run_id }}
+          role-duration-seconds: 900
+          unset-current-credentials: true
+          retry-max-attempts: 2
+      - name: Approve only the currently open gate for the active lease
+        env:
+          OBSERVATION_RUN_ID: ${{ inputs.run_id }}
+          OBSERVATION_PHASE: ${{ inputs.phase }}
+        run: node --import tsx scripts/observation-approve.ts

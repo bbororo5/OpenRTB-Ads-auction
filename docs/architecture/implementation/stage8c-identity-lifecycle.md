@@ -79,6 +79,8 @@ gh workflow run stage8c-experiment.yml --ref main \
 
 AWS 인수 기준인 OIDC로 Control 생성 → 회수 시험 → Control DELETE_COMPLETE → IAM 기반 존속 확인을 통과했다. 다음은 참여형 대시보드 준비/사용자 확인 게이트 구현이다. 현재 smoke 워크플로는 여전히 자동 부하를 실행하므로 참여형 관찰용으로 실행하지 않는다.
 
+2026-09-20: [참여형 관찰 절차](stage8c-guided-observation.md)를 별도 `observe` 모드로 구현했다. 기존 `smoke`는 그대로 자동 실행이므로 화면 관찰 시 `observe`를 선택한다. 새 승인 경로는 로컬 검증 완료, AWS 실증 대기다.
+
 ## 2026-09-06 AWS 실증 결과
 
 - 구현 커밋 `43b5e39e4f920cc3d0571649ba3f2a8bc47b694b`을 main에 푸시한 뒤 기존 관리자 세션으로 `RtbStage8cIdentity`를 최초 설치했다. 이 단계와 이후의 OIDC 실행을 구분한다.

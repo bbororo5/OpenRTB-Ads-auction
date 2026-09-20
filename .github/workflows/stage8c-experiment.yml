@@ -4,9 +4,9 @@ name: Stage8C bounded experiment
   workflow_dispatch:
     inputs:
       mode:
-        description: 'safety-check creates no EC2; smoke deploys and always attempts cleanup'
+        description: 'safety-check: no EC2; smoke: automatic trial; observe: wait for screen approval'
         type: choice
-        options: [safety-check, smoke]
+        options: [safety-check, smoke, observe]
         default: safety-check
         required: true
       acknowledge_cost:
@@ -78,14 +78,18 @@ jobs:
           run_id="rtb-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           case "$EXPERIMENT_MODE" in
             safety-check) npm run experiment -- safety-check "--run-id=$run_id" ;;
-            smoke)
+            smoke|observe)
               test "$ACKNOWLEDGE_COST" = true
-              npm run experiment -- run --ack-cost "--run-id=$run_id"
+              if [ "$EXPERIMENT_MODE" = observe ]; then
+                npm run experiment -- observe --ack-cost "--run-id=$run_id"
+              else
+                npm run experiment -- run --ack-cost "--run-id=$run_id"
+              fi
               ;;
             *) exit 1 ;;
           esac
       - name: Retry cleanup after success, failure or cancellation
-        if: always() && steps.deployment_identity.outcome == 'success' && inputs.mode == 'smoke' && inputs.acknowledge_cost
+        if: always() && steps.deployment_identity.outcome == 'success' && inputs.mode != 'safety-check' && inputs.acknowledge_cost
         timeout-minutes: 12
         run: npm run experiment -- cleanup --ack-cost "--run-id=rtb-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
       - name: Preserve evidence, including failures
