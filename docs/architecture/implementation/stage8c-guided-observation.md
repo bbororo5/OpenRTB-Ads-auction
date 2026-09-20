@@ -72,4 +72,10 @@ Mac Tailscale → private HTTPS:443 → observer localhost:3000 → Grafana View
 - 2026-09-20 로컬 및 GitHub: TypeScript 검사, 인프라 47개 + gateway 4개 테스트 통과.
 - 공식 pinned 이미지의 ARM64 컨테이너를 네트워크 차단/읽기 전용 rootfs/전체 capability 제거 상태에서 실제 기동했다. userspace daemon socket과 `NeedsLogin` 상태를 확인한 후 `--rm`으로 테스트 컨테이너를 제거했다. 실제 tailnet 로그인 검증과는 구분한다.
 - [GitHub run 35496989000](https://github.com/bbororo5/OpenRTB-Ads-auction/actions/runs/35496989000): `f5a400e` 기준 SUCCESS. OIDC 교환 → 600초 1회용 ephemeral/tagged auth key 생성 → 폐기까지 성공. AWS API 호출 및 tailnet 장비 등록 없음.
-- 아직 미검증: tailnet HTTPS 활성화, EC2에서 암호문 복호화/등록/Serve, Mac 브라우저 접속, 실제 배포 후 logout과 AWS 철거. HTTPS 인증서의 도메인 공개에 대한 사용자 승인 전에는 인증서 기능을 활성화하지 않는다.
+- 사용자 승인 후 tailnet HTTPS 기능을 활성화했고 관리 화면의 `HTTPS enabled`를 확인했다.
+
+### 실제 배포에서 확인한 준비 결함
+
+- Run `35507282336`: 이미지 준비 중 배포 역할의 `ecr:DescribeRepositories` 누락으로 실패. EC2 생성 전 중단됐고 제어 스택도 `DELETE_COMPLETE`를 확인했다. `04010a2`에서 실험 저장소 하나로 제한해 권한을 보완하고, AWS `RtbStage8cIdentity UPDATE_COMPLETE`와 실제 역할 정책을 확인했다.
+- Run `35507885888` (`04010a2`): 5-host 생성, 모든 관찰 도구 준비, 암호화 등록키 전달 및 Tailscale 등록까지 성공. 그러나 브라우저 TLS 접속은 `no TailscaleVarRoot`로 실패했다. `--state=mem:`만으로는 인증서 경로가 결정되지 않는다. 부하 승인 없이 실행을 취소하고 회수했다. EC2 5대 `terminated` 및 workload/lease/assets cleanup 완료를 확인했다.
+- `ce22f41`: 기존 tmpfs 경로에 `--statedir=/var/lib/tailscale`을 명시하고, 실제 `tailscale cert` 발급을 Serve/화면 승인보다 먼저 검사한다. 인증서 파일과 상태는 여전히 컨테이너 메모리에만 둔다. 로컬 48개 인프라 + 4개 gateway 테스트 통과. 이 수정의 브라우저 성공 여부는 다음 실행으로 검증한다.
