@@ -1,6 +1,8 @@
 import http from "k6/http";
 import { check } from "k6";
 import { Counter, Rate } from "k6/metrics";
+import { randomBytes } from "k6/crypto";
+import encoding from "k6/encoding";
 
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
 const RPS = Number(__ENV.RPS || 500);
@@ -41,11 +43,16 @@ export const options = {
 
 export default function () {
   const requestId = `stage8c-${__VU}-${__ITER}-${Date.now()}`;
+  const recordEvidence = __ENV.REQUEST_EVIDENCE === "true";
+  const hex = n => Array.from(new Uint8Array(randomBytes(n)), b => b.toString(16).padStart(2, "0")).join("");
+  const traceId = recordEvidence ? hex(16) : null;
+  const startedAt = new Date().toISOString();
   const response = http.post(
     `${BASE_URL}/publisher/auction`,
     JSON.stringify(providerAuction(requestId)),
     {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json",
+        ...(traceId ? { traceparent: `00-${traceId}-${hex(8)}-01` } : {}) },
       tags: { test_stage: "8c", phase: "normal_peak" },
       timeout: __ENV.REQUEST_TIMEOUT || "60s",
     },
@@ -67,6 +74,13 @@ export default function () {
   if (valid) {
     projectDspWinRate.add(slot.dspId === PROJECT_DSP_ID);
   }
+  // Observation runs only: bounded request journal, not high-cardinality metric labels.
+  // Never log payloads, provider credentials, response bodies or render proofs.
+  if (recordEvidence) console.log("RTB_REQUEST " + encoding.b64encode(JSON.stringify({
+    requestId, traceId, startedAt, finishedAt: new Date().toISOString(),
+    status: response.status, durationMs: response.timings.duration,
+    valid: Boolean(valid), projectWon: Boolean(valid && slot.dspId === PROJECT_DSP_ID),
+  })));
   check(response, {
     "auction succeeds": () => response.status === 200,
     "auction result preserves the slot contract": () => valid,

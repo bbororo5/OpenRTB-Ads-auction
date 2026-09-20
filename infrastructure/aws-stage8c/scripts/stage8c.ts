@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { evidenceHtml, parseRequestJournal, readRemoteEvidence, requestReport, selectTraceRequests, traceSpans } from "../lib/request-evidence.js";
 
 type Outputs = Record<string, string>;
 
@@ -221,6 +222,12 @@ async function runLoadTest(
   const baseUrl = requireOutput(outputs, "SspBaseUrl");
   const sampleSeconds = Number(options["sample-seconds"] ?? 0);
   if (!Number.isInteger(sampleSeconds) || sampleSeconds < 0 || sampleSeconds > 120) throw new Error("sample-seconds must be 0..120");
+  const requestEvidence = options["request-evidence"] === "true";
+  if (requestEvidence && (script !== "stage8c-capacity.js" || environment.RPS !== "10" || environment.DURATION !== "60s"))
+    throw new Error("Request evidence is bounded to a 10 RPS / 60s observation trial");
+  if (requestEvidence) Object.assign(environment, {
+    REQUEST_EVIDENCE: "true", K6_CONSOLE_OUTPUT: `/results/${label}-requests.log`,
+  });
   const envFlags = Object.entries({ BASE_URL: baseUrl, ...environment })
     .flatMap(([name, value]) => ["-e", `${name}=${shellQuote(value)}`])
     .join(" ");
@@ -264,7 +271,18 @@ async function runLoadTest(
   }
   const exported = await sendCommand(loadgenId, [`cat /tmp/rtb-k6-results/${label}-summary.json`], 30);
   if (exported.status !== "Success") throw new Error("k6 summary export missing; refusing to infer success");
-  writeEvidence(`${label}-summary.json`, JSON.stringify(JSON.parse(exported.stdout), null, 2));
+  const summary = JSON.parse(exported.stdout);
+  writeEvidence(`${label}-summary.json`, JSON.stringify(summary, null, 2));
+  // Save the original outcome before any diagnostic can fail.
+  writeEvidence(`${label}-result.json`, JSON.stringify({ status: result.status, responseCode: result.responseCode }, null, 2));
+  if (requestEvidence) {
+    try { await collectRequestEvidence(label, outputs, summary, startedAt); }
+    catch (error) {
+      writeEvidence(`${label}-evidence-error.json`, JSON.stringify({ error: String(error), complete: false }));
+      // Preserve the load result and proceed to bounded review/cleanup, never retry load silently.
+      process.stderr.write(`Request evidence incomplete: ${String(error)}\n`);
+    }
+  }
   await samples;
   if (sampleSeconds) await collectBudgetEvidence(`post-${label}`, outputs);
   await collectEvidence(`post-${label}`);
@@ -272,6 +290,59 @@ async function runLoadTest(
   if (result.status !== "Success") {
     throw new Error(`Remote k6 command ended with ${result.status}`);
   }
+}
+
+async function collectRequestEvidence(label: string, outputs: Outputs, summary: any, startedAt: string): Promise<void> {
+  const loadgen = requireOutput(outputs, "LoadgenInstanceId");
+  const observer = requireOutput(outputs, "ObserverInstanceId");
+  const remote = (commands: string[], timeout: number) => sendCommand(observer, commands, timeout);
+  const journal = await readRemoteEvidence((commands, timeout) => sendCommand(loadgen, commands, timeout),
+    `/tmp/rtb-k6-results/${label}-requests.log`);
+  const requests = parseRequestJournal(journal, summary.metrics.http_reqs.count);
+  writeEvidence(`${label}-requests.json`, JSON.stringify(requests, null, 2));
+  writeEvidence(`${label}-review.md`, requestReport(requests, summary));
+  const traces: any[] = [];
+  for (const request of selectTraceRequests(requests)) {
+    const file = `/tmp/rtb-k6-results/${label}-${request.traceId}.json`;
+    try {
+      const response = await remote(["install -d -m 0700 /tmp/rtb-k6-results",
+        `curl --silent --show-error --max-time 5 -H 'Accept: application/json' -o ${file} -w '%{http_code}' http://127.0.0.1:3200/api/traces/${request.traceId}`], 10);
+      if (response.status !== "Success" || response.stdout.trim() !== "200")
+        throw new Error(`Trace unavailable (HTTP ${response.stdout.trim().slice(0, 3)})`);
+      const trace = JSON.parse(await readRemoteEvidence(remote, file));
+      traceSpans(trace, request.traceId);
+      traces.push({ request, state: "retrieved", trace });
+    } catch (error) { traces.push({ request, state: "unavailable", error: String(error) }); }
+    // Incremental persistence survives later API failure or cancellation.
+    writeEvidence(`${label}-traces.json`, JSON.stringify(traces, null, 2));
+    writeEvidence(`${label}-review.html`, evidenceHtml(requests, summary, traces));
+  }
+  const queries = {
+    memory: 'sum by (service_name) (jvm_memory_used_bytes{service_name=~"rtb-ssp|rtb-dsp"})',
+    gc: 'sum by (service_name,jvm_gc_name) (jvm_gc_duration_seconds_count{service_name=~"rtb-ssp|rtb-dsp"})',
+    cpu: 'sum by (node_role) (rate(system_cpu_time_seconds_total{state!="idle"}[1m]))',
+    http: 'sum by (service_name,http_route,http_response_status_code) (http_server_request_duration_seconds_count{service_name=~"rtb-ssp|rtb-dsp"})',
+    serverP99: 'histogram_quantile(0.99, sum by (le,service_name,http_route) (rate(http_server_request_duration_seconds_bucket{service_name=~"rtb-ssp|rtb-dsp"}[1m]))) * 1000',
+  };
+  const metrics: Record<string, unknown> = {};
+  const end = new Date().toISOString();
+  for (const [name, query] of Object.entries(queries)) {
+    const file = `/tmp/rtb-k6-results/${label}-${name}.json`;
+    try {
+      const result = await remote([`curl --fail --silent --show-error --max-time 5 --get --data-urlencode ${shellQuote(`query=${query}`)} --data-urlencode ${shellQuote(`start=${startedAt}`)} --data-urlencode ${shellQuote(`end=${end}`)} --data-urlencode step=5s -o ${file} http://127.0.0.1:9090/api/v1/query_range`], 10);
+      if (result.status !== "Success") throw new Error("Metric query failed");
+      const data = JSON.parse(await readRemoteEvidence(remote, file));
+      if (data.status !== "success" || !data.data?.result?.length) throw new Error("Metric response failed or empty; missing is not zero");
+      metrics[name] = { query, data };
+    } catch (error) { metrics[name] = { query, error: String(error) }; }
+    writeEvidence(`${label}-metrics.json`, JSON.stringify({ start: startedAt, end, metrics }, null, 2));
+  }
+  writeEvidence(`${label}-evidence-manifest.json`, JSON.stringify({
+    requestCount: requests.length, selectedTraces: traces.length,
+    retrievedTraces: traces.filter(t => t.state === "retrieved").length,
+    complete: traces.every(t => t.state === "retrieved") && Object.values(metrics).every(m => !(m as any).error),
+    scope: "Request journal, at most 10 selected traces and five metric queries; not a full log/profile archive",
+  }, null, 2));
 }
 
 async function sampleHosts(label: string, outputs: Outputs, seconds: number): Promise<void> {

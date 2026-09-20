@@ -197,7 +197,7 @@ async function observe(): Promise<void> {
   const label = `${runId}-observed-10`;
   let stageError: unknown;
   try { await stage(["capacity", "--label", label, "--rps", "10", "--duration", "60s",
-    "--pre-allocated-vus", "100", "--max-vus", "200", "--sample-seconds", "60"], 240_000); }
+    "--pre-allocated-vus", "100", "--max-vus", "200", "--sample-seconds", "60", "--request-evidence"], 240_000); }
   catch (error) { if (cancelled) throw error; stageError = error; }
   const result = JSON.parse(readFileSync(path.join(evidenceDirectory, `stage8c-aws-${label}-result.json`), "utf8"));
   if (stageError && result.responseCode !== 99) throw stageError;
