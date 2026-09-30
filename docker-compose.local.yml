@@ -1,0 +1,38 @@
+x-db: &db
+  image: postgres:17-alpine
+  environment:
+    POSTGRES_DB: rtb
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:?Run local up to generate credentials}
+  command: [postgres, -c, max_connections=80, -c, shared_buffers=128MB]
+  healthcheck:
+    test: [CMD-SHELL, pg_isready -U postgres -d rtb]
+    interval: 2s
+    timeout: 2s
+    retries: 30
+  mem_limit: 384m
+
+services:
+  provider-store:
+    <<: *db
+    volumes:
+      - provider_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/provider-config/schema.sql:/docker-entrypoint-initdb.d/01-provider.sql:ro
+      - ./infrastructure/postgres/ssp-claims/schema.sql:/docker-entrypoint-initdb.d/02-claims.sql:ro
+      - ./performance/fixtures/stage8c/init-provider.sql:/docker-entrypoint-initdb.d/03-seed.sql:ro
+  ledger-store:
+    <<: *db
+    volumes:
+      - ledger_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/dsp-regional-ledger/schema.sql:/docker-entrypoint-initdb.d/01-ledger.sql:ro
+      - ./performance/fixtures/stage8c/init-ledger.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+  outcome-store:
+    <<: *db
+    volumes:
+      - outcome_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/dsp-money-events/schema.sql:/docker-entrypoint-initdb.d/01-outcome.sql:ro
+
+volumes:
+  provider_data:
+  ledger_data:
+  outcome_data:
