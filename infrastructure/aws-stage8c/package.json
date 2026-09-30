@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "local": "tsx scripts/local.ts",
     "build": "tsc --noEmit",
     "test": "node --import tsx --test test/**/*.test.ts && node --test ../../performance/fixtures/stage8c/server.test.mjs",
     "cdk": "cdk",
