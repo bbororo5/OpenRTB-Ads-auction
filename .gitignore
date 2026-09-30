@@ -10,6 +10,7 @@ out/
 
 .env.grafana-cloud
 .secrets/
+.local-stage8c/
 monitoring/prometheus/prometheus.cloud.yml
 
 infrastructure/aws-stage8c/node_modules/
