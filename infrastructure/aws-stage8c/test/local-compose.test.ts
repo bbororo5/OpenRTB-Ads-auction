@@ -14,3 +14,10 @@ test("databases have isolated volumes, readiness checks and no published ports",
     assert.equal(c.services[name].volumes[0].type, "volume");
   }
 });
+test("application topology uses internal DNS and loopback ingress", () => {
+  const { services } = configuration();
+  assert.match(services.ssp.environment.DSP_ENDPOINTS, /support:8080/);
+  assert.equal(services.support.environment.DSP_BASE_URL, "http://dsp:8081");
+  assert.equal(services.ssp.ports[0].host_ip, "127.0.0.1");
+  assert.equal(services.dsp.ports, undefined);
+});

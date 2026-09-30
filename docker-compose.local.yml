@@ -13,6 +13,71 @@ x-db: &db
   mem_limit: 384m
 
 services:
+  ssp:
+    build:
+      context: .
+      args: { APP_MODULE: ssp-app }
+    image: rtb-local-ssp:dev
+    mem_limit: 1536m
+    ports: ["127.0.0.1:18080:8080"]
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms768m -Xmx768m -XX:+UseG1GC
+      SERVER_PORT: "8080"
+      SSP_REGION_ID: ap-northeast-2
+      RENDER_COMPLETION_URL: http://ssp:8080/publisher/render
+      DATABASE_URL: jdbc:postgresql://provider-store:5432/rtb
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: ${LOCAL_DB_PASSWORD}
+      RENDER_PROOF_KEY_BASE64: ${LOCAL_RENDER_KEY}
+      DSP_ENDPOINTS: project-dsp=http://support:8080/openrtb/2.6/bid,external-a=http://support:8081/openrtb/2.6/bid,external-b=http://support:8082/openrtb/2.6/bid
+      PROVIDER_MAX_IN_FLIGHT: "128"
+      DSP_BID_TIMEOUT_MS: "100"
+      DSP_MAX_IN_FLIGHT: "256"
+      BILLING_WORKER_CONCURRENCY: "8"
+    depends_on:
+      provider-store: { condition: service_healthy }
+      support: { condition: service_started }
+  dsp:
+    build:
+      context: .
+      args: { APP_MODULE: dsp-app }
+    image: rtb-local-dsp:dev
+    mem_limit: 1536m
+    volumes: ["${RTB_LOCAL_STATE}/campaigns.json:/opt/rtb/campaigns.json:ro"]
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms768m -Xmx768m -XX:+UseG1GC
+      SERVER_PORT: "8081"
+      DSP_REGION_ID: ap-northeast-2
+      DSP_INSTANCE_ID: dsp-local-1
+      DSP_PUBLIC_BASE_URL: http://support:8080
+      DSP_CAMPAIGN_SNAPSHOT_PATH: /opt/rtb/campaigns.json
+      DSP_CAMPAIGN_VERSION: v1
+      DSP_CAMPAIGN_SHA256: ${LOCAL_CAMPAIGN_SHA}
+      DSP_NOTICE_TOKEN_ACTIVE_KEY_ID: key-1
+      DSP_NOTICE_TOKEN_KEYS: key-1=${LOCAL_NOTICE_KEY}
+      DSP_LEDGER_JDBC_URL: jdbc:postgresql://ledger-store:5432/rtb
+      DSP_OUTCOME_JDBC_URL: jdbc:postgresql://outcome-store:5432/rtb
+      DSP_STORE_USERNAME: postgres
+      DSP_STORE_PASSWORD: ${LOCAL_DB_PASSWORD}
+      DSP_MINIMUM_LEASE_MICROS: "100000"
+      DSP_BID_WORKERS: "8"
+      DSP_NOTICE_WORKERS: "4"
+      DSP_LEDGER_POOL_SIZE: "6"
+      DSP_OUTCOME_POOL_SIZE: "6"
+      DSP_JDBC_WORKERS: "6"
+    depends_on:
+      ledger-store: { condition: service_healthy }
+      outcome-store: { condition: service_healthy }
+  support:
+    build:
+      context: .
+      dockerfile: performance/fixtures/stage8c/Dockerfile
+    image: rtb-local-support:dev
+    mem_limit: 128m
+    environment:
+      DSP_BASE_URL: http://dsp:8081
+      SUPPORT_PRIVATE_IP: support
+    depends_on: [dsp]
   provider-store:
     <<: *db
     volumes:
