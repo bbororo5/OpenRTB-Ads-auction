@@ -49,3 +49,16 @@ export async function verifySyntheticLogs(base = "http://127.0.0.1:3100", timeou
   }, timeout);
   return { source: "synthetic-telemetrygen-not-application", streams };
 }
+export async function backendStatus(ports: Record<string, number> = {}) {
+  const targets: Record<string, [number, string]> = {
+    grafana: [ports.grafana ?? 3000, "/api/health"], prometheus: [ports.prometheus ?? 9090, "/-/ready"],
+    tempo: [ports.tempo ?? 3200, "/ready"], loki: [ports.loki ?? 3100, "/ready"],
+    pyroscope: [ports.pyroscope ?? 4040, "/ready"], collector: [ports.collector ?? 13133, "/"],
+  };
+  return Object.fromEntries(await Promise.all(Object.entries(targets).map(async ([name, [port, path]]) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}${path}`, { signal: AbortSignal.timeout(2000) });
+      return [name, { state: response.ok ? "ready" : "unhealthy", httpStatus: response.status }];
+    } catch { return [name, { state: "unreachable" }]; }
+  })));
+}

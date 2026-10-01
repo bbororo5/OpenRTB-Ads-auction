@@ -6,14 +6,14 @@ import { command, requireSuccess, root } from "./local-runtime.js";
 
 export class LocalSession {
   readonly directory: string;
-  constructor(readonly project = "rtb-local") {
+  constructor(readonly project = "rtb-local", readonly profiles = false) {
     validateProject(project); this.directory = stateDirectory(project);
   }
   get env() { return { ...process.env, RTB_LOCAL_STATE: this.directory, RTB_DEPLOYMENT_ENVIRONMENT: "local-stage8c" }; }
   args(args: string[]) {
     if (!existsSync(resolve(this.directory, "runtime.env"))) throw new Error("Local configuration absent; run up first");
     return ["docker", "compose", "--project-name", this.project, "--env-file", resolve(this.directory, "runtime.env"),
-      "-f", resolve(root, "docker-compose.local.yml"), ...args];
+      "-f", resolve(root, "docker-compose.local.yml"), ...(this.profiles ? ["--profile", "linux-profiles"] : []), ...args];
   }
   compose(args: string[], timeout = 30000) { return requireSuccess(this.args(args), timeout, this.env); }
   async execute(args: string[], timeout: number) {
