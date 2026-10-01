@@ -1,4 +1,5 @@
 import { waitFor } from "./local-session.js";
+import { traceSpans } from "./request-evidence.js";
 
 export async function jsonRequest(url: string, timeout = 5000): Promise<any> {
   const response = await fetch(url, { signal: AbortSignal.timeout(timeout) });
@@ -24,4 +25,27 @@ export async function verifyMetrics(base = "http://127.0.0.1:9090", timeout = 45
     }
   }
   return result;
+}
+export async function retrieveTrace(traceId: string, base = "http://127.0.0.1:3200", timeout = 15000) {
+  if (!/^[a-f0-9]{32}$/.test(traceId)) throw new Error("Invalid trace ID");
+  let trace: any;
+  await waitFor(async () => {
+    trace = await jsonRequest(`${base}/api/traces/${traceId}`);
+    traceSpans(trace, traceId);
+    return true;
+  }, timeout);
+  return trace;
+}
+export function logStreams(data: any) {
+  if (data.status !== "success" || !data.data?.result?.some((s: any) => s.values?.length))
+    throw new Error("No log records observed");
+  return data.data.result;
+}
+export async function verifySyntheticLogs(base = "http://127.0.0.1:3100", timeout = 30000) {
+  let streams: any;
+  await waitFor(async () => {
+    streams = logStreams(await jsonRequest(`${base}/loki/api/v1/query_range?query=${encodeURIComponent('{service_name="telemetrygen"}')}&limit=10`));
+    return true;
+  }, timeout);
+  return { source: "synthetic-telemetrygen-not-application", streams };
 }
