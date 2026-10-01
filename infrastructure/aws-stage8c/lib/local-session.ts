@@ -9,7 +9,7 @@ export class LocalSession {
   constructor(readonly project = "rtb-local") {
     validateProject(project); this.directory = stateDirectory(project);
   }
-  get env() { return { ...process.env, RTB_LOCAL_STATE: this.directory }; }
+  get env() { return { ...process.env, RTB_LOCAL_STATE: this.directory, RTB_DEPLOYMENT_ENVIRONMENT: "local-stage8c" }; }
   args(args: string[]) {
     if (!existsSync(resolve(this.directory, "runtime.env"))) throw new Error("Local configuration absent; run up first");
     return ["docker", "compose", "--project-name", this.project, "--env-file", resolve(this.directory, "runtime.env"),

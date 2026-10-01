@@ -29,3 +29,12 @@ test("shared observability uses the same project network and loopback ports", ()
   }
   assert.match(services.grafana.volumes[0].source, /observability\/grafana\/provisioning$/);
 });
+test("Java agent preserves signals and stable service names", () => {
+  const { services } = configuration();
+  for (const name of ["ssp", "dsp"]) {
+    const env = services[name].environment;
+    assert.equal(env.OTEL_SERVICE_NAME, `rtb-${name}`);
+    assert.equal(env.OTEL_EXPORTER_OTLP_ENDPOINT, "http://otel-collector:4318");
+    for (const signal of ["TRACES", "METRICS", "LOGS"]) assert.equal(env[`OTEL_${signal}_EXPORTER`], "otlp");
+  }
+});

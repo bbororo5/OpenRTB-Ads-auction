@@ -15,6 +15,20 @@ x-db: &db
     retries: 30
   mem_limit: 384m
 
+x-telemetry: &telemetry
+  JAVA_TOOL_OPTIONS: -Xms768m -Xmx768m -XX:+UseG1GC -javaagent:/otel/opentelemetry-javaagent.jar
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: otlp
+  OTEL_LOGS_EXPORTER: otlp
+  OTEL_PROPAGATORS: tracecontext,baggage
+  OTEL_TRACES_SAMPLER: parentbased_traceidratio
+  OTEL_TRACES_SAMPLER_ARG: "0.10"
+  OTEL_METRIC_EXPORT_INTERVAL: "5000"
+  OTEL_BSP_SCHEDULE_DELAY: "1000"
+  OTEL_RESOURCE_ATTRIBUTES: service.namespace=rtb,deployment.environment.name=local-stage8c,service.version=local
+
 services:
   ssp:
     build:
@@ -24,7 +38,8 @@ services:
     mem_limit: 1536m
     ports: ["127.0.0.1:18080:8080"]
     environment:
-      JAVA_TOOL_OPTIONS: -Xms768m -Xmx768m -XX:+UseG1GC
+      <<: *telemetry
+      OTEL_SERVICE_NAME: rtb-ssp
       SERVER_PORT: "8080"
       SSP_REGION_ID: ap-northeast-2
       RENDER_COMPLETION_URL: http://ssp:8080/publisher/render
@@ -48,7 +63,8 @@ services:
     mem_limit: 1536m
     volumes: ["${RTB_LOCAL_STATE}/campaigns.json:/opt/rtb/campaigns.json:ro"]
     environment:
-      JAVA_TOOL_OPTIONS: -Xms768m -Xmx768m -XX:+UseG1GC
+      <<: *telemetry
+      OTEL_SERVICE_NAME: rtb-dsp
       SERVER_PORT: "8081"
       DSP_REGION_ID: ap-northeast-2
       DSP_INSTANCE_ID: dsp-local-1

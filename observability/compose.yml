@@ -4,7 +4,7 @@ services:
     command: ["--config=/etc/otelcol-contrib/agent.yaml"]
     environment:
       HOST_ROLE: local
-      DEPLOYMENT_ENVIRONMENT: local-observability
+      DEPLOYMENT_ENVIRONMENT: ${RTB_DEPLOYMENT_ENVIRONMENT:-local-observability}
       TEMPO_OTLP_ENDPOINT: tempo:4317
       LOKI_OTLP_ENDPOINT: http://loki:3100/otlp
     volumes:
@@ -79,7 +79,7 @@ services:
       - --feature-gates=service.profilesSupport
     environment:
       HOST_ROLE: local
-      DEPLOYMENT_ENVIRONMENT: local-observability
+      DEPLOYMENT_ENVIRONMENT: ${RTB_DEPLOYMENT_ENVIRONMENT:-local-observability}
       PYROSCOPE_OTLP_ENDPOINT: pyroscope:4040
     privileged: true
     pid: host
