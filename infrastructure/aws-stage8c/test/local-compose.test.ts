@@ -21,3 +21,11 @@ test("application topology uses internal DNS and loopback ingress", () => {
   assert.equal(services.ssp.ports[0].host_ip, "127.0.0.1");
   assert.equal(services.dsp.ports, undefined);
 });
+test("shared observability uses the same project network and loopback ports", () => {
+  const { services } = configuration();
+  for (const name of ["grafana", "tempo", "loki", "prometheus", "pyroscope", "otel-collector"]) {
+    assert.ok(services[name]);
+    for (const port of services[name].ports ?? []) assert.equal(port.host_ip, "127.0.0.1");
+  }
+  assert.match(services.grafana.volumes[0].source, /observability\/grafana\/provisioning$/);
+});
