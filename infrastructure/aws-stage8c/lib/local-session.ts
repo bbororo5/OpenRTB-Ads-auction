@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { initialize, stateDirectory, validateProject } from "./local-config.js";
 import { command, requireSuccess, root } from "./local-runtime.js";
+import { buildImages } from "./local-build.js";
 
 export class LocalSession {
   readonly directory: string;
@@ -27,8 +28,8 @@ export class LocalSession {
   }
   async up(build = true) {
     initialize(this.project);
-    if (build && await this.execute(["build"], 20 * 60_000)) throw new Error("Local build failed");
-    if (await this.execute(["up", "-d", "--wait", "--wait-timeout", "120"], 180000)) throw new Error("Local startup failed");
+    if (build) await buildImages();
+    if (await this.execute(["up", "-d", "--no-build", "--wait", "--wait-timeout", "120"], 180000)) throw new Error("Local startup failed");
     await waitFor(async () => (await fetch("http://127.0.0.1:18080/health/ready", { signal: AbortSignal.timeout(2000) })).ok, 90000);
     const valid = this.compose(["exec", "-T", "ledger-store", "psql", "-U", "postgres", "-d", "rtb", "-Atc",
       "SELECT count(*) FROM regional_campaign_budget WHERE campaign_id='campaign-1' AND campaign_ends_at > now()"]);

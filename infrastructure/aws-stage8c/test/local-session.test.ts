@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { LocalSession, waitFor } from "../lib/local-session.js";
+import { buildInputs } from "../lib/local-build.js";
+test("build archive only includes explicit sources, never secrets or evidence", () => {
+  assert.ok(buildInputs.includes("ssp-app/src"));
+  assert.ok(!buildInputs.some(p => p.includes(".local-stage8c") || p === "." || p.includes(".secrets")));
+});
 test("local session rejects unscoped project names", () => {
   assert.throws(() => new LocalSession("other-project"), /Invalid/);
 });
