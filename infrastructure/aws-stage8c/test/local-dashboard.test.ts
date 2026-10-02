@@ -13,3 +13,9 @@ test("CPU panel explains shared Linux VM scope", () => {
   assert.match(panel.description, /neither per-service CPU nor macOS/);
   assert.match(panel.targets[0].expr, /\$scrape_job/);
 });
+test("all application panels filter the selected collection environment", () => {
+  for (const panel of dashboard.panels.filter((p: any) => [3, 4, 6, 7, 8, 9].includes(p.id))) {
+    assert.match(panel.targets[0].expr, /job="\$scrape_job"/);
+    assert.match(panel.targets[0].expr, /service_name=/);
+  }
+});
