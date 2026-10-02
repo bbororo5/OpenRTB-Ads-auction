@@ -8,3 +8,8 @@ test("dashboard only offers known local and AWS scrape jobs", () => {
   assert.match(dashboard.templating.list[0].query, /stage8c-hosts\|otel-collector/);
   assert.match(dashboard.panels.find((p: any) => p.id === 2).targets[0].expr, /\$scrape_job/);
 });
+test("CPU panel explains shared Linux VM scope", () => {
+  const panel = dashboard.panels.find((p: any) => p.id === 5);
+  assert.match(panel.description, /neither per-service CPU nor macOS/);
+  assert.match(panel.targets[0].expr, /\$scrape_job/);
+});

@@ -37,10 +37,11 @@
       "fieldConfig": {"defaults": {"unit": "reqps", "min": 0}, "overrides": []}
     },
     {
-      "id": 5, "type": "timeseries", "title": "Host CPU usage — cores (not percent)",
+      "id": 5, "type": "timeseries", "title": "Host CPU — shared Docker VM locally; cores, not percent",
+      "description": "Local host CPU includes apps, databases, k6 and telemetry sharing the Docker Linux VM. It is neither per-service CPU nor macOS host CPU. AWS node_role identifies separate hosts.",
       "gridPos": {"x": 0, "y": 23, "w": 12, "h": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "sum by (node_role) (rate(system_cpu_time_seconds_total{state!=\"idle\"}[1m]))", "legendFormat": "{{node_role}}"}],
+      "targets": [{"refId": "A", "expr": "sum by (node_role) (rate(system_cpu_time_seconds_total{job=\"$scrape_job\",state!=\"idle\"}[1m]))", "legendFormat": "host {{node_role}}"}],
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}, "overrides": []}
     },
     {
