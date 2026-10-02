@@ -15,7 +15,8 @@
       "options": {"mode": "markdown", "content": "Start with 5xx and latency, then correlate resources. **HTTP 200 is not proof that our DSP keeps bidding.** These are SERVER metrics across all routes, including notices: DSP 204 alone does not mean no-bid. Route labels may be absent. Do not interpret missing data as zero. Exact client failures, run-wide p99, win rate and selected traces are in the saved k6 review report; histogram latency here is NOT the k6 SLO. 5-second refresh does not imply 5-second Java metric export."}
     },
     {
-      "id": 2, "type": "stat", "title": "Collector scrape status — 1 = UP",
+      "id": 2, "type": "stat", "title": "Collector scrape status — 1 = reachable, NOT application health",
+      "description": "Select otel-collector for local or stage8c-hosts for AWS. No data means no matching series, not zero failures. Use the saved local review.html for exact client failures, whole-run p99 and trace IDs; server panels include readiness and notice traffic.",
       "gridPos": {"x": 0, "y": 3, "w": 24, "h": 4},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [{"refId": "A", "expr": "up{job=\"$scrape_job\"}", "legendFormat": "{{node_role}}", "instant": true}],
@@ -46,6 +47,7 @@
     },
     {
       "id": 6, "type": "timeseries", "title": "SSP / DSP JVM memory used",
+      "description": "JVM heap and non-heap pools, not container RSS or configured heap maximum. Growth between GCs alone does not establish a memory leak.",
       "gridPos": {"x": 12, "y": 23, "w": 12, "h": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [{"refId": "A", "expr": "sum by (service_name) (jvm_memory_used_bytes{job=\"$scrape_job\",service_name=~\"rtb-ssp|rtb-dsp\"})", "legendFormat": "{{service_name}}"}],

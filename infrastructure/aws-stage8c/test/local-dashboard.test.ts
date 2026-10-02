@@ -19,3 +19,9 @@ test("all application panels filter the selected collection environment", () => 
     assert.match(panel.targets[0].expr, /service_name=/);
   }
 });
+test("dashboard separates client evidence, scrape status and application health", () => {
+  const text = JSON.stringify(dashboard);
+  assert.match(text, /NOT application health/);
+  assert.match(text, /No data means no matching series/);
+  assert.match(text, /NOT k6 p99/);
+});
