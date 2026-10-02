@@ -25,3 +25,14 @@ test("dashboard separates client evidence, scrape status and application health"
   assert.match(text, /No data means no matching series/);
   assert.match(text, /NOT k6 p99/);
 });
+test("both configurations resolve the dashboard variable without mixing environments", () => {
+  for (const [file, job] of [["local.yaml", "otel-collector"], ["aws-stage8c.yaml", "stage8c-hosts"]]) {
+    const config = readFileSync(resolve(root, "observability/prometheus", file!), "utf8");
+    assert.ok(config.includes(`job_name: ${job}`));
+    for (const panel of dashboard.panels) for (const target of panel.targets ?? []) {
+      const query = target.expr.replaceAll("$scrape_job", job);
+      assert.ok(query.includes(`job="${job}"`));
+      assert.ok(!query.includes("$"));
+    }
+  }
+});
