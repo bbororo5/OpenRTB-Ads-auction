@@ -2,6 +2,11 @@ export interface RequestEvidence {
   requestId: string; traceId: string; startedAt: string; finishedAt: string;
   status: number; durationMs: number; valid: boolean; projectWon: boolean;
 }
+// Transport-independent entrypoint for both SSM and local-file collectors.
+export function analyzeRequestJournal(journal: string, summary: any) {
+  const records = parseRequestJournal(journal, summary.metrics?.http_reqs?.count);
+  return { records, selected: selectTraceRequests(records), markdown: requestReport(records, summary) };
+}
 export type EvidenceRemote = (commands: string[], timeout: number) => Promise<{
   status: string; stdout: string; stderr: string;
 }>;

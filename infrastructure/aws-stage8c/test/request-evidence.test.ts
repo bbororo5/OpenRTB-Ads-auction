@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { analyzeRequestJournal } from "../lib/request-evidence.js";
 import test from "node:test";
 import { evidenceHtml, parseRequestJournal, readRemoteEvidence, requestReport, selectTraceRequests, traceSpans, type RequestEvidence } from "../lib/request-evidence.js";
 
@@ -6,6 +7,12 @@ const row: RequestEvidence = { requestId: "stage8c-1-0-123", traceId: "123456789
   startedAt: "2026-09-20T12:00:00Z", finishedAt: "2026-09-20T12:00:01Z",
   status: 504, durationMs: 180, valid: false, projectWon: false };
 const line = (r: RequestEvidence) => `time=x level=info msg="RTB_REQUEST ${Buffer.from(JSON.stringify(r)).toString("base64")}" source=console`;
+test("analysis entrypoint is independent of SSM or local transport", () => {
+  const analysis = analyzeRequestJournal(line(row), { metrics: { http_reqs: { count: 1 }, http_req_duration: { "p(99)": 180 } } });
+  assert.deepEqual(analysis.records, [row]);
+  assert.equal(analysis.selected[0]?.traceId, row.traceId);
+  assert.match(analysis.markdown, /504/);
+});
 
 test("journal preserves failed requests and detects truncation, duplicate IDs and invalid rows", () => {
   assert.deepEqual(parseRequestJournal(line(row), 1), [row]);
