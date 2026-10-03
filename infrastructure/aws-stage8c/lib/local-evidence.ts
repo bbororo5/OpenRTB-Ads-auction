@@ -3,7 +3,8 @@ import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { LocalSession } from "./local-session.js";
 import { command } from "./local-runtime.js";
-import { analyzeRequestJournal } from "./request-evidence.js";
+import { analyzeRequestJournal, evidenceHtml } from "./request-evidence.js";
+import { capture } from "./local-capture.js";
 
 export const loadSettings = { RPS: 10, preAllocatedVUs: 20, maxVUs: 100 } as const;
 export function save(directory: string, name: string, data: unknown) {
@@ -26,5 +27,11 @@ export async function runLoad(session: LocalSession, mode: "smoke" | "observe") 
   const analysis = analyzeRequestJournal(journal, summary);
   save(directory, "requests.json", analysis.records);
   writeFileSync(resolve(directory, "review.md"), analysis.markdown);
-  return { directory, summary, code, startedAt, analysis };
+  const collected = await capture(directory, analysis.selected, startedAt);
+  writeFileSync(resolve(directory, "review.html"), evidenceHtml(analysis.records, summary, collected.traces));
+  save(directory, "manifest.json", { complete: collected.complete, requestCount: analysis.records.length,
+    selectedTraces: analysis.selected.length, retrievedTraces: collected.traces.filter(t => t.state === "retrieved").length,
+    scope: "Request journal, at most 10 selected traces, five metric windows. Not a complete log/profile archive.",
+    runMetadata: "run.json", result: "result.json" });
+  return { directory, summary, code, startedAt, analysis, collected };
 }
