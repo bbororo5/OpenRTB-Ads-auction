@@ -30,6 +30,20 @@ x-telemetry: &telemetry
   OTEL_RESOURCE_ATTRIBUTES: service.namespace=rtb,deployment.environment.name=local-stage8c,service.version=local
 
 services:
+  k6:
+    image: grafana/k6:1.2.1
+    profiles: [test]
+    mem_limit: 384m
+    user: "0"
+    volumes:
+      - ./performance/k6:/scripts:ro
+      - ${RTB_LOCAL_STATE}/runs:/results
+    environment:
+      BASE_URL: http://ssp:8080
+      RPS: "10"
+      PRE_ALLOCATED_VUS: "20"
+      MAX_VUS: "100"
+      REQUEST_TIMEOUT: 5s
   ssp:
     build:
       context: .
