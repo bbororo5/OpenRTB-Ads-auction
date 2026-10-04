@@ -4,13 +4,15 @@ import { spawn } from "node:child_process";
 import { initialize, stateDirectory, validateProject } from "./local-config.js";
 import { command, requireSuccess, root } from "./local-runtime.js";
 import { buildImages } from "./local-build.js";
+import { type ChildProcess } from "node:child_process";
 
 export class LocalSession {
+  private activeChild?: ChildProcess;
   readonly directory: string;
   constructor(readonly project = "rtb-local", readonly profiles = false, readonly ports: Record<string, number> = {}) {
     validateProject(project); this.directory = stateDirectory(project);
   }
-  get env() { return { ...process.env, RTB_LOCAL_STATE: this.directory, RTB_DEPLOYMENT_ENVIRONMENT: "local-stage8c",
+  get env(): NodeJS.ProcessEnv { return { ...process.env, RTB_LOCAL_STATE: this.directory, RTB_DEPLOYMENT_ENVIRONMENT: "local-stage8c",
     ...Object.fromEntries(Object.entries(this.ports).map(([key, port]) => [`RTB_${key.toUpperCase()}_PORT`, String(port)])) }; }
   endpoint(service: string, fallback: number) { return `http://127.0.0.1:${this.ports[service] ?? fallback}`; }
   args(args: string[]) {
@@ -23,9 +25,10 @@ export class LocalSession {
     const argv = this.args(args);
     return new Promise<number>((resolve, reject) => {
       const child = spawn(argv[0]!, argv.slice(1), { cwd: root, env: this.env, stdio: "inherit" });
-      const timer = setTimeout(() => child.kill("SIGTERM"), timeout);
+      this.activeChild = child;
+      const timer = setTimeout(() => child.kill("SIGKILL"), timeout);
       child.once("error", e => { clearTimeout(timer); reject(e); });
-      child.once("close", code => { clearTimeout(timer); resolve(code ?? 1); });
+      child.once("close", code => { clearTimeout(timer); this.activeChild = undefined; resolve(code ?? 1); });
     });
   }
   async up(build = true) {
@@ -38,7 +41,13 @@ export class LocalSession {
     if (valid.trim() !== "1") throw new Error("Database campaign expired/missing; existing data was preserved");
   }
   status() { return JSON.parse(this.compose(["ps", "--all", "--format", "json"]).trim().split("\n").filter(Boolean).map(s => s).join(",").replace(/^/, "[").replace(/$/, "]")); }
-  down(volumes = false) { this.compose(["down", "--remove-orphans", ...(volumes ? ["--volumes"] : [])], 120000); }
+  down(volumes = false) {
+    if (volumes && !/^rtb-local-verify-[a-f0-9]{8}$/.test(this.project)) throw new Error("Volume deletion restricted to owned verification projects");
+    this.activeChild?.kill("SIGKILL");
+    if (!existsSync(resolve(this.directory, "runtime.env"))) return;
+    this.compose(["down", "--remove-orphans", ...(volumes ? ["--volumes"] : [])], 120000);
+    if (this.compose(["ps", "--all", "-q"]).trim()) throw new Error("Cleanup incomplete: project containers remain");
+  }
 }
 export async function waitFor(check: () => Promise<boolean>, timeout: number, interval = 1000) {
   const deadline = Date.now() + timeout;
