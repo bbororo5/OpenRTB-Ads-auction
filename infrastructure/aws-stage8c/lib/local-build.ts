@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { root } from "./local-runtime.js";
+import { publicDockerEnvironment } from "./local-docker.js";
 
 // Streaming a bounded source context avoids BuildKit session headers containing
 // non-ASCII workspace paths. It also excludes credentials and local evidence.
@@ -7,12 +8,13 @@ export const buildInputs = ["Dockerfile", "settings.gradle", "build.gradle", "ss
   "dsp-app/src", "dsp-app/build.gradle", "performance/k6", "performance/fixtures/stage8c",
   "scripts/performance/aws-vm-baseline.sh", "infrastructure/postgres"];
 export async function buildImages() {
+  const env = publicDockerEnvironment();
   for (const app of ["ssp", "dsp", "support"]) {
     await new Promise<void>((resolve, reject) => {
       const tar = spawn("tar", ["-cf", "-", ...buildInputs], { cwd: root, stdio: ["ignore", "pipe", "inherit"] });
       const args = ["build", "-t", `rtb-local-${app}:dev`, ...(app === "support"
         ? ["-f", "performance/fixtures/stage8c/Dockerfile"] : ["--build-arg", `APP_MODULE=${app}-app`]), "-"];
-      const docker = spawn("docker", args, { cwd: root, stdio: ["pipe", "inherit", "inherit"] });
+      const docker = spawn("docker", args, { cwd: root, env, stdio: ["pipe", "inherit", "inherit"] });
       tar.stdout.pipe(docker.stdin);
       docker.stdin.on("error", () => { /* docker exit is authoritative */ });
       let tarCode: number | null = null;
