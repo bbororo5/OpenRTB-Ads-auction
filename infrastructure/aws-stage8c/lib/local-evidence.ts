@@ -11,20 +11,29 @@ export const loadSettings = { RPS: 10, preAllocatedVUs: 20, maxVUs: 100 } as con
 export function save(directory: string, name: string, data: unknown) {
   writeFileSync(resolve(directory, name), JSON.stringify(data, null, 2) + "\n", { mode: 0o600 });
 }
+export function recordCaptureFailure(directory: string, error: unknown) {
+  save(directory, "manifest.json", { complete: false, error: String(error), at: new Date().toISOString() });
+}
+function snapshot(session: LocalSession, directory: string, name: string) {
+  try { save(directory, name, diagnostics(session)); }
+  catch (error) { save(directory, name, { incomplete: true, error: String(error) }); }
+}
 export async function runLoad(session: LocalSession, mode: "smoke" | "observe") {
   const id = `${mode}-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const directory = resolve(session.directory, "runs", id);
   mkdirSync(directory, { recursive: true });
-  save(directory, "pre-runtime.json", diagnostics(session));
+  snapshot(session, directory, "pre-runtime.json");
   const startedAt = new Date().toISOString();
   save(directory, "run.json", { id, startedAt, project: session.project, mode, ...loadSettings,
     duration: mode === "smoke" ? "10s" : "60s", source: command(["git", "rev-parse", "HEAD"]).stdout.trim(),
     trackedChanges: command(["git", "status", "--porcelain", "--untracked-files=no"]).stdout.trim() });
-  const code = await session.execute(["run", "--rm", "--no-deps", "-e", `DURATION=${mode === "smoke" ? "10s" : "60s"}`,
+  let code = 1;
+  try {
+  code = await session.execute(["run", "--rm", "--no-deps", "-e", `DURATION=${mode === "smoke" ? "10s" : "60s"}`,
     "-e", "REQUEST_EVIDENCE=true", "-e", `K6_CONSOLE_OUTPUT=/results/${id}/requests.log`,
     "k6", "run", `--summary-export=/results/${id}/summary.json`, "/scripts/stage8c-capacity.js"], 120000);
   save(directory, "result.json", { code, finishedAt: new Date().toISOString(), interpretation: "Original k6 thresholds, not AWS capacity certification" });
-  save(directory, "post-runtime.json", diagnostics(session));
+  snapshot(session, directory, "post-runtime.json");
   const summary = JSON.parse(readFileSync(resolve(directory, "summary.json"), "utf8"));
   const journal = readFileSync(resolve(directory, "requests.log"), "utf8");
   const analysis = analyzeRequestJournal(journal, summary);
@@ -37,4 +46,9 @@ export async function runLoad(session: LocalSession, mode: "smoke" | "observe") 
     scope: "Request journal, at most 10 selected traces, five metric windows. Not a complete log/profile archive.",
     runMetadata: "run.json", result: "result.json" });
   return { directory, summary, code, startedAt, analysis, collected };
+  } catch (error) {
+    recordCaptureFailure(directory, error);
+    snapshot(session, directory, "failure-runtime.json");
+    throw new Error(`Local run incomplete; k6 code=${code}; evidence=${directory}; ${String(error)}`);
+  }
 }

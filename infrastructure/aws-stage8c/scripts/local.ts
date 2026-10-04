@@ -18,7 +18,7 @@ try {
     case "down": session.down(); break;
     case "smoke": case "observe": {
       const result = await runLoad(session, process.argv[2]);
-      console.log(`Evidence: ${result.directory}`); process.exitCode = result.code; break;
+      console.log(`Evidence: ${result.directory}`); process.exitCode = result.code || (result.collected.complete ? 0 : 1); break;
     }
     default: throw new Error("Usage: npm run local -- doctor|up|status|down");
   }
