@@ -5,6 +5,7 @@ import { LocalSession } from "./local-session.js";
 import { command } from "./local-runtime.js";
 import { analyzeRequestJournal, evidenceHtml } from "./request-evidence.js";
 import { capture } from "./local-capture.js";
+import { diagnostics } from "./local-diagnostics.js";
 
 export const loadSettings = { RPS: 10, preAllocatedVUs: 20, maxVUs: 100 } as const;
 export function save(directory: string, name: string, data: unknown) {
@@ -14,6 +15,7 @@ export async function runLoad(session: LocalSession, mode: "smoke" | "observe") 
   const id = `${mode}-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const directory = resolve(session.directory, "runs", id);
   mkdirSync(directory, { recursive: true });
+  save(directory, "pre-runtime.json", diagnostics(session));
   const startedAt = new Date().toISOString();
   save(directory, "run.json", { id, startedAt, project: session.project, mode, ...loadSettings,
     duration: mode === "smoke" ? "10s" : "60s", source: command(["git", "rev-parse", "HEAD"]).stdout.trim(),
@@ -22,6 +24,7 @@ export async function runLoad(session: LocalSession, mode: "smoke" | "observe") 
     "-e", "REQUEST_EVIDENCE=true", "-e", `K6_CONSOLE_OUTPUT=/results/${id}/requests.log`,
     "k6", "run", `--summary-export=/results/${id}/summary.json`, "/scripts/stage8c-capacity.js"], 120000);
   save(directory, "result.json", { code, finishedAt: new Date().toISOString(), interpretation: "Original k6 thresholds, not AWS capacity certification" });
+  save(directory, "post-runtime.json", diagnostics(session));
   const summary = JSON.parse(readFileSync(resolve(directory, "summary.json"), "utf8"));
   const journal = readFileSync(resolve(directory, "requests.log"), "utf8");
   const analysis = analyzeRequestJournal(journal, summary);
