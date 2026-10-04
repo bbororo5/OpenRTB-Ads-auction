@@ -11,7 +11,7 @@ export async function buildImages() {
   const env = publicDockerEnvironment();
   for (const app of ["ssp", "dsp", "support"]) {
     await new Promise<void>((resolve, reject) => {
-      const tar = spawn("tar", ["-cf", "-", ...buildInputs], { cwd: root, stdio: ["ignore", "pipe", "inherit"] });
+      const tar = spawn("tar", ["--no-xattrs", "-cf", "-", ...buildInputs], { cwd: root, env: { ...process.env, COPYFILE_DISABLE: "1" }, stdio: ["ignore", "pipe", "inherit"] });
       const args = ["build", "-t", `rtb-local-${app}:dev`, ...(app === "support"
         ? ["-f", "performance/fixtures/stage8c/Dockerfile"] : ["--build-arg", `APP_MODULE=${app}-app`]), "-"];
       const docker = spawn("docker", args, { cwd: root, env, stdio: ["pipe", "inherit", "inherit"] });
