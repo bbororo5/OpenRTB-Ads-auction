@@ -39,7 +39,8 @@ export async function runLoad(session: LocalSession, mode: "smoke" | "observe") 
   const analysis = analyzeRequestJournal(journal, summary);
   save(directory, "requests.json", analysis.records);
   writeFileSync(resolve(directory, "review.md"), analysis.markdown);
-  const collected = await capture(directory, analysis.selected, startedAt);
+  const collected = await capture(directory, analysis.selected, startedAt,
+    { tempo: session.endpoint("tempo", 3200), prometheus: session.endpoint("prometheus", 9090) });
   writeFileSync(resolve(directory, "review.html"), evidenceHtml(analysis.records, summary, collected.traces));
   save(directory, "manifest.json", { complete: collected.complete, requestCount: analysis.records.length,
     selectedTraces: analysis.selected.length, retrievedTraces: collected.traces.filter(t => t.state === "retrieved").length,

@@ -2,6 +2,7 @@ import { doctor } from "../lib/local-runtime.js";
 import { LocalSession } from "../lib/local-session.js";
 import { backendStatus } from "../lib/local-telemetry.js";
 import { runLoad } from "../lib/local-evidence.js";
+import { verify } from "../lib/local-verify.js";
 
 try {
   const session = new LocalSession("rtb-local", process.argv.includes("--profiles"));
@@ -16,6 +17,7 @@ try {
       break;
     }
     case "down": session.down(); break;
+    case "verify": process.exitCode = await verify(); break;
     case "smoke": case "observe": {
       const result = await runLoad(session, process.argv[2]);
       console.log(`Evidence: ${result.directory}`); process.exitCode = result.code || (result.collected.complete ? 0 : 1); break;

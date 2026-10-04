@@ -7,10 +7,12 @@ import { buildImages } from "./local-build.js";
 
 export class LocalSession {
   readonly directory: string;
-  constructor(readonly project = "rtb-local", readonly profiles = false) {
+  constructor(readonly project = "rtb-local", readonly profiles = false, readonly ports: Record<string, number> = {}) {
     validateProject(project); this.directory = stateDirectory(project);
   }
-  get env() { return { ...process.env, RTB_LOCAL_STATE: this.directory, RTB_DEPLOYMENT_ENVIRONMENT: "local-stage8c" }; }
+  get env() { return { ...process.env, RTB_LOCAL_STATE: this.directory, RTB_DEPLOYMENT_ENVIRONMENT: "local-stage8c",
+    ...Object.fromEntries(Object.entries(this.ports).map(([key, port]) => [`RTB_${key.toUpperCase()}_PORT`, String(port)])) }; }
+  endpoint(service: string, fallback: number) { return `http://127.0.0.1:${this.ports[service] ?? fallback}`; }
   args(args: string[]) {
     if (!existsSync(resolve(this.directory, "runtime.env"))) throw new Error("Local configuration absent; run up first");
     return ["docker", "compose", "--project-name", this.project, "--env-file", resolve(this.directory, "runtime.env"),
@@ -30,7 +32,7 @@ export class LocalSession {
     initialize(this.project);
     if (build) await buildImages();
     if (await this.execute(["up", "-d", "--no-build", "--wait", "--wait-timeout", "120"], 180000)) throw new Error("Local startup failed");
-    await waitFor(async () => (await fetch("http://127.0.0.1:18080/health/ready", { signal: AbortSignal.timeout(2000) })).ok, 90000);
+    await waitFor(async () => (await fetch(`${this.endpoint("ssp", 18080)}/health/ready`, { signal: AbortSignal.timeout(2000) })).ok, 90000);
     const valid = this.compose(["exec", "-T", "ledger-store", "psql", "-U", "postgres", "-d", "rtb", "-Atc",
       "SELECT count(*) FROM regional_campaign_budget WHERE campaign_id='campaign-1' AND campaign_ends_at > now()"]);
     if (valid.trim() !== "1") throw new Error("Database campaign expired/missing; existing data was preserved");
