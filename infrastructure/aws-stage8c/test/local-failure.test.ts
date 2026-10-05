@@ -4,6 +4,8 @@ import { withCleanup } from "../lib/local-lifecycle.js";
 import { LocalSession, waitFor } from "../lib/local-session.js";
 import { jsonRequest, retrieveTrace } from "../lib/local-telemetry.js";
 import http from "node:http";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 test("startup or load failure always invokes cleanup and preserves failure", async () => {
   let calls = 0;
@@ -21,4 +23,17 @@ test("delayed/unavailable telemetry remains bounded and is not success", async (
     await assert.rejects(retrieveTrace("a".repeat(32), base, 5), /timed out/);
     await assert.rejects(waitFor(async () => false, 5, 1), /timed out/);
   } finally { server.close(); }
+});
+test("SIGTERM executes cleanup once before exiting 143", async () => {
+  const module = new URL("../lib/local-lifecycle.ts", import.meta.url).href;
+  const child = spawn(process.execPath, ["--import", "tsx", "--input-type=module", "-e",
+    `import {installSignalCleanup} from ${JSON.stringify(module)}; installSignalCleanup(()=>console.log('cleaned')); console.log('ready'); setInterval(()=>{},1000);`],
+    { cwd: fileURLToPath(new URL("../", import.meta.url)), stdio: ["ignore", "pipe", "pipe"] });
+  let output = "";
+  const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
+  child.stdout.on("data", chunk => { output += chunk; if (output.includes("ready") && !output.includes("cleaned")) child.kill("SIGTERM"); });
+  try {
+    const code = await new Promise<number | null>((resolve, reject) => { child.on("error", reject); child.on("close", resolve); });
+    assert.equal(code, 143); assert.equal(output.match(/cleaned/g)?.length, 1);
+  } finally { clearTimeout(timer); child.kill("SIGKILL"); }
 });

@@ -25,7 +25,8 @@ test("dashboard keeps infrastructure availability distinct from auction success"
   assert.match(help, /HTTP 200 is not proof/);
   assert.match(help, /missing data as zero/);
   const queries = dashboard.panels.flatMap((p: { targets?: { expr: string }[] }) => p.targets ?? []).map((t: { expr: string }) => t.expr);
-  assert.ok(queries.includes('up{job="stage8c-hosts"}'));
+  assert.ok(queries.includes('up{job="$scrape_job"}'));
+  assert.match(dashboard.templating.list[0].query, /stage8c-hosts\|otel-collector/);
   assert.ok(queries.some((q: string) => q.includes('service_name="rtb-ssp"')));
   assert.ok(queries.some((q: string) => q.includes('service_name="rtb-dsp"')));
   assert.ok(queries.some((q: string) => q.includes('http_response_status_code=~"5.."')));
