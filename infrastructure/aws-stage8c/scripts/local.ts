@@ -22,6 +22,6 @@ try {
       const result = await runLoad(session, process.argv[2]);
       console.log(`Evidence: ${result.directory}`); process.exitCode = result.code || (result.collected.complete ? 0 : 1); break;
     }
-    default: throw new Error("Usage: npm run local -- doctor|up|status|down");
+    default: throw new Error("Usage: npm run local -- doctor|up|status|smoke|observe|verify|down [--profiles]");
   }
 } catch (error) { console.error(String(error)); process.exitCode = 1; }

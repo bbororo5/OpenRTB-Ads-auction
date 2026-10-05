@@ -53,6 +53,13 @@ export class LocalSession {
     if (!existsSync(resolve(this.directory, "runtime.env"))) return;
     this.compose(["down", "--remove-orphans", ...(volumes ? ["--volumes"] : [])], 120000);
     if (this.compose(["ps", "--all", "-q"]).trim()) throw new Error("Cleanup incomplete: project containers remain");
+    if (volumes) {
+      const filter = `label=com.docker.compose.project=${this.project}`;
+      for (const kind of ["volume", "network"]) {
+        if (requireSuccess(["docker", kind, "ls", "--filter", filter, "--quiet"], 30000, this.env).trim())
+          throw new Error(`Cleanup incomplete: project ${kind} remains`);
+      }
+    }
   }
 }
 export async function waitFor(check: () => Promise<boolean>, timeout: number, interval = 1000) {
