@@ -45,6 +45,23 @@ SSP와 DSP는 서로 다른 업체로 가정하므로 공유 애플리케이션 
 
 ## 현재 상태
 
+### 로컬 실행·관찰
+
+AWS 배포 없이 SSP·DSP·DB·관찰 도구를 실행하고 요청별 증거를 저장할 수 있다.
+
+```sh
+cd infrastructure/aws-stage8c
+npm ci
+npm run local -- verify
+```
+
+`verify`는 독립 환경을 만들고 검증 후 자동 제거한다. 직접 화면을 보려면 `up` → `observe` → `down`을 사용한다.
+상세: [실행 안내](docs/architecture/implementation/stage8c-local-runbook.md) ·
+[검증 결과](docs/architecture/implementation/stage8c-local-verification.md) ·
+[로컬/AWS 역할 분리](docs/architecture/implementation/stage8c-local-aws-boundaries.md).
+
+### 기존 구현 기준선
+
 요구사항·아키텍처 동인과 주요 ADR을 바탕으로 SSP의 첫 수직 흐름과 8개 컴포넌트의 기준선 강화를 구현했다. 공급자 설정 적재, 경매 입장과 중복 방지, OpenRTB DSP fan-out, 1가격 낙찰, AEAD 렌더링 증표, PostgreSQL 청구 기록과 `burl` 전달까지 연결된다. SSP는 서울·도쿄 지역 PostgreSQL에 독립 기동하고 상태 확인·안전 종료·HTTP 운영 지표까지 검증했다. 다음은 DSP 구현과 두 시스템의 기준선·용량·장애 측정이다.
 
 - [문서 안내](docs/README.md)
