@@ -13,6 +13,11 @@ test("analysis entrypoint is independent of SSM or local transport", () => {
   assert.equal(analysis.selected[0]?.traceId, row.traceId);
   assert.match(analysis.markdown, /504/);
 });
+test("optional report metadata is escaped rather than executable HTML", () => {
+  const html = evidenceHtml([row], { metrics: { http_req_duration: { "p(99)": 180 } } }, [], { source: "<script>bad</script>" });
+  assert.ok(html.includes("&lt;script&gt;"));
+  assert.ok(!html.includes("<script>"));
+});
 
 test("journal preserves failed requests and detects truncation, duplicate IDs and invalid rows", () => {
   assert.deepEqual(parseRequestJournal(line(row), 1), [row]);

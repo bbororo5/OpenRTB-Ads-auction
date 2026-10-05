@@ -99,7 +99,7 @@ export function traceSpans(trace: any, expectedId: string) {
   return spans.sort((a: any, b: any) => Number(BigInt(a.startTimeUnixNano) - BigInt(b.startTimeUnixNano)));
 }
 
-export function evidenceHtml(records: RequestEvidence[], summary: any, traces: any[]): string {
+export function evidenceHtml(records: RequestEvidence[], summary: any, traces: any[], metadata?: unknown): string {
   const escape = (v: unknown) => String(v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
   const header = "<tr><th>시작 UTC</th><th>상태</th><th>k6 지연(ms)</th><th>trace ID</th></tr>";
   const rows = records.filter(r => !r.valid || r.durationMs > 50).map(r =>
@@ -107,7 +107,7 @@ export function evidenceHtml(records: RequestEvidence[], summary: any, traces: a
   const panels = traces.map(item => {
     if (item.state !== "retrieved") return `<section id="${item.request.traceId}"><h3>${item.request.traceId}</h3><p>trace 미확보: ${escape(item.error)}</p></section>`;
     const spans = traceSpans(item.trace, item.request.traceId);
-    const start = BigInt(spans[0].startTimeUnixNano);
+    const start = spans.reduce((min: bigint, s: any) => BigInt(s.startTimeUnixNano) < min ? BigInt(s.startTimeUnixNano) : min, BigInt(spans[0].startTimeUnixNano));
     const body = spans.map((s: any) => `<tr><td>${escape(s.service)}</td><td>${escape(s.name)}</td><td>${(Number(BigInt(s.startTimeUnixNano) - start) / 1e6).toFixed(2)}</td><td>${(Number(BigInt(s.endTimeUnixNano) - BigInt(s.startTimeUnixNano)) / 1e6).toFixed(2)}</td><td>${escape(s.spanId)}</td><td>${escape(s.parentSpanId ?? "")}</td></tr>`).join("");
     return `<section id="${item.request.traceId}"><h3>${item.request.status} · ${item.request.durationMs.toFixed(2)} ms · ${item.request.traceId}</h3><table><tr><th>서비스</th><th>span</th><th>시작 +ms</th><th>소요 ms</th><th>span ID</th><th>부모 ID</th></tr>${body}</table></section>`;
   }).join("");
@@ -115,9 +115,10 @@ export function evidenceHtml(records: RequestEvidence[], summary: any, traces: a
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>RTB 관찰 증거</title>
 <style>body{font:16px system-ui;max-width:1200px;margin:32px auto;padding:0 20px;color:#172536}table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid #ccd4dd;padding:8px;text-align:left;overflow-wrap:anywhere}section{margin:32px 0}h1,h2{color:#164c78}a{color:#145ea8}</style>
 <h1>RTB 요청 → trace 검토</h1><p>서버를 철거한 뒤에도 볼 수 있는 정적 자료입니다. 외부 네트워크 요청 없음.</p>
+${metadata ? `<details><summary>실행 설정·시각·소스·증거 상태</summary><pre>${escape(JSON.stringify(metadata, null, 2))}</pre></details>` : ""}
 <p>출처: k6 전체 실행 summary + 요청 journal. 요청 ${records.length}건 · 실패/계약 위반 ${records.length - valid}건 · p99 ${escape(summary.metrics.http_req_duration["p(99)"])}ms (목표 ≤50ms) · 낙찰 ${records.filter(r => r.projectWon).length}/${valid} 유효 경매.</p>
 <p>Grafana의 서버 histogram p99와 다른 측정값입니다. journal 기록/강제 sampled trace를 켠 진단 실행이며 이전 실행과 관측 오버헤드가 다릅니다. 인과관계는 아직 확정하지 않습니다.</p>
 <h2>1. 실패 또는 50ms 초과 요청</h2><p>UTC 기준. 실패가 초반에 몰리는지 확인하세요. trace는 최대 10개 표본만 보존하며, 아래에 없는 ID는 requests.json 기록만 있습니다.</p><table>${header}${rows}</table>
-<h2>2. 실패·느린 요청과 정상 비교 요청의 span</h2><p>시작 +ms는 해당 trace 첫 span 기준입니다. 부모·자식 span의 시간은 겹칩니다. 더해서 총 지연으로 해석하지 마세요. trace가 존재해도 모든 서비스가 연결됐다는 보장은 없습니다.</p>${panels}
+<h2>2. 실패·느린 요청과 정상 비교 요청의 span</h2><p>시작 +ms는 해당 trace의 가장 이른 span 기준입니다. 부모·자식 span의 시간은 겹칩니다. 더해서 총 지연으로 해석하지 마세요. trace가 존재해도 모든 서비스가 연결됐다는 보장은 없습니다.</p>${panels}
 <h2>3. 가설 → 반증 실험 → 수정 → 재시험</h2><p>어느 구간이 오래 걸렸는가? 정상 요청과 무엇이 다른가? 가설 하나를 적고 확인 실험 후 최소 변경을 합니다. 같은 revision 외 조건·부하·cold-start·진단 설정으로 비교합니다.</p></html>`;
 }
