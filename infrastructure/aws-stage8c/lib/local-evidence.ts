@@ -6,11 +6,10 @@ import { command } from "./local-runtime.js";
 import { analyzeRequestJournal, evidenceHtml } from "./request-evidence.js";
 import { capture } from "./local-capture.js";
 import { diagnostics } from "./local-diagnostics.js";
+import { save } from "./local-artifacts.js";
+export { save } from "./local-artifacts.js";
 
 export const loadSettings = { RPS: 10, preAllocatedVUs: 20, maxVUs: 100 } as const;
-export function save(directory: string, name: string, data: unknown) {
-  writeFileSync(resolve(directory, name), JSON.stringify(data, null, 2) + "\n", { mode: 0o600 });
-}
 export function recordCaptureFailure(directory: string, error: unknown) {
   save(directory, "manifest.json", { complete: false, error: String(error), at: new Date().toISOString() });
 }

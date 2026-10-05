@@ -1,6 +1,6 @@
 import { retrieveTrace, jsonRequest, metricSeries } from "./local-telemetry.js";
 import { type RequestEvidence } from "./request-evidence.js";
-import { save } from "./local-evidence.js";
+import { save } from "./local-artifacts.js";
 
 export const metricQueries = {
   memory: 'sum by (service_name) (jvm_memory_used_bytes{job="otel-collector",service_name=~"rtb-ssp|rtb-dsp"})',

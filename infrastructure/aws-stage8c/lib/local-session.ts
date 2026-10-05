@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { initialize, stateDirectory, validateProject } from "./local-config.js";
-import { command, requireSuccess, root } from "./local-runtime.js";
+import { requireSuccess, root } from "./local-runtime.js";
 import { buildImages } from "./local-build.js";
 import { type ChildProcess } from "node:child_process";
 import { publicDockerEnvironment } from "./local-docker.js";
@@ -42,7 +42,11 @@ export class LocalSession {
       "SELECT count(*) FROM regional_campaign_budget WHERE campaign_id='campaign-1' AND campaign_ends_at > now()"]);
     if (valid.trim() !== "1") throw new Error("Database campaign expired/missing; existing data was preserved");
   }
-  status() { return JSON.parse(this.compose(["ps", "--all", "--format", "json"]).trim().split("\n").filter(Boolean).map(s => s).join(",").replace(/^/, "[").replace(/$/, "]")); }
+  status(): any[] {
+    const output = this.compose(["ps", "--all", "--format", "json"]).trim();
+    if (!output) return [];
+    return output.startsWith("[") ? JSON.parse(output) : output.split("\n").filter(Boolean).map(line => JSON.parse(line));
+  }
   down(volumes = false) {
     if (volumes && !/^rtb-local-verify-[a-f0-9]{8}$/.test(this.project)) throw new Error("Volume deletion restricted to owned verification projects");
     this.activeChild?.kill("SIGKILL");
