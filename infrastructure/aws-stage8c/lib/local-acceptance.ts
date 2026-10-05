@@ -11,7 +11,8 @@ export function connectedApplicationTrace(traces: any[]): boolean {
   });
 }
 export async function acceptance(session: LocalSession) {
-  await waitFor(async () => Object.values(await backendStatus(session.ports)).every((v: any) => v.state === "ready"), 60000);
+  // Pyroscope's fresh ring/segment writer has its own readiness hold-down.
+  await waitFor(async () => Object.values(await backendStatus(session.ports)).every((v: any) => v.state === "ready"), 120000);
   const result = await runLoad(session, "observe");
   const checks: Record<string, unknown> = { environmentReady: true, evidenceComplete: result.collected.complete,
     applicationExitCode: result.code, correlatedSspDspTrace: connectedApplicationTrace(result.collected.traces) };
