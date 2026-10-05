@@ -5,6 +5,7 @@ import { runLoad, save } from "./local-evidence.js";
 import { withCleanup, installSignalCleanup } from "./local-lifecycle.js";
 import { initialize } from "./local-config.js";
 import { buildImages } from "./local-build.js";
+import { acceptance } from "./local-acceptance.js";
 
 export async function verificationSession() {
   const names = ["ssp", "grafana", "tempo", "loki", "prometheus", "pyroscope", "collector", "grpc", "otlp", "metrics", "profiler"];
@@ -33,8 +34,9 @@ export async function verify() {
   try { return await withCleanup(async () => {
     await session.up(false);
     save(session.directory, "session.json", { project: session.project, ports: session.ports, at: new Date().toISOString() });
-    const result = await runLoad(session, "observe");
+    const { result, infrastructurePassed } = await acceptance(session);
     console.log(`Verification evidence: ${result.directory}`);
-    return result.code || (result.collected.complete ? 0 : 1);
+    console.log(`Environment/evidence acceptance: ${infrastructurePassed ? "PASS" : "FAIL"}; k6 exit: ${result.code}`);
+    return result.code || (infrastructurePassed ? 0 : 1);
   }, cleanup); } finally { removeHandlers(); }
 }
